@@ -406,4 +406,18 @@
 <p class="mini">Reception data tab include hoga jab Reception isi browser / PC pe kabhi open ho chuka ho (localStorage me save ho).</p>
 </div></div>
 </section>
-</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=77"></script></body></html>
+<script src="app.js?v=77"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const menuBtn = document.querySelector(".navToggle, #menuBtn, .hamburger, [onclick*='toggle'], nav button");
+    const sidebar = document.querySelector(".sidebar, #sidebar, aside, nav");
+    if (menuBtn && sidebar) {
+      menuBtn.addEventListener("click", function () {
+        sidebar.classList.toggle("open");
+        sidebar.classList.toggle("active");
+      });
+    }
+  });
+</script>
+</body>
+</html>
