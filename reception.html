@@ -1,0 +1,143 @@
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anand Homoeopathy Multi Speciality Clinic — Reception</title><link rel="stylesheet" href="style.css?v=77"></head><body data-role="reception"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-bill-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button>
+<button class="navBtn" data-page="appointmentHistory">Appointment History</button><button class="navBtn hidden" data-page="payments">Payment</button><button class="navBtn hidden" data-page="medicines">Medicine</button><button class="navBtn" data-page="connection">Server Connection</button><button class="navBtn" data-page="bill">Bill / Receipt</button><button class="navBtn" data-page="backup">Backup / Restore</button></div></aside><main class="main"><header class="topbar"><button class="toggle embossed hamburgerBtn" id="toggleSide" type="button" aria-label="Toggle sidebar"><span class="hamIcon" aria-hidden="true">☰</span></button><span>Reception</span><span class="appVersionBadge" title="Application version">v77</span><span class="syncLiveBadge" id="syncLiveBadge">Offline</span><button class="btn embossed themeToggle" id="themeToggle">☾ Dark</button>
+<div class="globalSearchWrap">
+  <input type="search" id="globalPatientSearch" class="globalPatientSearch" placeholder="Search patient: name, mobile, case no…" autocomplete="off" aria-label="Search patient">
+  <div class="globalSearchResults hidden" id="globalSearchResults" role="listbox"></div>
+</div>
+<span class="status off" id="connDot">Offline</span><span id="connText">Offline</span><button class="toggle refreshBtn" id="refreshBtn" title="Refresh now">↻ Refresh</button></header>
+<section class="page active" id="dashboard"><section class="calendarStrip embossed"><div><button class="btn embossed" id="calendarBtn">📅 Calendar</button><span id="calendarSelected" class="calendarSelected">Selected date: --/--/----</span></div><div id="calendarPanel" class="calendarPanel hidden"><input id="calendarDate" type="date"><span id="festivalInfo" class="festivalInfo">No festival within the next 15 days</span></div></section><div class="hero"><div><h1>Patient Entry</h1><p>Register new or old cases. Works offline and syncs when a server is available.</p></div><div class="actions"><button class="primary" id="newCase">New Case</button><button class="green" id="oldCase">Old Case</button></div></div><div class="card hidden" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label class="full backdatePendingWrap" style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px 12px;border-radius:12px;background:linear-gradient(165deg,#fffbeb,#fef3c7);border:1px solid #f0d78c">
+<input type="checkbox" id="backdatePending"> <span><b>Mark payment as Pending</b> <span class="mini">(back-dated entry only — leave unticked = Received automatically)</span></span>
+</label>
+<div class="full actions"><button type="submit" class="primary embossed" id="patientSubmitBtn">Update</button></div></form></div></div>
+<div class="card hidden" id="oldAppointmentPanel">
+  <div class="cardHead">
+    <h2>Old Case — Find patient &amp; add appointment</h2>
+    <button type="button" class="btn embossed" id="oldApptClose">Close</button>
+  </div>
+  <div class="cardBody">
+    <p class="mini">Already registered patient ko name, mobile ya case number se dhoondhein. Full form nahi — sirf appointment + medicine charges.</p>
+    <div class="oldSearchBar">
+      <input type="search" id="oldApptSearch" class="oldApptSearchInput" placeholder="Name, mobile or case number…" autocomplete="off">
+      <button type="button" class="btn embossed" id="oldApptSearchBtn">Find</button>
+    </div>
+    <div id="oldApptResults" class="oldApptResults"></div>
+    <div id="oldApptSelected" class="oldApptSelected hidden"></div>
+  </div>
+</div>
+
+<div class="card queueCard"><div class="cardHead"><h2>Reception Patient List — Today</h2><span class="mini" id="queueCountHint">0 patients</span></div><div class="cardBody"><div class="search"><input id="queueSearch" placeholder="Search case no, name, mobile"></div><div class="tablewrap queueTableWrap"><table class="table queueTable"><thead><tr><th>Sr</th><th>Case</th><th>Date</th><th>Type</th><th>Patient</th><th>Fees</th><th>Payment</th><th>Action</th></tr></thead><tbody id="receptionPatients"></tbody></table></div><div class="pagination queuePagination" id="queueMobileCards" class="mobileCardList"></div><div class="pagination" id="queuePagination"></div></div></div></section>
+
+
+
+
+<section class="page" id="payments"><div class="hero"><div><h1>Payment</h1><p>Select Year / Month / Day for collected payment totals. Access controlled by Office.</p></div></div>
+<div class="filterBar embossed">
+  <span>Year</span><select id="paymentYearSelect"></select>
+  <span>Month</span><select id="paymentMonthSelect"></select>
+  <span>Day</span><select id="paymentDaySelect"></select>
+  <span>From</span><input type="date" id="payCustomFrom" class="dateInput">
+  <span>To</span><input type="date" id="payCustomTo" class="dateInput">
+  <button class="btn embossed" id="payFilterShow">Show</button>
+  <button class="btn embossed" id="payFilterClear">All years</button>
+  <span class="mini" id="payYearHint">Select period</span>
+</div>
+<div class="paySummaryTop" id="paySummaryTop">
+  <div class="paySummaryBox new"><small>New Cases Payment</small><b id="paySumNew">₹ 0</b></div>
+  <div class="paySummaryBox renewal"><small>Renewal Payment</small><b id="paySumRenewal">₹ 0</b></div>
+  <div class="paySummaryBox med"><small>Medicine Payment</small><b id="paySumMedicine">₹ 0</b></div>
+  <div class="paySummaryBox pend"><small>Outstanding / Pending</small><b id="paySumPending">₹ 0</b></div>
+  <div class="paySummaryBox"><small id="paySumTotalLabel">Total Collected</small><b id="paySumTotal">₹ 0</b></div>
+</div>
+<div class="card"><div class="cardHead"><h2 id="payMonthTitle">Breakdown</h2><span>New · Old · Renewal · Total</span></div>
+<div class="cardBody tablewrap"><table class="payMonthTable" id="payMonthTable"><thead id="payMonthHead"><tr><th>Period</th><th>New Cases</th><th>Old Cases</th><th>Renewal</th><th>Total</th></tr></thead><tbody id="payMonthBody"></tbody><tfoot id="payMonthFoot"></tfoot></table></div></div>
+<div class="hidden"><tbody id="receptionPaymentBody"></tbody></div>
+</section><section class="page" id="medicines"><div class="hero"><div><h1>Medicine</h1><p>Medicine access is controlled by Office. 10 per page.</p></div>
+<div class="actions" style="gap:10px;flex-wrap:wrap">
+  <button type="button" class="btn embossed emptyStockBtn" id="emptyStockBtn">Empty stock Medicine</button>
+  <div class="reportBox" style="background:linear-gradient(165deg,#fff5f5,#fde8e8)"><small>Empty stock</small><b id="medEmptyCount">0</b></div>
+</div></div>
+<div class="card hidden" id="emptyStockCard"><div class="cardHead"><h2>Empty stock Medicine</h2><button type="button" class="btn embossed" id="emptyStockClose">Close list</button></div>
+<div class="cardBody tablewrap"><table class="table"><thead><tr><th>Sr No.</th><th>No.</th><th>Name</th><th>Drawer</th><th>Quantity</th><th>Available</th><th>Action</th></tr></thead><tbody id="emptyStockBody"></tbody></table></div></div><div class="card embossed" id="receptionMedicineEntryCard"><div class="cardBody"><h3>Medicine Entry</h3><form id="receptionMedicineForm" class="formgrid"><label>Medicine Name<input id="receptionMedName" required></label><label>Drawer<input id="receptionMedDrawer"></label><label>Quantity<input id="receptionMedQuantity" type="number" min="0" value="0"></label><label>Available<select id="receptionMedAvailable"><option>Yes</option><option>No</option></select></label><div class="full actions"><button class="btn embossed" type="submit">Register Medicine</button></div></form></div></div><div class="card"><div class="cardBody"><div class="formgrid"><label>Search Medicine<input id="receptionMedSearch" placeholder="Name, drawer or availability"></label></div><div class="tablewrap"><table class="table medTable"><thead><tr><th>No.</th><th>Medicine</th><th>Drawer</th><th>Quantity</th><th>Available</th><th>Action</th></tr></thead><tbody id="receptionMedBody"></tbody></table></div><div class="pagination" id="receptionMedPagination" aria-label="Medicine list pages"></div></div></div></section>
+<section class="page" id="appointmentHistory">
+  <div class="hero"><div><h1>Appointment History</h1><p>All appointments including back-dated and old case entries. 10 per page.</p></div></div>
+  <div class="filterBar embossed">
+    <span>Search</span>
+    <input type="search" id="histSearch" placeholder="Name, mobile, case no…" style="min-width:220px">
+    <button class="btn embossed" id="histSearchBtn">Search</button>
+    <button class="btn embossed" id="histClearBtn">Clear</button>
+    <span class="mini" id="histHint">Showing all appointments</span>
+  </div>
+  <div class="pagination historyPagination" id="histPagination"></div>
+  <div class="card histCard"><div class="cardBody tablewrap histTableWrap"><table class="table histTable">
+    <thead><tr><th>Case</th><th>Date</th><th>Type</th><th>Patient</th><th>Fees</th><th>Paid</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody id="histBody"></tbody>
+  </table></div><div class="mobileCardList" id="histMobileCards"></div></div></div>
+</section>
+<section class="page" id="connection"><div class="hero"><div><h1>Server Connection</h1><p>Optional synchronization with the Office computer. Reception works offline when Office is unavailable.</p></div><button class="primary" id="testConn">Check Connection</button></div><div class="card"><div class="cardBody"><div class="connectionBig off" id="connBig">Offline / not connected</div><p id="connDetail" class="mini"></p><div class="formgrid" style="margin-top:15px"><label class="full">Sync Server URL<input id="serverUrl" placeholder="http://192.168.1.25:8787"></label><div class="full actions"><button class="green" id="connectBtn">Connect & Sync</button></div></div></div></div></section>
+
+<section class="page" id="bill">
+<div class="hero"><div><h1>Bill / Receipt</h1><p>Print patient bill with stamp. Use letterhead mode on pre-printed pads.</p></div></div>
+<div class="card embossed"><div class="cardHead"><h2>Create Bill</h2></div><div class="cardBody">
+<div class="formgrid">
+<label>Search patient<input id="billPatientSearch" placeholder="Search name / mobile / case — last case on top…" autocomplete="off"></label>
+<label>Patient<select id="billPatientSelect" class="embossed"><option value="">— Select patient —</option></select></label>
+<label>Date<input type="date" id="billDate"></label>
+<label class="full">Patient name (print)<input id="billPatientName"></label>
+<label>Case No.<input id="billCaseNo" readonly></label>
+</div>
+<div class="billFeePicks" style="margin-top:14px">
+  <label class="billChk embossed"><input type="checkbox" id="billIncConsult" checked> Consultation <input type="number" id="billConsultAmt" min="0" value="0" class="billAmt"></label>
+  <label class="billChk embossed"><input type="checkbox" id="billIncMedicine" checked> Medicine <input type="number" id="billMedicineAmt" min="0" value="0" class="billAmt"></label>
+  <label class="billChk embossed"><input type="checkbox" id="billIncRenewal"> Renewal <input type="number" id="billRenewalAmt" min="0" value="0" class="billAmt"></label>
+  <label class="billChk embossed"><input type="checkbox" id="billIncCourier"> Courier <input type="number" id="billCourierAmt" min="0" value="0" class="billAmt"></label>
+</div>
+<div class="actions" style="margin-top:14px;flex-wrap:wrap;gap:10px">
+  <label class="billChk embossed" style="display:inline-flex;align-items:center;gap:8px;margin-right:12px">
+  <input type="checkbox" id="billSkipHeader"> Print without logo / doctors
+</label>
+<button type="button" class="btn embossed primary" id="billPreviewBtn">Preview</button>
+  <button type="button" class="btn embossed green" id="billPrintFullBtn">Print (with header)</button>
+  <button type="button" class="btn embossed" id="billPrintLetterheadBtn">Print on letterhead (no logo)</button>
+</div>
+</div></div>
+<div class="card" style="margin-top:16px"><div class="cardHead"><h2>Preview</h2></div><div class="cardBody"><div id="billPreview" class="billSheet"></div></div></div>
+</section>
+<section class="page" id="backup"><div class="hero"><div><h1>Backup / Restore</h1><p>Reception data backup.</p></div>
+<div class="paymentViewControl embossed"><label for="backupViewSelect">Backup View</label>
+<select id="backupViewSelect" class="embossed">
+<option value="reception" selected>Reception Backup</option>
+<option value="office">Office Backup</option>
+</select></div></div>
+<div id="receptionBackupPanel" class="card embossed"><div class="cardHead"><h2>Reception Backup</h2></div><div class="cardBody">
+<div class="actions embossedActions" style="flex-wrap:wrap;gap:12px">
+<button type="button" class="btn embossed green" id="receptionBackupBtn" style="min-height:44px;padding:12px 22px;font-weight:700">⬇ Reception Backup Now</button>
+<button type="button" class="btn embossed green" id="manualBackupBtn">⬇ Backup Now</button>
+<button type="button" class="primary embossed" id="exportBtn">Export Full Backup</button>
+<label class="btn embossed">Import Full Backup<input id="importInput" type="file" accept="application/json" hidden></label>
+</div>
+<div class="actions" style="margin-top:14px"><button type="button" class="btn embossed green" id="serverBackupBtn">Save Safe Server Backup</button><button type="button" class="btn embossed" id="refreshBackupListBtn">Refresh Backup List</button></div>
+<div id="serverBackupList" class="serverBackupList" style="margin-top:12px"></div>
+<div class="card embossed" style="margin-top:16px"><div class="cardHead"><h2>Last 5 Full Backups (This PC)</h2></div><div class="cardBody"><div id="localBackupList" class="serverBackupList"></div></div></div>
+<p class="mini">Safe Server Backup: last <b>5</b> only (older auto-delete).</p>
+</div></div>
+<div id="officeBackupPanel" class="card embossed hidden" style="margin-top:16px"><div class="cardHead"><h2>Office Backup</h2></div><div class="cardBody">
+<p class="mini">Office backup Office application se banaye.</p>
+<button type="button" class="btn embossed" id="officeBackupBtn">⬇ Office Backup Now</button>
+</div></div>
+<div class="card embossed" style="margin-top:16px"><div class="cardHead"><h2>Auto Backup</h2><span id="autoBackupStatus" class="mini">Off</span></div><div class="cardBody">
+<label>Auto backup interval
+<select id="autoBackupInterval" class="embossed">
+<option value="0">Off</option>
+<option value="30">Every 30 minutes</option>
+<option value="60">Every 1 hour</option>
+<option value="120">Every 2 hours</option>
+<option value="180">Every 3 hours</option>
+<option value="240">Every 4 hours</option>
+</select></label>
+<div class="actions" style="margin-top:14px">
+<button type="button" class="btn embossed primary" id="saveAutoBackupBtn">Save Auto Backup Settings</button>
+</div>
+<p class="mini" style="margin-top:12px">Last auto backup: <b id="lastAutoBackupTime">Never</b></p>
+</div></div>
+</section>
+</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=77"></script></body></html>
