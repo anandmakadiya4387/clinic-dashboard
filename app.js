@@ -436,8 +436,16 @@ function connectClinicWebSocket() {
             try { clinicWs.close(); } catch (e) {}
             clinicWs = null;
         }
-        const ws = new WebSocket(wsBase + '/ws');
-        clinicWs = ws;
+        let wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+let wsHost = server ? server.replace(/^https?:\/\//, '') : window.location.host;
+let wsUrl = wsProtocol + '//' + wsHost + '/ws';
+
+if (window.location.protocol === 'https:' && wsUrl.startsWith('ws:')) {
+    wsUrl = wsUrl.replace('ws:', 'wss:');
+}
+
+const ws = new WebSocket(wsUrl);
+clinicWs = ws;
         ws.onopen = () => {
             setConn(true, 'Live WebSocket connected', 0);
             try { ws.send('ping'); } catch (e) {}
