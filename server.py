@@ -26,6 +26,45 @@ START_PAGE = "office.html" if ROLE == "office" else "reception.html"
 DBFILE = os.path.join(BASE_DIR, "clinic-sync.sqlite3")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 os.makedirs(BACKUP_DIR, exist_ok=True)
+# --- SUPABASE STORAGE SYNC ---
+try:
+    from supabase import create_client
+    _sb_url = os.environ.get("SUPABASE_URL")
+    _sb_key = os.environ.get("SUPABASE_KEY")
+    sb_client = create_client(_sb_url, _sb_key) if _sb_url and _sb_key else None
+except Exception as e:
+    sb_client = None
+    print(f"Supabase init error: {e}")
+
+def pull_db_from_supabase():
+    """Startup par cloud se SQLite database restore karega"""
+    if not sb_client:
+        return
+    try:
+        res = sb_client.storage.from_("clinic-backups").download("clinic-sync.sqlite3")
+        with open(DBFILE, "wb") as f:
+            f.write(res)
+        print(">>> Restored database from Supabase cloud!")
+    except Exception as e:
+        print(f">>> Supabase download note (may be first run): {e}")
+
+def push_db_to_supabase():
+    """Naya data aate hi cloud bucket par backup upload karega"""
+    if not sb_client or not os.path.exists(DBFILE):
+        return
+    try:
+        with open(DBFILE, "rb") as f:
+            file_bytes = f.read()
+        sb_client.storage.from_("clinic-backups").upload(
+            file=file_bytes,
+            path="clinic-sync.sqlite3",
+            file_options={"upsert": "true"}
+        )
+        print(">>> Database backed up to Supabase cloud!")
+    except Exception as e:
+        print(f">>> Supabase sync error: {e}")
+
+pull_db_from_supabase()
 LOCK = threading.RLock()
 PEERS: dict[str, float] = {}
 DISCOVERY_PORT = 8788
