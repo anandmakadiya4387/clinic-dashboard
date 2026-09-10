@@ -482,8 +482,12 @@ def create_fastapi_app():
             while True:
                 msg = await ws.receive_text()
                 # ping/pong or client notify
-                if msg == "ping":
-                    await ws.send_text(json.dumps({"type": "pong", "time": now()}))
+                try:
+                _d = json.loads(msg) if str(msg).startswith("{") else {}
+            except Exception:
+                _d = {}
+            if msg == "ping" or _d.get("type") == "ping":
+                await ws.send_text(json.dumps({"type": "pong", "time": now()}))
         except WebSocketDisconnect:
             pass
         except Exception:
