@@ -374,6 +374,7 @@ def create_fastapi_app():
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -466,8 +467,8 @@ def create_fastapi_app():
         return {"peers": sorted(PEERS)}
 
     @app.websocket("/ws")
-    async def websocket_endpoint(ws: WebSocket):
-        await ws.accept()
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept(subprotocol=None)
         # attach loop for cross-thread send
         try:
             import asyncio
