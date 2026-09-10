@@ -378,7 +378,7 @@ def create_fastapi_app():
         allow_headers=["*"],
     )
 
-    def role_guard(request: Request, x_role: str | None, x_token: str | None, office_only=False):
+    def role_guard(request: Request, x_role: str | None = None, x_token: str | None = None, office_only=False):
         # Token optional for LAN ease; if provided must match
         if x_token and not check_token(x_token):
             raise HTTPException(401, "Invalid or expired session")
