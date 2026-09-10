@@ -407,14 +407,42 @@
 </div></div>
 </section>
 <script src="app.js?v=77"></script>
+<style>
+  aside.mobile-open, nav.mobile-open, .sidebar.mobile-open, div.mobile-open {
+    display: flex !important;
+    flex-direction: column !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 280px !important;
+    height: 100vh !important;
+    z-index: 999999 !important;
+    background: #0d2137 !important;
+    overflow-y: auto !important;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.6) !important;
+  }
+</style>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    const menuBtn = document.querySelector(".navToggle, #menuBtn, .hamburger, [onclick*='toggle'], nav button");
-    const sidebar = document.querySelector(".sidebar, #sidebar, aside, nav");
+    const navBtn = document.querySelector(".navBtn");
+    const sidebar = navBtn ? (navBtn.closest("aside") || navBtn.closest("nav") || navBtn.parentElement) : null;
+    const allButtons = Array.from(document.querySelectorAll("button, div[role='button']"));
+    const menuBtn = allButtons.find(b => {
+      const txt = (b.innerText || b.textContent || "").trim();
+      return txt.includes("☰") || b.innerHTML.includes("svg") || b.className.includes("nav") || b.className.includes("menu");
+    }) || allButtons[0];
+
     if (menuBtn && sidebar) {
-      menuBtn.addEventListener("click", function () {
-        sidebar.classList.toggle("open");
-        sidebar.classList.toggle("active");
+      menuBtn.style.cursor = "pointer";
+      menuBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        sidebar.classList.toggle("mobile-open");
+      });
+      document.addEventListener("click", function (e) {
+        if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
+          sidebar.classList.remove("mobile-open");
+        }
       });
     }
   });
