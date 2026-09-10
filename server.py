@@ -65,6 +65,16 @@ def push_db_to_supabase():
         print(f">>> Supabase sync error: {e}")
 
 pull_db_from_supabase()
+def auto_sync_worker():
+    while True:
+        time.sleep(30)
+        try:
+            push_db_to_supabase()
+        except Exception:
+            pass
+
+threading.Thread(target=auto_sync_worker, daemon=True).start()
+
 LOCK = threading.RLock()
 PEERS: dict[str, float] = {}
 DISCOVERY_PORT = 8788
