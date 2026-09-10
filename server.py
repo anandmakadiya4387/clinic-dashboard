@@ -53,6 +53,9 @@ def push_db_to_supabase():
     if not sb_client or not os.path.exists(DBFILE):
         return
     try:
+        con = sqlite3.connect(DBFILE)
+        con.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        con.close()
         with open(DBFILE, "rb") as f:
             file_bytes = f.read()
         sb_client.storage.from_("clinic-backups").upload(
