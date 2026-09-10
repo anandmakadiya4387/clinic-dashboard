@@ -524,7 +524,7 @@ function setConn(ok, msg, lagMs) {
 }
 async function testConn() {
     if (!server) {
-        setConn(false, 'Enter a server URL such as http://192.168.1.25:8787');
+        setConn(false, 'Enter a server URL such as https://clinic-dashboard-kv0x.onrender.com');
         return
     }
     try {
