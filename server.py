@@ -409,11 +409,11 @@ def create_fastapi_app():
         return {"ok": True, "token": tok, "role": role}
 
     @app.get("/api/data")
-    def get_data(x_token: str | None = Header(default=None)):
+    def get_data(request: Request):
         return load_state()
 
     @app.post("/api/sync")
-    async def sync(request: Request, x_token: str | None = Header(default=None)):
+    async def sync(request: Request):
         body = await request.json()
         current = load_state()
         merged = merge_state(current, body)
