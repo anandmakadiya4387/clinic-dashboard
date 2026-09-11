@@ -410,7 +410,7 @@ def create_fastapi_app():
         return {"ok": True, "token": tok, "role": role}
 
     @app.get("/api/data")
-    def get_data(request: Request):
+    def get_data():
         return load_state()
 
     @app.post("/api/sync")
@@ -468,7 +468,7 @@ def create_fastapi_app():
 
     @app.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket):
-        await ws.accept(subprotocol=None)
+        await ws.accept()
         # attach loop for cross-thread send
         try:
             import asyncio
