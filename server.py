@@ -467,8 +467,8 @@ def create_fastapi_app():
         return {"peers": sorted(PEERS)}
 
     @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept(subprotocol=None)
+    async def websocket_endpoint(ws: WebSocket):
+        await ws.accept(subprotocol=None)
         # attach loop for cross-thread send
         try:
             import asyncio
