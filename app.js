@@ -436,16 +436,8 @@ function connectClinicWebSocket() {
             try { clinicWs.close(); } catch (e) {}
             clinicWs = null;
         }
-        let wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-let wsHost = server ? server.replace(/^https?:\/\//, '') : window.location.host;
-let wsUrl = wsProtocol + '//' + wsHost + '/ws';
-
-if (window.location.protocol === 'https:' && wsUrl.startsWith('ws:')) {
-    wsUrl = wsUrl.replace('ws:', 'wss:');
-}
-
-const ws = new WebSocket(wsUrl);
-clinicWs = ws;
+        const ws = new WebSocket(wsBase + '/ws');
+        clinicWs = ws;
         ws.onopen = () => {
             setConn(true, 'Live WebSocket connected', 0);
             try { ws.send('ping'); } catch (e) {}
@@ -532,7 +524,7 @@ function setConn(ok, msg, lagMs) {
 }
 async function testConn() {
     if (!server) {
-        setConn(false, 'Enter a server URL such as https://clinic-dashboard-kv0x.onrender.com');
+        setConn(false, 'Enter a server URL such as http://192.168.1.25:8787');
         return
     }
     try {
