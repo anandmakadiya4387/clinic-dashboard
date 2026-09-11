@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=77"></head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-bill-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=pro1"></head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-bill-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
   <button type="button" class="navBtn navParent" id="patientsNavToggle">Patients ▾</button>
   <div class="navSub" id="patientsNavSub">
     <button type="button" class="navBtn navSubBtn" data-page="patients" data-patient-view="new">New Cases</button>
@@ -13,13 +13,13 @@
     <button type="button" class="navBtn navSubBtn" data-page="payments" data-pay-view="incomeExpense">Income &amp; Expenses</button>
     <button type="button" class="navBtn navSubBtn" data-page="payments" data-pay-view="spendEntries">Spend Entries</button>
   </div>
-<button class="navBtn" data-page="appointmentHistory">Appointment History</button><button class="navBtn" data-page="medicines">Medicine</button><button class="navBtn" data-page="clinic">Clinic Profile</button><button class="navBtn" data-page="connection">Server Connection</button><button class="navBtn" data-page="permissions">Reception Permissions</button><button class="navBtn" data-page="bill">Bill / Receipt</button><button class="navBtn" data-page="reports">Reports</button><button class="navBtn" data-page="backup">Backup / Restore</button></div></aside><main class="main"><header class="topbar"><button class="toggle embossed hamburgerBtn" id="toggleSide" type="button" aria-label="Toggle sidebar"><span class="hamIcon" aria-hidden="true">☰</span></button><span>Office</span><span class="appVersionBadge" title="Application version">v77</span><span class="syncLiveBadge" id="syncLiveBadge" data-sync="1" title="LAN sync status">Offline</span><button class="btn embossed themeToggle" id="themeToggle">☾ Dark</button>
+<button class="navBtn" data-page="appointmentHistory">Appointment History</button><button class="navBtn" data-page="medicines">Medicine</button><button class="navBtn" data-page="clinic">Clinic Profile</button><button class="navBtn" data-page="connection">Server Connection</button><button class="navBtn" data-page="permissions">Reception Permissions</button><button class="navBtn" data-page="bill">Bill / Receipt</button><button class="navBtn" data-page="reports">Reports</button><button class="navBtn" data-page="backup">Backup / Restore</button></div></aside><main class="main"><header class="topbar"><button class="toggle embossed hamburgerBtn" id="toggleSide" type="button" aria-label="Toggle sidebar"><span class="hamIcon" aria-hidden="true">☰</span></button><span>Office</span><span class="appVersionBadge" title="Application version">PRO 1</span><span class="syncLiveBadge" id="syncLiveBadge" data-sync="1" title="LAN sync status">Offline</span><button class="btn embossed themeToggle" id="themeToggle">☾ Dark</button>
 <div class="globalSearchWrap">
   <input type="search" id="globalPatientSearch" class="globalPatientSearch" placeholder="Search patient: name, mobile, case no…" autocomplete="off" aria-label="Search patient">
   <div class="globalSearchResults hidden" id="globalSearchResults" role="listbox"></div>
 </div>
-<span class="status off" id="connDot">Offline</span><span id="connText">Offline</span><span class="mini lastSync" id="lastSyncText"></span><button type="button" class="btn embossed mini" id="reconnectBtn" title="Reconnect &amp; sync">Reconnect</button><button class="toggle refreshBtn" id="refreshBtn" title="Refresh now">↻ Refresh</button></header>
-<section class="page active" id="dashboard"><section class="calendarStrip embossed"><div><button class="btn embossed" id="calendarBtn">📅 Calendar</button><span id="calendarSelected" class="calendarSelected">Selected date: --/--/----</span></div><div id="calendarPanel" class="calendarPanel hidden"><input id="calendarDate" type="date"><span id="festivalInfo" class="festivalInfo">No festival within the next 15 days</span></div></section><div class="hero"><div><h1>Patient Entry</h1><p>Register new or old cases. Works offline and syncs when a server is available.</p></div><div class="actions"><button class="primary" id="newCase">New Case</button><button class="green" id="oldCase">Old Case</button></div></div><div class="queueStrip premiumQueueStrip medicalTechQueue" id="queueStatusStrip">
+<span class="mini lastSync" id="lastSyncText"></span><button type="button" class="btn embossed mini" id="reconnectBtn" title="Reconnect &amp; sync">Reconnect</button><button class="toggle refreshBtn" id="refreshBtn" title="Refresh now">↻ Refresh</button></header>
+<section class="page active" id="dashboard"><section class="calendarStrip embossed"><div><button class="btn embossed" id="calendarBtn">📅 Calendar</button><span id="calendarSelected" class="calendarSelected">Selected date: --/--/----</span></div><div id="calendarPanel" class="calendarPanel hidden"><input id="calendarDate" type="date"><span id="festivalInfo" class="festivalInfo">No festival within the next 15 days</span></div></section><div class="hero"><div><h1 class="patientEntryTitle">Patient Entry</h1></div><div class="actions"><button class="primary" id="newCase">New Case</button><button class="green" id="oldCase">Old Case</button></div></div><div class="queueStrip premiumQueueStrip medicalTechQueue" id="queueStatusStrip">
   <div class="queueStat wait"><span class="qDot"></span><small>Waiting</small><b id="qWaiting">0</b></div>
   <div class="queueStat doctor"><span class="qDot"></span><small>With doctor</small><b id="qWithDoctor">0</b></div>
   <div class="queueStat done"><span class="qDot"></span><small>Completed</small><b id="qCompleted">0</b></div>
@@ -45,11 +45,11 @@
 <div class="pagination" id="queuePagination"></div>
 </div></div>
 
-<div class="card hidden" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label>Consultation Fees<input id="consultation" type="number" min="0" value="0"></label><label>Medicine Fees<input id="medicine" type="number" min="0" value="0"></label><label class="hidden" id="renewWrap">Renewal Fees (Annual)<input id="renewal" type="number" min="0" value="0"><span class="mini" id="renewDue"></span></label><label class="full backdatePendingWrap" style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px 12px;border-radius:12px;background:linear-gradient(165deg,#fffbeb,#fef3c7);border:1px solid #f0d78c">
+<div class="card hidden patientFormCard newCasePanel" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label>Consultation Fees<input id="consultation" type="number" min="0" value="0"></label><label>Medicine Fees<input id="medicine" type="number" min="0" value="0"></label><label class="hidden" id="renewWrap">Renewal Fees (Annual)<input id="renewal" type="number" min="0" value="0"><span class="mini" id="renewDue"></span></label><label class="full backdatePendingWrap" style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px 12px;border-radius:12px;background:linear-gradient(165deg,#fffbeb,#fef3c7);border:1px solid #f0d78c">
 <input type="checkbox" id="backdatePending"> <span><b>Mark payment as Pending</b> <span class="mini">(back-dated entry only — leave unticked = Received automatically)</span></span>
 </label>
 <div class="full actions"><button type="submit" class="primary embossed" id="patientSubmitBtn">Update</button></div></form></div></div>
-<div class="card hidden" id="oldAppointmentPanel">
+<div class="card hidden oldCasePanel" id="oldAppointmentPanel">
   <div class="cardHead">
     <h2>Old Case — Find patient &amp; add appointment</h2>
     <button type="button" class="btn embossed" id="oldApptClose">Close</button>
@@ -101,7 +101,7 @@
     <tbody id="histBody"></tbody>
   </table></div></div>
 </section>
-<section class="page" id="payments"><div class="hero"><div><h1>Payment</h1><p>Choose a payment view. All financial figures come from the live ledger.</p></div><div class="paymentViewControl embossed"><label for="paymentViewSelect">Payment View</label><select id="paymentViewSelect" class="embossed"><option value="clinicPayment">Clinic Payment</option><option value="yearlyPayment">Yearly Payment</option><option value="incomeExpense">Income &amp; Expenses</option><option value="spendEntries">Spend Entries</option></select></div></div>
+<section class="page" id="payments"><div class="hero"><div><h1>Payment</h1></div><div class="paymentViewControl embossed"><label for="paymentViewSelect">Payment View</label><select id="paymentViewSelect" class="embossed"><option value="clinicPayment">Clinic Payment</option><option value="yearlyPayment">Yearly Payment</option><option value="incomeExpense">Income &amp; Expenses</option><option value="spendEntries">Spend Entries</option></select></div></div>
 <div id="clinicPaymentPanel">
 <div class="filterBar embossed financeFilterBar">
   <span>Year</span><select id="paymentYearSelect"></select>
@@ -111,9 +111,7 @@
   <span>From</span><input type="date" id="payCustomFrom" class="dateInput">
   <span>To</span><input type="date" id="payCustomTo" class="dateInput">
   <button class="btn embossed" id="payFilterShow">Show</button>
-  <button class="btn embossed" id="payFilterClear">All years</button>
-  <span class="mini" id="payYearHint">Select period</span>
-</div>
+  </div>
 <div class="paySummaryTop" id="paySummaryTop">
   <div class="paySummaryBox new"><small>New Case Payment</small><b id="paySumNew">₹ 0</b></div>
   <div class="paySummaryBox renewal"><small>Renewal Payment</small><b id="paySumRenewal">₹ 0</b></div>
@@ -123,10 +121,9 @@
 </div>
 <div class="card" style="margin-top:14px"><div class="cardHead"><h2 id="payMonthCompareTitle">Monthly Payment Comparison</h2><span>Select year — New · Renewal · Medicine · Total</span></div>
 <div class="cardBody">
-<div class="yearSelectWrap embossed raisedYearBox">
-  <label for="monthlyYearSelect"><b>Select Year</b></label>
-  <select id="monthlyYearSelect" class="embossed yearSelectBox" aria-label="Select year for monthly comparison"></select>
-  
+<div class="yearSelectWrap slimYearSelect">
+  <label for="monthlyYearSelect">Year</label>
+  <select id="monthlyYearSelect" class="yearSelectBox slim" aria-label="Select year for monthly comparison"></select>
 </div>
 <div class="tablewrap" style="margin-top:12px"><table class="payMonthTable"><thead><tr><th>Month</th><th>New Cases</th><th>Renewal</th><th>Medicine</th><th>Total</th></tr></thead><tbody id="payMonthCompareBody"></tbody></table></div>
 </div></div>
@@ -134,10 +131,6 @@
 <div id="yearlyPaymentPanel" class="hidden">
 <div class="card" style="margin-top:14px"><div class="cardHead"><h2>Year comparison</h2><span>All years from ledger — New · Renewal · Medicine · Total</span></div>
 <div class="cardBody">
-<div class="yearCompareToolbar">
-  <button type="button" class="btn embossed primary" id="yearCompareShowAllBtn">Show all years (start → now)</button>
-  <span class="mini" id="yearCompareHint">10 years per page</span>
-</div>
 <div class="tablewrap" style="margin-top:10px"><table class="payMonthTable" id="payYearCompareTable"><thead><tr><th>Year</th><th>New</th><th>Renewal</th><th>Medicine</th><th>Total</th></tr></thead><tbody id="payYearCompareBody"></tbody></table></div>
 <div class="pagination" id="yearComparePagination" style="margin-top:12px"></div>
 </div></div>
@@ -157,10 +150,9 @@
 </div>
 <div class="card" style="margin-top:14px"><div class="cardHead"><h2 id="expenseMonthlyTitle">Income vs Expenses (Monthly)</h2><span>Select year — Clinic income minus other expenses</span></div>
 <div class="cardBody">
-<div class="yearSelectWrap embossed raisedYearBox">
-  <label for="expenseMonthlyYearSelect"><b>Select Year</b></label>
-  <select id="expenseMonthlyYearSelect" class="embossed yearSelectBox"></select>
-  
+<div class="yearSelectWrap slimYearSelect">
+  <label for="expenseMonthlyYearSelect">Year</label>
+  <select id="expenseMonthlyYearSelect" class="yearSelectBox slim"></select>
 </div>
 <div class="tablewrap" style="margin-top:12px"><table class="payMonthTable"><thead><tr><th>Month</th><th>Clinic Income</th><th>Other Expenses</th><th>Net Income</th></tr></thead><tbody id="expenseCompareBody"></tbody></table></div>
 </div></div>
@@ -349,13 +341,11 @@
 <div id="officeBackupPanel" class="card embossed"><div class="cardHead"><h2>Office Backup</h2></div><div class="cardBody">
 <p class="mini">Sirf Office database ka backup / restore.</p>
 <div class="actions embossedActions" style="flex-wrap:wrap;gap:12px">
-<button type="button" class="btn embossed green" id="officeBackupBtn" style="min-height:44px;padding:12px 22px;font-weight:700">⬇ Office Backup Now</button>
 <button type="button" class="btn embossed green" id="manualBackupBtn">⬇ Backup Now</button>
 <button type="button" class="primary embossed" id="exportBtn">Export Full Backup</button>
 <label class="btn embossed">Import Full Backup<input id="importInput" type="file" accept="application/json" hidden></label>
-<label class="btn embossed">Import Previous Data<input id="importPreviousInput" type="file" accept="application/json" hidden></label>
 </div>
-<div class="actions" style="margin-top:14px"><button type="button" class="btn embossed green" id="serverBackupBtn">Save Safe Server Backup</button><button type="button" class="btn embossed" id="refreshBackupListBtn">Refresh Backup List</button><button type="button" class="btn embossed" id="emailBackupBtnOffice">Email / Cloud Backup</button></div>
+<div class="actions" style="margin-top:14px"><button type="button" class="btn embossed green" id="serverBackupBtn">Save Safe Server Backup</button></div>
 <div id="serverBackupList" class="serverBackupList" style="margin-top:12px"></div>
 <div class="card embossed" style="margin-top:16px" id="localBackupCard">
   <div class="cardHead"><h2>Last 5 Full Backups (This PC)</h2><span class="mini">Always available offline</span></div>
@@ -369,15 +359,12 @@
 <div id="receptionBackupPanel" class="card embossed hidden" style="margin-top:16px"><div class="cardHead"><h2>Reception Backup</h2></div><div class="cardBody">
 <p class="mini">Sirf Reception database ka backup / restore — Office jaisa full tools.</p>
 <div class="actions embossedActions" style="flex-wrap:wrap;gap:12px">
-<button type="button" class="btn embossed green" id="receptionBackupBtn" style="min-height:44px;padding:12px 22px;font-weight:700">⬇ Reception Backup Now</button>
 <button type="button" class="btn embossed green" id="receptionManualBackupBtn">⬇ Backup Now</button>
 <button type="button" class="primary embossed" id="receptionExportBtn">Export Full Backup</button>
 <label class="btn embossed">Import Full Backup<input id="receptionImportInput" type="file" accept="application/json" hidden></label>
 </div>
 <div class="actions" style="margin-top:14px">
 <button type="button" class="btn embossed green" id="receptionServerBackupBtn">Save Safe Server Backup</button>
-<button type="button" class="btn embossed" id="receptionRefreshBackupListBtn">Refresh Backup List</button>
-<button type="button" class="btn embossed" id="emailBackupBtn">Email / Cloud Backup</button>
 </div>
 <div id="receptionServerBackupList" class="serverBackupList" style="margin-top:12px"></div>
 <p class="mini" style="margin-top:10px">Safe Server Backup last <b>5</b> only. Email backup JSON download karke aapke email client me attach/send kar sakte ho (PC crash recovery).</p>
@@ -406,4 +393,4 @@
 <p class="mini">Reception data tab include hoga jab Reception isi browser / PC pe kabhi open ho chuka ho (localStorage me save ho).</p>
 </div></div>
 </section>
-</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=77"></script></body></html>
+</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=pro1"></script></body></html>

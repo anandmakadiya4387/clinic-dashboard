@@ -1,4 +1,4 @@
-const APP_VERSION = 'v77';
+const APP_VERSION = 'PRO 1';
 const role = document.body.dataset.role || 'office';
 const savedTheme = localStorage.getItem('anandClinicTheme') || 'light';
 document.documentElement.dataset.theme = savedTheme;
@@ -490,11 +490,14 @@ function setConn(ok, msg, lagMs) {
         txt = $('#connText'),
         big = $('#connBig'),
         detail = $('#connDetail');
-    if (dot) dot.className = 'status ' + (ok ? 'ok' : 'off');
-    if (txt) txt.textContent = ok ? 'Connected' : 'Offline';
+    if (dot) {
+        dot.className = 'status ' + (ok ? 'ok' : 'off');
+        dot.textContent = ok ? 'Online' : 'Offline';
+    }
+    if (txt) txt.textContent = ok ? 'Online' : 'Offline';
     if (big) {
         big.textContent = ok
-            ? (`Live · lag ${lagMs != null ? lagMs : '—'} ms`)
+            ? (`Online · lag ${lagMs != null ? lagMs : '—'} ms`)
             : 'Offline / not connected';
         big.className = 'connectionBig ' + (ok ? 'ok' : 'off')
     }
@@ -503,11 +506,11 @@ function setConn(ok, msg, lagMs) {
     const live = $('#syncLiveBadge');
     if (live) {
         if (ok) {
-            live.textContent = lagMs != null ? `🟢 Live · ${lagMs} ms` : '🟢 Live Connected';
-            live.className = 'syncLiveBadge live';
+            live.textContent = lagMs != null ? `Online · ${lagMs} ms` : 'Online';
+            live.className = 'syncLiveBadge live online';
         } else {
-            live.textContent = '🔴 Offline';
-            live.className = 'syncLiveBadge off';
+            live.textContent = 'Offline';
+            live.className = 'syncLiveBadge off offline';
         }
     }
     const ls = $('#lastSyncText');
@@ -4643,7 +4646,7 @@ function setup() {
     $('#reconnectBtn')?.addEventListener('click', async () => {
         setConn(false, '🟡 Syncing…', null);
         const live = $('#syncLiveBadge');
-        if (live) { live.textContent = '🟡 Syncing…'; live.className = 'syncLiveBadge syncing'; }
+        if (live) { live.textContent = 'Syncing…'; live.className = 'syncLiveBadge syncing'; }
         try { await syncNow(false); connectClinicWebSocket(); } catch (e) { toast('Reconnect failed', true); }
     });
     setupBackupUI();
