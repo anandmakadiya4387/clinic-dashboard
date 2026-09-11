@@ -2291,3 +2291,219 @@ tr.doctorRow td,
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
+
+
+/* ========== V78 ========== */
+/* Online badge clearly says Online (green); Offline stays red/muted */
+.syncLiveBadge.live,
+.syncLiveBadge.online{
+  background: #dcfce7 !important;
+  color: #166534 !important;
+  border: 1px solid #86efac !important;
+  font-weight: 600 !important;
+}
+.syncLiveBadge.off,
+.syncLiveBadge.offline{
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+  border: 1px solid #fca5a5 !important;
+  font-weight: 600 !important;
+}
+.syncLiveBadge.syncing{
+  background: #fef9c3 !important;
+  color: #854d0e !important;
+}
+
+/* Patient Entry title — not bold */
+#dashboard .hero h1,
+#dashboard .hero h1.patientEntryTitle,
+.patientEntryTitle{
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  font-size: 1.35rem !important;
+  color: #1e293b !important;
+}
+
+/* Compact queue strip: Waiting / With doctor / Completed — small, content-sized */
+#queueStatusStrip.premiumQueueStrip,
+.premiumQueueStrip.medicalTechQueue,
+.medicalTechQueue{
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  align-items: stretch !important;
+  margin: 8px 0 12px !important;
+}
+.medicalTechQueue .queueStat,
+#queueStatusStrip .queueStat{
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 72px !important;
+  max-width: 110px !important;
+  padding: 6px 10px !important;
+  min-height: 0 !important;
+  height: auto !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 2px !important;
+}
+.medicalTechQueue .queueStat small,
+#queueStatusStrip .queueStat small{
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  letter-spacing: .03em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+.medicalTechQueue .queueStat b,
+#queueStatusStrip .queueStat b{
+  font-size: 1.05rem !important;
+  font-weight: 600 !important;
+  line-height: 1.1 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* KPI boxes — equal base, grow slightly with content */
+.premiumKpiGrid.medicalTechGrid,
+.medicalTechGrid{
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+.medicalTechGrid .kpiCard{
+  min-height: 64px !important;
+  height: auto !important;
+  max-height: none !important;
+  padding: 8px 10px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.medicalTechGrid .kpiBody span{
+  font-weight: 400 !important;
+  font-size: 10.5px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.medicalTechGrid .kpiBody b{
+  font-weight: 600 !important;
+  font-size: 15px !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100%;
+}
+
+@media(max-width:1100px){
+  .premiumKpiGrid.medicalTechGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+@media(max-width:700px){
+  .premiumKpiGrid.medicalTechGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .medicalTechQueue .queueStat{ max-width: 100px !important; }
+}
+
+
+/* ========== PRO 1 ========== */
+/* New Case form — soft teal/sky tint so panel is instantly noticeable */
+#patientForm.patientFormCard,
+#patientForm.newCasePanel,
+.card.patientFormCard,
+.card.newCasePanel{
+  background: linear-gradient(165deg, #e8f6f3 0%, #d4efe9 45%, #e3f2fd 100%) !important;
+  border: 1px solid #9ad4c8 !important;
+  box-shadow: 0 8px 28px rgba(15, 107, 92, .12), inset 0 1px 0 rgba(255,255,255,.7) !important;
+  border-radius: 16px !important;
+}
+#patientForm .cardHead,
+.newCasePanel .cardHead{
+  background: rgba(255,255,255,.45) !important;
+  border-bottom: 1px solid rgba(15,107,92,.12) !important;
+  border-radius: 16px 16px 0 0 !important;
+}
+#patientForm input,
+#patientForm select,
+#patientForm textarea,
+.newCasePanel input,
+.newCasePanel select,
+.newCasePanel textarea{
+  background: #fff !important;
+  border: 1px solid #b7d4ce !important;
+}
+
+/* Old Case panel — soft amber/cream tint */
+#oldAppointmentPanel.oldCasePanel,
+.card.oldCasePanel{
+  background: linear-gradient(165deg, #fff8eb 0%, #fef3c7 50%, #fde68a33 100%) !important;
+  border: 1px solid #f0d78c !important;
+  box-shadow: 0 8px 28px rgba(180, 120, 20, .10), inset 0 1px 0 rgba(255,255,255,.75) !important;
+  border-radius: 16px !important;
+}
+#oldAppointmentPanel .cardHead,
+.oldCasePanel .cardHead{
+  background: rgba(255,255,255,.5) !important;
+  border-bottom: 1px solid rgba(180,120,20,.12) !important;
+  border-radius: 16px 16px 0 0 !important;
+}
+#oldAppointmentPanel input,
+#oldAppointmentPanel select,
+.oldCasePanel input,
+.oldCasePanel select{
+  background: #fff !important;
+  border: 1px solid #e8d4a8 !important;
+}
+
+/* Slim year select — no big embossed box, not bold */
+.yearSelectWrap.slimYearSelect{
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 !important;
+  margin: 0 0 8px !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.yearSelectWrap.slimYearSelect label{
+  font-weight: 400 !important;
+  font-size: 13px !important;
+  color: #5a6a7a !important;
+}
+.yearSelectBox.slim,
+select.yearSelectBox.slim{
+  font-weight: 400 !important;
+  font-size: 13px !important;
+  padding: 4px 8px !important;
+  min-width: 88px !important;
+  max-width: 110px !important;
+  height: 30px !important;
+  border: 1px solid #c9d5e1 !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+/* Month names / pay month table — not bold */
+.payMonthTable th,
+.payMonthTable td,
+.payMonthTable thead th,
+.payMonthTable tbody td{
+  font-weight: 400 !important;
+}
+.payMonthTable tfoot td{
+  font-weight: 500 !important;
+}
+
+/* Version badge PRO 1 */
+.appVersionBadge{
+  font-weight: 600 !important;
+  letter-spacing: .04em !important;
+  background: linear-gradient(135deg, #1e3a5f, #2563eb) !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 3px 10px !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+}
