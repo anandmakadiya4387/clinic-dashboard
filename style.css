@@ -2655,3 +2655,7 @@ body[data-role="reception"] #queueStatusStrip{
 .totalCollectCell .payStatusUnder{
   font-weight: 500;
 }
+
+/* PRO6 queue layout: Reception uses the same single table arrangement as Office. */
+#receptionPatients + #queueMobileCards { display:none !important; }
+.queueSectionBreak td { text-transform:none !important; }

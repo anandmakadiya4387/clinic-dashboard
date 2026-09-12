@@ -1792,7 +1792,7 @@ function renderQueue() {
     if (queuePage < 1) queuePage = 1;
     const slice = active.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
     set('queueCountHint', `${active.length} active · ${done.length} completed today`);
-    const rowsActive = slice.map((p, i) => {
+    const renderActiveRows = (items) => items.map((p, i) => {
         const pending = pendingFor(p),
             withDoc = !!p.withDoctor,
             status = queueStatus(p);
@@ -1822,6 +1822,15 @@ function renderQueue() {
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button>`:''}
     </div></td></tr>`;
     }).join('');
+    const waiting = slice.filter(p => queueStatus(p) === 'waiting');
+    const withDoctor = slice.filter(p => queueStatus(p) === 'doctor');
+    const waitingHtml = waiting.length
+        ? `<tr class="queueSectionBreak"><td colspan="9">Waiting Today</td></tr>${renderActiveRows(waiting)}`
+        : '';
+    const doctorHtml = withDoctor.length
+        ? `<tr class="queueSectionBreak"><td colspan="9">With Doctor Today</td></tr>${renderActiveRows(withDoctor)}`
+        : '';
+    const rowsActive = waitingHtml + doctorHtml;
     let doneHtml = '';
     if (done.length) {
         doneHtml = `<tr class="queueSectionBreak"><td colspan="9">Completed today</td></tr>` + done.map((p, i) => {
@@ -4870,33 +4879,31 @@ function renderReceptionQueue() {
         return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b><div class="payStatusUnder">${statusLab}</div></td><td>${action}</td></tr>`;
     };
 
+    // Keep the same single-table arrangement as Office:
+    // Waiting Today → With Doctor Today → Completed today.
+    // Newest entry stays at the bottom of Waiting Today.
+    const waiting = active.filter(p => queueStatus(p) === 'waiting');
+    const withDoctor = active.filter(p => queueStatus(p) === 'doctor');
     let html = '';
-    active.forEach((p, i) => { html += rowHtml(p, i, 'active'); });
+    if (waiting.length) {
+        html += `<tr class="queueSectionBreak"><td colspan="8">Waiting Today</td></tr>`;
+        waiting.forEach((p, i) => { html += rowHtml(p, i, 'active'); });
+    }
+    if (withDoctor.length) {
+        html += `<tr class="queueSectionBreak"><td colspan="8">With Doctor Today</td></tr>`;
+        withDoctor.forEach((p, i) => { html += rowHtml(p, i, 'active'); });
+    }
     if (done.length) {
         html += `<tr class="queueSectionBreak"><td colspan="8">Completed today</td></tr>`;
         done.forEach((p, i) => { html += rowHtml(p, i, 'done'); });
     }
-    if (!active.length && !done.length) html = '<tr><td colspan="8">No patients today</td></tr>';
+    if (!waiting.length && !withDoctor.length && !done.length) html = '<tr><td colspan="8">No patients today</td></tr>';
     b.innerHTML = html;
 
+    // Do not create separate patient boxes/cards in Reception.
     const mobR = $('#queueMobileCards');
-    if (mobR) {
-        try {
-            let mhtml = active.map(p => {
-                const st = queueStatus(p);
-                const stLabel = st==='doctor'?'With Doctor':(st==='received'?'Completed':'Waiting');
-                return `<div class="patientMobileCard"><div class="pmTitle">#${permanentCaseNo(p)} · ${esc(p.title)} ${esc(p.name)}</div>
-                <div class="pmMeta">${fmtDate(p.date)} · ${stLabel}</div>
-                <div class="pmMeta">${receptionPayStatusLabel(p)}</div></div>`;
-            }).join('');
-            if (done.length) {
-                mhtml += `<div class="queueSectionBreakMob">Completed today</div>`;
-                mhtml += done.map(p => `<div class="patientMobileCard receivedRow"><div class="pmTitle">#${permanentCaseNo(p)} · ${esc(p.title)} ${esc(p.name)}</div>
-                <div class="pmMeta">Completed · ${receptionPayStatusLabel(p)}</div></div>`).join('');
-            }
-            mobR.innerHTML = mhtml || '';
-        } catch (e) {}
-    }
+    if (mobR) mobR.innerHTML = '';
+
     const pag = $('#queuePagination');
     if (pag) pag.innerHTML = `<span class="mini">${active.length} waiting/with doctor · ${done.length} completed</span>`;
 }
