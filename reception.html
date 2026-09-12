@@ -1,15 +1,21 @@
-<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anand Homoeopathy Multi Speciality Clinic — Reception</title><link rel="stylesheet" href="style.css?v=77"></head><body data-role="reception"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-bill-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button>
-<button class="navBtn" data-page="appointmentHistory">Appointment History</button><button class="navBtn hidden" data-page="payments">Payment</button><button class="navBtn hidden" data-page="medicines">Medicine</button><button class="navBtn" data-page="connection">Server Connection</button><button class="navBtn" data-page="bill">Bill / Receipt</button><button class="navBtn" data-page="backup">Backup / Restore</button></div></aside><main class="main"><header class="topbar"><button class="toggle embossed hamburgerBtn" id="toggleSide" type="button" aria-label="Toggle sidebar"><span class="hamIcon" aria-hidden="true">☰</span></button><span>Reception</span><span class="appVersionBadge" title="Application version">v77</span><span class="syncLiveBadge" id="syncLiveBadge">Offline</span><button class="btn embossed themeToggle" id="themeToggle">☾ Dark</button>
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anand Homoeopathy Multi Speciality Clinic — Reception</title><link rel="stylesheet" href="style.css?v=pro2"></head><body data-role="reception"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-bill-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button>
+<button class="navBtn" data-page="appointmentHistory">Appointment History</button><button class="navBtn hidden" data-page="payments">Payment</button><button class="navBtn hidden" data-page="medicines">Medicine</button><button class="navBtn" data-page="connection">Server Connection</button><button class="navBtn" data-page="bill">Bill / Receipt</button><button class="navBtn" data-page="backup">Backup / Restore</button></div></aside><main class="main"><header class="topbar"><button class="toggle embossed hamburgerBtn" id="toggleSide" type="button" aria-label="Toggle sidebar"><span class="hamIcon" aria-hidden="true">☰</span></button><span>Reception</span><span class="appVersionBadge" title="Application version">PRO 2</span><span class="syncLiveBadge" id="syncLiveBadge">Offline</span><button class="btn embossed themeToggle" id="themeToggle">☾ Dark</button>
 <div class="globalSearchWrap">
   <input type="search" id="globalPatientSearch" class="globalPatientSearch" placeholder="Search patient: name, mobile, case no…" autocomplete="off" aria-label="Search patient">
   <div class="globalSearchResults hidden" id="globalSearchResults" role="listbox"></div>
 </div>
-<span class="status off" id="connDot">Offline</span><span id="connText">Offline</span><button class="toggle refreshBtn" id="refreshBtn" title="Refresh now">↻ Refresh</button></header>
-<section class="page active" id="dashboard"><section class="calendarStrip embossed"><div><button class="btn embossed" id="calendarBtn">📅 Calendar</button><span id="calendarSelected" class="calendarSelected">Selected date: --/--/----</span></div><div id="calendarPanel" class="calendarPanel hidden"><input id="calendarDate" type="date"><span id="festivalInfo" class="festivalInfo">No festival within the next 15 days</span></div></section><div class="hero"><div><h1>Patient Entry</h1><p>Register new or old cases. Works offline and syncs when a server is available.</p></div><div class="actions"><button class="primary" id="newCase">New Case</button><button class="green" id="oldCase">Old Case</button></div></div><div class="card hidden" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label class="full backdatePendingWrap" style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px 12px;border-radius:12px;background:linear-gradient(165deg,#fffbeb,#fef3c7);border:1px solid #f0d78c">
+<button class="toggle refreshBtn" id="refreshBtn" title="Refresh now">↻ Refresh</button></header>
+<section class="page active" id="dashboard"><section class="calendarStrip embossed"><div><button class="btn embossed" id="calendarBtn">📅 Calendar</button><span id="calendarSelected" class="calendarSelected">Selected date: --/--/----</span></div><div id="calendarPanel" class="calendarPanel hidden"><input id="calendarDate" type="date"><span id="festivalInfo" class="festivalInfo">No festival within the next 15 days</span></div></section><div class="hero"><div><h1 class="patientEntryTitle">Patient Entry</h1></div><div class="actions"><button class="primary" id="newCase">New Case</button><button class="green" id="oldCase">Old Case</button></div></div>
+<div class="queueStrip premiumQueueStrip medicalTechQueue" id="queueStatusStrip">
+  <div class="queueStat wait"><span class="qDot"></span><small>Waiting</small><b id="qWaiting">0</b></div>
+  <div class="queueStat doctor"><span class="qDot"></span><small>With doctor</small><b id="qWithDoctor">0</b></div>
+  <div class="queueStat done"><span class="qDot"></span><small>Completed</small><b id="qCompleted">0</b></div>
+</div>
+<div class="card hidden patientFormCard newCasePanel" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label class="full backdatePendingWrap" style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px 12px;border-radius:12px;background:linear-gradient(165deg,#fffbeb,#fef3c7);border:1px solid #f0d78c">
 <input type="checkbox" id="backdatePending"> <span><b>Mark payment as Pending</b> <span class="mini">(back-dated entry only — leave unticked = Received automatically)</span></span>
 </label>
 <div class="full actions"><button type="submit" class="primary embossed" id="patientSubmitBtn">Update</button></div></form></div></div>
-<div class="card hidden" id="oldAppointmentPanel">
+<div class="card hidden oldCasePanel" id="oldAppointmentPanel">
   <div class="cardHead">
     <h2>Old Case — Find patient &amp; add appointment</h2>
     <button type="button" class="btn embossed" id="oldApptClose">Close</button>
@@ -25,7 +31,7 @@
   </div>
 </div>
 
-<div class="card queueCard"><div class="cardHead"><h2>Reception Patient List — Today</h2><span class="mini" id="queueCountHint">0 patients</span></div><div class="cardBody"><div class="search"><input id="queueSearch" placeholder="Search case no, name, mobile"></div><div class="tablewrap queueTableWrap"><table class="table queueTable"><thead><tr><th>Sr</th><th>Case</th><th>Date</th><th>Type</th><th>Patient</th><th>Fees</th><th>Payment</th><th>Action</th></tr></thead><tbody id="receptionPatients"></tbody></table></div><div class="pagination queuePagination" id="queueMobileCards" class="mobileCardList"></div><div class="pagination" id="queuePagination"></div></div></div></section>
+<div class="card queueCard"><div class="cardHead"><h2>Reception Patient List — Today</h2><span class="mini" id="queueCountHint">0 patients</span></div><div class="cardBody"><div class="search"><input id="queueSearch" placeholder="Search case no, name, mobile"></div><div class="tablewrap queueTableWrap"><table class="table queueTable"><thead><tr><th>Sr</th><th>Case</th><th>Date</th><th>Type</th><th>Patient</th><th>Payment</th><th>Total Collection</th><th>Action</th></tr></thead><tbody id="receptionPatients"></tbody></table></div><div class="pagination queuePagination" id="queueMobileCards" class="mobileCardList"></div><div class="pagination" id="queuePagination"></div></div></div></section>
 
 
 
@@ -38,9 +44,7 @@
   <span>From</span><input type="date" id="payCustomFrom" class="dateInput">
   <span>To</span><input type="date" id="payCustomTo" class="dateInput">
   <button class="btn embossed" id="payFilterShow">Show</button>
-  <button class="btn embossed" id="payFilterClear">All years</button>
-  <span class="mini" id="payYearHint">Select period</span>
-</div>
+  </div>
 <div class="paySummaryTop" id="paySummaryTop">
   <div class="paySummaryBox new"><small>New Cases Payment</small><b id="paySumNew">₹ 0</b></div>
   <div class="paySummaryBox renewal"><small>Renewal Payment</small><b id="paySumRenewal">₹ 0</b></div>
@@ -110,19 +114,17 @@
 </select></div></div>
 <div id="receptionBackupPanel" class="card embossed"><div class="cardHead"><h2>Reception Backup</h2></div><div class="cardBody">
 <div class="actions embossedActions" style="flex-wrap:wrap;gap:12px">
-<button type="button" class="btn embossed green" id="receptionBackupBtn" style="min-height:44px;padding:12px 22px;font-weight:700">⬇ Reception Backup Now</button>
 <button type="button" class="btn embossed green" id="manualBackupBtn">⬇ Backup Now</button>
 <button type="button" class="primary embossed" id="exportBtn">Export Full Backup</button>
 <label class="btn embossed">Import Full Backup<input id="importInput" type="file" accept="application/json" hidden></label>
 </div>
-<div class="actions" style="margin-top:14px"><button type="button" class="btn embossed green" id="serverBackupBtn">Save Safe Server Backup</button><button type="button" class="btn embossed" id="refreshBackupListBtn">Refresh Backup List</button></div>
+<div class="actions" style="margin-top:14px"><button type="button" class="btn embossed green" id="serverBackupBtn">Save Safe Server Backup</button></div>
 <div id="serverBackupList" class="serverBackupList" style="margin-top:12px"></div>
 <div class="card embossed" style="margin-top:16px"><div class="cardHead"><h2>Last 5 Full Backups (This PC)</h2></div><div class="cardBody"><div id="localBackupList" class="serverBackupList"></div></div></div>
 <p class="mini">Safe Server Backup: last <b>5</b> only (older auto-delete).</p>
 </div></div>
 <div id="officeBackupPanel" class="card embossed hidden" style="margin-top:16px"><div class="cardHead"><h2>Office Backup</h2></div><div class="cardBody">
 <p class="mini">Office backup Office application se banaye.</p>
-<button type="button" class="btn embossed" id="officeBackupBtn">⬇ Office Backup Now</button>
 </div></div>
 <div class="card embossed" style="margin-top:16px"><div class="cardHead"><h2>Auto Backup</h2><span id="autoBackupStatus" class="mini">Off</span></div><div class="cardBody">
 <label>Auto backup interval
@@ -140,4 +142,4 @@
 <p class="mini" style="margin-top:12px">Last auto backup: <b id="lastAutoBackupTime">Never</b></p>
 </div></div>
 </section>
-</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=77"></script></body></html>
+</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=pro2"></script></body></html>

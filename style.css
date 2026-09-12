@@ -2507,3 +2507,29 @@ select.yearSelectBox.slim{
   border-radius: 999px !important;
   font-size: 12px !important;
 }
+
+
+/* PRO 2 — reception payment breakup */
+.payBreakup{font-size:12px;line-height:1.45;color:#1e3a5f}
+.payBreakup div{white-space:nowrap}
+.payBreakup b{font-weight:600}
+.payBreakCell{min-width:140px;vertical-align:middle}
+.totalCollectCell{font-size:14px;color:#0f4c81;white-space:nowrap}
+.queueActions .withDocActive{background:#dbeafe!important;color:#1d4ed8!important;font-weight:600}
+
+/* Ensure new/old case panels colored on reception too */
+body[data-role="reception"] #patientForm.patientFormCard,
+body[data-role="reception"] #patientForm.newCasePanel,
+body[data-role="reception"] .card.patientFormCard,
+body[data-role="reception"] .card.newCasePanel{
+  background: linear-gradient(165deg, #e8f6f3 0%, #d4efe9 45%, #e3f2fd 100%) !important;
+  border: 1px solid #9ad4c8 !important;
+}
+body[data-role="reception"] #oldAppointmentPanel.oldCasePanel,
+body[data-role="reception"] .card.oldCasePanel{
+  background: linear-gradient(165deg, #fff8eb 0%, #fef3c7 50%, #fde68a33 100%) !important;
+  border: 1px solid #f0d78c !important;
+}
+body[data-role="reception"] #queueStatusStrip{
+  display:flex !important;
+}

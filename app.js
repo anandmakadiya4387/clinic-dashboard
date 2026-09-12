@@ -1,4 +1,4 @@
-const APP_VERSION = 'PRO 1';
+const APP_VERSION = 'PRO 2';
 const role = document.body.dataset.role || 'office';
 const savedTheme = localStorage.getItem('anandClinicTheme') || 'light';
 document.documentElement.dataset.theme = savedTheme;
@@ -3489,14 +3489,12 @@ function receiveP(id) {
         ? `<label>Renewal (due ${money(renDue)})<input name="renewal" id="recvRenewal" type="number" min="0" step="1" value="${renDue}"></label>`
         : `<input type="hidden" name="renewal" id="recvRenewal" value="0">`;
     const html = `<form class="formgrid" id="receiveForm">
-      <p class="mini full">Jo amount ab collect kar rahe ho wohi likho. Baaki <b>Partial pending</b> me automatic aayega — sirf collected amount totals me count hoga.</p>
       <label>Date<input name="date" type="date" value="${isTodayCase(p) ? isoToday() : (p.date || isoToday())}" required></label>
       <label>Consultation (due ${money(consDue)})<input name="consultation" id="recvCons" type="number" min="0" step="1" value="${consDue}"></label>
       <label>Medicine (due ${money(medDue)})<input name="medicine" id="recvMed" type="number" min="0" step="1" value="${medDue}"></label>
       ${renewBlock}
       <label class="full partialPendingBox">Partial pending payment (balance)
         <input type="number" id="recvPartialPending" readonly value="${totalDue}" style="font-weight:800;color:#9a3412;background:#fff7ed;border:1px solid #fdba74">
-        <span class="mini">Total due ${money(totalDue)} − ab collect = pending balance. Pending sab jagah dikhega jab tak Receive na ho.</span>
       </label>
       <div class="full actions"><button class="primary embossed" type="submit">Confirm Receive</button></div>
     </form>`;
@@ -4202,7 +4200,11 @@ function renderPermissions() {
         $('#newCase')?.toggleAttribute('disabled', !(receptionCanEdit('patient') && allowNewOld));
         $('#oldCase')?.toggleAttribute('disabled', !(receptionCanEdit('patient') && allowNewOld));
         document.querySelector('.hero .actions')?.classList.toggle('hidden', !allowNewOld);
-        $('#queueStatusStrip')?.classList.toggle('hidden', !allowQStatus);
+        if (role === 'reception') {
+            $('#queueStatusStrip')?.classList.remove('hidden');
+        } else {
+            $('#queueStatusStrip')?.classList.toggle('hidden', !allowQStatus);
+        }
         $('#kpiCommand')?.classList.toggle('hidden', !allowMore);
         $('#kpiMoreWrap')?.classList.toggle('hidden', !allowMore);
         document.querySelector('.card.glassCard') && null;
@@ -4314,11 +4316,11 @@ function renderAppointmentHistory() {
           <td>${esc(p.title)} ${esc(p.name)}<div class="mini">${esc(p.mobile || '')}</div></td>
           <td class="amount">${money(total)}</td>
           <td class="amount">${money(paid)}</td>
-          <td>${status}${pend > 0 ? ` <button type="button" class="btn embossed receiveBtn histMiniBtn" onclick="receiveP('${p.id}')" title="Receive pending">Recv</button>` : ''}</td>
+          <td>${status}${role === 'reception' ? '' : (pend > 0 ? ` <button type="button" class="btn embossed receiveBtn histMiniBtn" onclick="receiveP('${p.id}')" title="Receive pending">Recv</button>` : '')}</td>
           <td><div class="compactActions histActions">
             <button class="btn embossed histMiniBtn" onclick="viewPatientHistory('${p.id}')">View</button>
-            <button class="btn embossed histMiniBtn" onclick="editP('${p.id}')">Edit</button>
-            <button class="btn embossed deleteBox histMiniBtn" onclick="delP('${p.id}')">Del</button>
+            ${role === 'reception' ? '' : `<button class="btn embossed histMiniBtn" onclick="editP('${p.id}')">Edit</button>
+            <button class="btn embossed deleteBox histMiniBtn" onclick="delP('${p.id}')">Del</button>`}
           </div></td>
         </tr>`;
     }).join('') || '<tr><td colspan="8">No appointments found</td></tr>';
@@ -4728,17 +4730,17 @@ function renderReceptionQueue() {
         let rowClass = stPay.kind === 'foc' ? 'focRow' : (fullyReceived ? 'receivedRow' : withDoc ? 'doctorRow' : 'pendingRow');
         if (stPay.kind === 'partial') rowClass += ' partialPendingRow';
         if (renewHighlight) rowClass += ' renewDueRow';
-        let payLabel = paymentStatusHtml(p);
+        const cons = Number(p.consultation || 0);
+        const med = Number(p.medicine || 0);
+        const ren = Number(p.renewal || 0);
+        const totalCol = cons + med + ren;
+        const payBreak = `<div class="payBreakup"><div>Consultation: <b>${money(cons)}</b></div><div>Medicine: <b>${money(med)}</b></div><div>Renewal: <b>${money(ren)}</b></div></div>`;
         const locked = fullyReceived;
         const dis = locked ? ' disabled' : '';
         const lockCls = locked ? ' actLocked' : '';
         const sr = (queuePage - 1) * queuePageSize + i + 1;
-        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="amount">${money(feeTotal(p))}</td><td class="totalPayCell">${payLabel}</td><td><div class="actions embossedActions compactActions queueActions">
-    <button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>
-    <button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>Doctor</button>
-    <button class="btn embossed ${fullyReceived?'actReceived':'actNeutral'}${lockCls}" onclick="receiveP('${p.id}')"${fullyReceived?' disabled':''}>Receive</button>
-    <button class="btn embossed actNeutral${lockCls}" onclick="pendingP('${p.id}')"${dis}>Pend</button>
-    <button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button>
+        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b></td><td><div class="actions embossedActions compactActions queueActions">
+    <button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>With Doctor</button>
     </div></td></tr>`;
     const mobR = $('#queueMobileCards');
     if (mobR) {
