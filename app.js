@@ -1,4 +1,4 @@
-const APP_VERSION = 'PRO 2';
+const APP_VERSION = 'PRO 3';
 const role = document.body.dataset.role || 'office';
 const savedTheme = localStorage.getItem('anandClinicTheme') || 'light';
 document.documentElement.dataset.theme = savedTheme;
@@ -351,8 +351,12 @@ function paymentStatusInfo(p) {
     const fees = feeTotal(p);
     const paid = paidFor(p.id);
     const pending = Math.max(0, fees - paid);
-    if (fees <= 0 && paid <= 0) {
+    // FOC only when explicitly marked — zero fees ≠ FOC (Reception register stays Pending/Waiting)
+    if (p.foc === true) {
         return { kind: 'foc', label: 'FOC', pending: 0, paid: 0, fees: 0, locked: false };
+    }
+    if (p.received === true && pending <= 0) {
+        return { kind: 'received', label: 'Received', pending: 0, paid, fees, locked: true };
     }
     if (pending <= 0 && paid > 0) {
         return { kind: 'received', label: 'Received', pending: 0, paid, fees, locked: true };
@@ -360,7 +364,7 @@ function paymentStatusInfo(p) {
     if (paid > 0 && pending > 0) {
         return { kind: 'partial', label: 'Partial', pending, paid, fees, locked: false };
     }
-    return { kind: 'pending', label: 'Pending', pending, paid: 0, fees, locked: false };
+    return { kind: 'pending', label: 'Pending', pending: pending || 0, paid: paid || 0, fees, locked: false };
 }
 
 function paymentStatusHtml(p) {
@@ -780,9 +784,9 @@ function set(id, v) {
 }
 
 function patientQueueStatus(p) {
-    const pending = pendingFor(p);
-    const fullyReceived = p.received === true && pending <= 0;
-    if (fullyReceived || p.completedAt) return 'completed';
+    // Waiting → With Doctor → Completed only after Office Receive (or explicit FOC)
+    if (p.foc === true && (p.received === true || !!p.completedAt)) return 'completed';
+    if (p.received === true && pendingFor(p) <= 0) return 'completed';
     if (p.withDoctor) return 'doctor';
     return 'waiting';
 }
@@ -1207,7 +1211,30 @@ function selectOldApptPatient(id) {
         priorPend = pendingFor(p);
         if (priorPend > 0) priorPendIds = [p.id];
     }
-    box.innerHTML = `
+    const todayStr = isoToday();
+    if (role === 'reception') {
+      box.innerHTML = `
+      <div class="oldApptLine embossed oldApptSelectedActive">
+        <span class="oldLineCase">#${p.caseNo}</span>
+        <span class="oldLineName">${esc(p.title)} ${esc(p.name)}</span>
+        <span class="oldLineMeta">${esc(p.mobile || '—')}</span>
+        <span class="oldLineMeta">${esc(p.address || '—')}</span>
+        <span class="oldLineMeta">Reg ${fmtDate(p.date)}</span>
+      </div>
+      <div class="oldApptActions oldApptOneLine">
+        <label class="oldMedLabel">Appointment date
+          <input type="date" id="oldApptDate" value="${todayStr}" min="${todayStr}" max="${todayStr}" readonly>
+        </label>
+        <input type="hidden" id="oldApptMedicine" value="0">
+        <input type="hidden" id="oldApptRenewal" value="0">
+        <input type="hidden" id="oldApptPayPending" value="0">
+        <input type="hidden" id="oldApptFoc" value="">
+        <button type="button" class="btn embossed primary" id="oldApptConfirm">Add appointment</button>
+      </div>
+      <p class="mini">Reception: only add today's appointment. Payment is done in Office after With Doctor.</p>
+    `;
+    } else {
+      box.innerHTML = `
       <div class="oldApptLine embossed oldApptSelectedActive">
         <span class="oldLineCase">#${p.caseNo}</span>
         <span class="oldLineName">${esc(p.title)} ${esc(p.name)}</span>
@@ -1228,17 +1255,16 @@ function selectOldApptPatient(id) {
           <input type="number" id="oldApptPayPending" min="0" step="1" value="0" title="Pending amount — next visit carry forward">
         </label>
         <label class="oldMedLabel">Appointment date
-          <input type="date" id="oldApptDate" value="${isoToday()}">
+          <input type="date" id="oldApptDate" value="${todayStr}">
         </label>
-        <label class="oldFocLabel" title="Free of cost">
-          <input type="checkbox" id="oldApptFoc"> FOC
-        </label>
-        <button type="button" class="btn embossed primary addApptBtn" id="oldApptConfirm" data-id="${p.id}">Add Appointment</button>
-        ${priorPend > 0 ? `<button type="button" class="btn embossed receiveBtn" id="oldApptRecvPrior">Receive pending ${money(priorPend)}</button>` : ''}
+        <label class="oldFocLabel" title="Free of charge visit"><input type="checkbox" id="oldApptFoc"> FOC</label>
+        <button type="button" class="btn embossed primary" id="oldApptConfirm">Add appointment</button>
+        ${priorPend > 0 ? `<button type="button" class="btn embossed" id="oldApptRecvPrior">Receive prior pending</button>` : ''}
       </div>
       <p class="mini">Medicine / Renewal = received. Payment pending = baaki amount (next visit pe carry). FOC = free visit.</p>
     `;
-    // FOC clears amounts
+    }
+        // FOC clears amounts
     $('#oldApptFoc')?.addEventListener('change', () => {
         if ($('#oldApptFoc').checked) {
             if ($('#oldApptMedicine')) $('#oldApptMedicine').value = 0;
@@ -1265,7 +1291,7 @@ function confirmOldAppointment(sourceId) {
         toast('Patient not found', true);
         return;
     }
-    const isFoc = !!($('#oldApptFoc')?.checked);
+    const isFoc = role === 'reception' ? false : !!($('#oldApptFoc')?.checked);
     let medRecv = Math.max(0, Number($('#oldApptMedicine')?.value || 0));
     let renRecv = Math.max(0, Number($('#oldApptRenewal')?.value || 0));
     let payPend = Math.max(0, Number($('#oldApptPayPending')?.value || 0));
@@ -1316,7 +1342,15 @@ function confirmOldAppointment(sourceId) {
         src.lastRenewalDate = date;
         markUpdated(src);
     }
-    if (isFoc || (medFee <= 0 && renFee <= 0)) {
+    if (role === 'reception') {
+        appt.received = false;
+        appt.foc = false;
+        appt.withDoctor = false;
+        appt.completedAt = null;
+        appt.consultation = 0;
+        appt.medicine = 0;
+        appt.renewal = 0;
+    } else if (isFoc) {
         appt.received = true;
         appt.foc = true;
         appt.completedAt = new Date().toISOString();
@@ -1341,8 +1375,11 @@ function confirmOldAppointment(sourceId) {
     }
     const pendLeft = pendingFor(appt);
     let msg = `Follow-up #${appt.caseNo} — ${src.title} ${src.name}`;
-    if (isFoc) msg += ' · FOC';
-    else {
+    if (role === 'reception') {
+        msg += ' · Waiting (payment in Office)';
+    } else if (isFoc) {
+        msg += ' · FOC';
+    } else {
         if (medRecv > 0) msg += ` · Medicine received ${money(medRecv)}`;
         if (renRecv > 0) msg += ` · Renewal received ${money(renRecv)}`;
         if (pendLeft > 0) msg += ` · Pending ${money(pendLeft)}`;
@@ -1389,6 +1426,23 @@ function buildPatientForm(type, patient = null) {
     $('#consultation').value = patient?.consultation ?? 0;
     $('#medicine').value = patient?.medicine ?? 0;
     $('#renewal').value = patient?.renewal ?? 0;
+    // Reception: no fee entry / no mark-pending — Office handles payment
+    try {
+      const isRec = role === 'reception';
+      ['consultation','medicine','renewal'].forEach(id => {
+        const lab = $('#'+id)?.closest('label');
+        if (lab) lab.style.display = isRec ? 'none' : '';
+      });
+      const bp = document.querySelector('.backdatePendingWrap');
+      if (bp) bp.style.display = isRec ? 'none' : '';
+      if (isRec && !patient) {
+        $('#consultation').value = 0;
+        $('#medicine').value = 0;
+        $('#renewal').value = 0;
+        const bpc = $('#backdatePending');
+        if (bpc) bpc.checked = false;
+      }
+    } catch (e) {}
     const locked = patient ? isPaymentLocked(patient) : false;
     ['consultation', 'medicine', 'renewal'].forEach(id => {
         const el = $('#' + id);
@@ -1634,6 +1688,16 @@ function registerCase(e) {
         if (oldP.linkedCaseNo) p.linkedCaseNo = oldP.linkedCaseNo;
         if (oldP.permanentCaseNo) p.permanentCaseNo = oldP.permanentCaseNo;
     }
+    // Reception new/old register: always Waiting, never FOC/completed
+    if (role === 'reception' && !id) {
+        p.withDoctor = false;
+        p.received = false;
+        p.foc = false;
+        p.completedAt = null;
+        p.consultation = Number(p.consultation || 0);
+        p.medicine = Number(p.medicine || 0);
+        p.renewal = Number(p.renewal || 0);
+    }
     markUpdated(p);
     // Robust replace by id (string-safe)
     const pid = String(p.id);
@@ -1677,8 +1741,8 @@ function isTodayCase(p) {
 }
 
 function queueStatus(p) {
-    const pending = pendingFor(p);
-    if (p.received === true || pending <= 0) return 'received';
+    if (p.foc === true && (p.received === true || p.completedAt)) return 'received';
+    if (p.received === true && pendingFor(p) <= 0) return 'received';
     if (p.withDoctor) return 'doctor';
     return 'pending';
 }

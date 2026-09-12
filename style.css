@@ -2533,3 +2533,20 @@ body[data-role="reception"] .card.oldCasePanel{
 body[data-role="reception"] #queueStatusStrip{
   display:flex !important;
 }
+
+
+/* PRO 3 — brown brand zone for logo readability (nav/control centre unchanged) */
+.sidebar .brand,
+.brand{
+  background: linear-gradient(180deg, #6b4423 0%, #5a3a1e 45%, #4a3018 100%) !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+.brandInner.brandLogoOnly{
+  background: transparent !important;
+}
+.brandFullLogo, .brand img.brandFullLogo{
+  background: transparent !important;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)) brightness(1.06) contrast(1.05);
+}
