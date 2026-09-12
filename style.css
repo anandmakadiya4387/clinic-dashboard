@@ -2550,3 +2550,60 @@ body[data-role="reception"] #queueStatusStrip{
   background: transparent !important;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)) brightness(1.06) contrast(1.05);
 }
+
+
+/* PRO 4 — queue sections + brand */
+.queueSectionBreak td{
+  background: linear-gradient(90deg, #1e3a5f, #2563eb 40%, #1e3a5f) !important;
+  color: #fff !important;
+  text-align: center !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: .04em !important;
+  padding: 10px 8px !important;
+  border: none !important;
+}
+.queueSectionBreakMob{
+  margin: 12px 0 8px;
+  padding: 8px;
+  text-align: center;
+  background: #1e3a5f;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.payStatusUnder{margin-top:6px;padding-top:4px;border-top:1px dashed #c5d4e4}
+.payPendingTag{background:#fff0f0;color:#a93131;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+.payReceivedTag{background:#e9f8ef;color:#137b4c;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+.payPartialTag{background:#fff8e8;color:#c47a12;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+.payFocTag{background:#eef2ff;color:#4338ca;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+
+/* Lighter brown brand, no box frame, darker logo look */
+.sidebar .brand,
+.brand{
+  background: linear-gradient(180deg, #8b6914 0%, #7a5c28 40%, #6b4f22 100%) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  padding: 10px 8px 8px !important;
+}
+.brandInner.brandLogoOnly,
+.brandInner{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  min-height: 68px !important;
+}
+.brandFullLogo, .brand img.brandFullLogo{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  /* slightly darker so light blues read as deep blue */
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)) saturate(1.15) contrast(1.12) brightness(0.92);
+}

@@ -1,4 +1,4 @@
-const APP_VERSION = 'PRO 3';
+const APP_VERSION = 'PRO 4';
 const role = document.body.dataset.role || 'office';
 const savedTheme = localStorage.getItem('anandClinicTheme') || 'light';
 document.documentElement.dataset.theme = savedTheme;
@@ -1342,6 +1342,7 @@ function confirmOldAppointment(sourceId) {
         src.lastRenewalDate = date;
         markUpdated(src);
     }
+    appt._created = new Date().toISOString();
     if (role === 'reception') {
         appt.received = false;
         appt.foc = false;
@@ -1698,6 +1699,7 @@ function registerCase(e) {
         p.medicine = Number(p.medicine || 0);
         p.renewal = Number(p.renewal || 0);
     }
+    if (!id) p._created = new Date().toISOString();
     markUpdated(p);
     // Robust replace by id (string-safe)
     const pid = String(p.id);
@@ -1747,17 +1749,50 @@ function queueStatus(p) {
     return 'pending';
 }
 
+
+function patientEntryTime(p) {
+    // First registered earlier → smaller key (top of active queue)
+    return String(p._created || p._updated || p.id || '');
+}
+function patientCompletedTime(p) {
+    return String(p.completedAt || p._updated || '');
+}
+function splitTodayQueue(arr) {
+    const active = [];
+    const done = [];
+    arr.forEach(p => {
+        const st = queueStatus(p);
+        if (st === 'received') done.push(p);
+        else active.push(p);
+    });
+    // Active: pehle entry upar, last entry niche
+    active.sort((a, b) => patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    // Completed: sabse last completed sabse upar
+    done.sort((a, b) => patientCompletedTime(b).localeCompare(patientCompletedTime(a)));
+    return { active, done };
+}
+function receptionPayStatusLabel(p) {
+    const st = paymentStatusInfo(p);
+    if (st.kind === 'received') return '<span class="payReceivedTag">Received</span>';
+    if (st.kind === 'foc') return '<span class="payFocTag">FOC</span>';
+    if (st.kind === 'partial') return `<span class="payPartialTag">Pending</span> <span class="mini">Partial · due ${money(st.pending)}</span>`;
+    // fees set or not — jab tak Office Receive na kare
+    return '<span class="payPendingTag">Pending</span>';
+}
+
 function renderQueue() {
     const b = $('#queueBody');
     if (!b) return;
     const q = ($('#queueSearch')?.value || '').toLowerCase();
     let arr = caseRows().filter(isTodayCase).filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile} ${p.address}`.toLowerCase().includes(q));
-    const totalPages = Math.max(1, Math.ceil(arr.length / queuePageSize));
+    const { active, done } = splitTodayQueue(arr);
+    // Active queue only for main list pagination; completed appended after
+    const totalPages = Math.max(1, Math.ceil(active.length / queuePageSize));
     if (queuePage > totalPages) queuePage = totalPages;
     if (queuePage < 1) queuePage = 1;
-    const slice = arr.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
-    set('queueCountHint', `${arr.length} patient${arr.length === 1 ? '' : 's'} today`);
-    b.innerHTML = slice.map((p, i) => {
+    const slice = active.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
+    set('queueCountHint', `${active.length} active · ${done.length} completed today`);
+    const rowsActive = slice.map((p, i) => {
         const pending = pendingFor(p),
             withDoc = !!p.withDoctor,
             status = queueStatus(p);
@@ -1786,11 +1821,27 @@ function renderQueue() {
     ${(role!=='reception'||receptionCanEdit('paymentEntry'))?`<button class="btn embossed actNeutral${lockCls}" onclick="pendingP('${p.id}')"${dis}>Pend</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button>`:''}
     </div></td></tr>`;
-    }).join('') || '<tr><td colspan="8">No today\'s patients in the queue</td></tr>';
+    }).join('');
+    let doneHtml = '';
+    if (done.length) {
+        doneHtml = `<tr class="queueSectionBreak"><td colspan="9">—— Completed today (latest on top) ——</td></tr>` + done.map((p, i) => {
+            const stPay = paymentStatusInfo(p);
+            const payLabel = paymentStatusHtml(p);
+            const renewHighlight = renewalDue(p) && !hasRenewalPayment(p);
+            return `<tr class="receivedRow">
+   <td>${i + 1}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
+   <td><div class="patientMain">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile || '')}</div></td>
+   <td class="amount">${money(feeTotal(p))}</td>
+   <td class="totalPayCell">${payLabel}</td>
+   <td><span class="queueStatusTag received">Completed</span></td>
+   <td><span class="mini">—</span></td></tr>`;
+        }).join('');
+    }
+    b.innerHTML = (rowsActive || (done.length ? '' : '<tr><td colspan="9">No today\'s patients in the queue</td></tr>')) + doneHtml;
     const pag = $('#queuePagination');
     if (pag) {
-        if (arr.length <= queuePageSize) {
-            pag.innerHTML = arr.length ? `<span class="mini">Showing all ${arr.length}</span>` : '';
+        if (active.length <= queuePageSize) {
+            pag.innerHTML = `<span class="mini">${active.length} active · ${done.length} completed</span>`;
         } else {
             let html = `<button type="button" class="btn embossed" data-qpg="prev" ${queuePage<=1?'disabled':''}>‹ Prev</button>`;
             for (let i = 1; i <= totalPages; i++) {
@@ -4779,16 +4830,13 @@ function renderReceptionQueue() {
     if (!b) return;
     const q = ($('#queueSearch')?.value || '').toLowerCase();
     let arr = caseRows().filter(isTodayCase).filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile}`.toLowerCase().includes(q));
-    const totalPages = Math.max(1, Math.ceil(arr.length / queuePageSize));
-    if (queuePage > totalPages) queuePage = totalPages;
-    if (queuePage < 1) queuePage = 1;
-    const slice = arr.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
-    set('queueCountHint', `${arr.length} patient${arr.length === 1 ? '' : 's'} today`);
-    b.innerHTML = slice.map((p, i) => {
-        const pending = pendingFor(p);
+    const { active, done } = splitTodayQueue(arr);
+    set('queueCountHint', `${active.length} active · ${done.length} completed today`);
+
+    const rowHtml = (p, i, section) => {
         const withDoc = !!p.withDoctor;
         const stPay = paymentStatusInfo(p);
-        const fullyReceived = stPay.kind === 'received';
+        const fullyReceived = stPay.kind === 'received' || queueStatus(p) === 'received';
         const pulse = fullyReceived && p.completedAt && (Date.now() - new Date(p.completedAt).getTime() < 8000);
         const renewHighlight = renewalDue(p) && !hasRenewalPayment(p);
         let rowClass = stPay.kind === 'foc' ? 'focRow' : (fullyReceived ? 'receivedRow' : withDoc ? 'doctorRow' : 'pendingRow');
@@ -4798,62 +4846,50 @@ function renderReceptionQueue() {
         const med = Number(p.medicine || 0);
         const ren = Number(p.renewal || 0);
         const totalCol = cons + med + ren;
-        const payBreak = `<div class="payBreakup"><div>Consultation: <b>${money(cons)}</b></div><div>Medicine: <b>${money(med)}</b></div><div>Renewal: <b>${money(ren)}</b></div></div>`;
+        const statusLab = receptionPayStatusLabel(p);
+        const payBreak = `<div class="payBreakup"><div>Consultation: <b>${money(cons)}</b></div><div>Medicine: <b>${money(med)}</b></div><div>Renewal: <b>${money(ren)}</b></div><div class="payStatusUnder">${statusLab}</div></div>`;
         const locked = fullyReceived;
         const dis = locked ? ' disabled' : '';
         const lockCls = locked ? ' actLocked' : '';
-        const sr = (queuePage - 1) * queuePageSize + i + 1;
-        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b></td><td><div class="actions embossedActions compactActions queueActions">
-    <button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>With Doctor</button>
-    </div></td></tr>`;
+        const sr = i + 1;
+        const action = section === 'done'
+            ? `<span class="mini">Completed</span>`
+            : `<div class="actions embossedActions compactActions queueActions"><button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>With Doctor</button></div>`;
+        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b></td><td>${action}</td></tr>`;
+    };
+
+    let html = '';
+    active.forEach((p, i) => { html += rowHtml(p, i, 'active'); });
+    if (done.length) {
+        html += `<tr class="queueSectionBreak"><td colspan="8">—— Completed today (latest on top) ——</td></tr>`;
+        done.forEach((p, i) => { html += rowHtml(p, i, 'done'); });
+    }
+    if (!active.length && !done.length) html = '<tr><td colspan="8">No patients today</td></tr>';
+    b.innerHTML = html;
+
     const mobR = $('#queueMobileCards');
     if (mobR) {
         try {
-            const q = ($('#queueSearch')?.value || '').toLowerCase();
-            let arr = caseRows().filter(isTodayCase).filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile}`.toLowerCase().includes(q));
-            const slice = arr.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
-            mobR.innerHTML = slice.map(p => {
-                const st = typeof queueStatus === 'function' ? queueStatus(p) : (p.withDoctor ? 'doctor' : 'pending');
+            let mhtml = active.map(p => {
+                const st = queueStatus(p);
                 const stLabel = st==='doctor'?'With Doctor':(st==='received'?'Completed':'Waiting');
                 return `<div class="patientMobileCard"><div class="pmTitle">#${permanentCaseNo(p)} · ${esc(p.title)} ${esc(p.name)}</div>
-                <div class="pmMeta">${fmtDate(p.date)} · ${esc(p.mobile||'')} · ${stLabel}</div>
-                <div class="pmActions">
-                  <button class="btn embossed patientMiniBtn" onclick="openPatientProfile('${p.id}')">Profile</button>
-                  <button class="btn embossed patientMiniBtn" onclick="editP('${p.id}')">Edit</button>
-                  <button class="btn embossed patientMiniBtn" onclick="receiveP('${p.id}')">Receive</button>
-                </div></div>`;
-            }).join('') || '<div class="mini">No patients today</div>';
-        } catch(e) {}
-    }
-
-    }).join('') || '<tr><td colspan="8">No today\'s patients in the queue</td></tr>';
-    const pag = $('#queuePagination');
-    if (pag) {
-        if (arr.length <= queuePageSize) {
-            pag.innerHTML = arr.length ? `<span class="mini">Showing all ${arr.length}</span>` : '';
-        } else {
-            let html = `<button type="button" class="btn embossed" data-qpg="prev" ${queuePage<=1?'disabled':''}>‹ Prev</button>`;
-            for (let i = 1; i <= totalPages; i++) {
-                html += `<button type="button" class="btn embossed ${i===queuePage?'active':''}" data-qpg="${i}">${i}</button>`;
+                <div class="pmMeta">${fmtDate(p.date)} · ${stLabel}</div>
+                <div class="pmMeta">${receptionPayStatusLabel(p)}</div></div>`;
+            }).join('');
+            if (done.length) {
+                mhtml += `<div class="queueSectionBreakMob">Completed today</div>`;
+                mhtml += done.map(p => `<div class="patientMobileCard receivedRow"><div class="pmTitle">#${permanentCaseNo(p)} · ${esc(p.title)} ${esc(p.name)}</div>
+                <div class="pmMeta">Completed · ${receptionPayStatusLabel(p)}</div></div>`).join('');
             }
-            html += `<button type="button" class="btn embossed" data-qpg="next" ${queuePage>=totalPages?'disabled':''}>Next ›</button>`;
-            html += `<span class="mini" style="margin-left:8px">Page ${queuePage}/${totalPages}</span>`;
-            pag.innerHTML = html;
-            pag.querySelectorAll('[data-qpg]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const v = btn.getAttribute('data-qpg');
-                    if (v === 'prev') queuePage = Math.max(1, queuePage - 1);
-                    else if (v === 'next') queuePage = Math.min(totalPages, queuePage + 1);
-                    else queuePage = Number(v) || 1;
-                    renderReceptionQueue();
-                });
-            });
-        }
+            mobR.innerHTML = mhtml || '';
+        } catch (e) {}
     }
+    const pag = $('#queuePagination');
+    if (pag) pag.innerHTML = `<span class="mini">${active.length} waiting/with doctor · ${done.length} completed</span>`;
 }
 
 
-/* ===== Bill / Receipt + Email backup (v47) ===== */
 function emailCloudBackup() {
     try {
         const data = buildBackupPayload(role === 'office');
