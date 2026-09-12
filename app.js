@@ -1,4 +1,4 @@
-const APP_VERSION = 'PRO 4';
+const APP_VERSION = 'PRO 5';
 const role = document.body.dataset.role || 'office';
 const savedTheme = localStorage.getItem('anandClinicTheme') || 'light';
 document.documentElement.dataset.theme = savedTheme;
@@ -1377,7 +1377,7 @@ function confirmOldAppointment(sourceId) {
     const pendLeft = pendingFor(appt);
     let msg = `Follow-up #${appt.caseNo} — ${src.title} ${src.name}`;
     if (role === 'reception') {
-        msg += ' · Waiting (payment in Office)';
+        msg += '';
     } else if (isFoc) {
         msg += ' · FOC';
     } else {
@@ -1824,17 +1824,29 @@ function renderQueue() {
     }).join('');
     let doneHtml = '';
     if (done.length) {
-        doneHtml = `<tr class="queueSectionBreak"><td colspan="9">—— Completed today (latest on top) ——</td></tr>` + done.map((p, i) => {
+        doneHtml = `<tr class="queueSectionBreak"><td colspan="9">Completed today</td></tr>` + done.map((p, i) => {
+            const withDoc = !!p.withDoctor;
             const stPay = paymentStatusInfo(p);
+            const fullyReceived = true;
             const payLabel = paymentStatusHtml(p);
             const renewHighlight = renewalDue(p) && !hasRenewalPayment(p);
+            const dis = '';
+            const lockCls = '';
+            // Office: keep all action buttons after complete; Reception handled in renderReceptionQueue
+            const actions = `<div class="actions embossedActions compactActions queueActions">
+    <button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>
+    <button class="btn embossed actNeutral" onclick="docP('${p.id}')">Doctor</button>
+    <button class="btn embossed actReceived" onclick="receiveP('${p.id}')">Receive</button>
+    <button class="btn embossed actNeutral" onclick="pendingP('${p.id}')">Pend</button>
+    <button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button>
+    </div>`;
             return `<tr class="receivedRow">
    <td>${i + 1}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
-   <td><div class="patientMain">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile || '')}</div></td>
+   <td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
    <td class="amount">${money(feeTotal(p))}</td>
    <td class="totalPayCell">${payLabel}</td>
    <td><span class="queueStatusTag received">Completed</span></td>
-   <td><span class="mini">—</span></td></tr>`;
+   <td>${actions}</td></tr>`;
         }).join('');
     }
     b.innerHTML = (rowsActive || (done.length ? '' : '<tr><td colspan="9">No today\'s patients in the queue</td></tr>')) + doneHtml;
@@ -3529,8 +3541,8 @@ function docP(id) {
     saveLocal();
     renderQueue();
     renderReceptionQueue();
-    toast(p.withDoctor ? 'Patient is with doctor' : 'Patient marked available');
-    syncNow(true);
+    // no toast popup — status shows in queue
+    try { syncNow(true); } catch (e) {}
 }
 
 function categoryPaid(patientId, feeCategory) {
@@ -4847,7 +4859,7 @@ function renderReceptionQueue() {
         const ren = Number(p.renewal || 0);
         const totalCol = cons + med + ren;
         const statusLab = receptionPayStatusLabel(p);
-        const payBreak = `<div class="payBreakup"><div>Consultation: <b>${money(cons)}</b></div><div>Medicine: <b>${money(med)}</b></div><div>Renewal: <b>${money(ren)}</b></div><div class="payStatusUnder">${statusLab}</div></div>`;
+        const payBreak = `<div class="payBreakup"><div>Consultation: <b>${money(cons)}</b></div><div>Medicine: <b>${money(med)}</b></div><div>Renewal: <b>${money(ren)}</b></div></div>`;
         const locked = fullyReceived;
         const dis = locked ? ' disabled' : '';
         const lockCls = locked ? ' actLocked' : '';
@@ -4855,13 +4867,13 @@ function renderReceptionQueue() {
         const action = section === 'done'
             ? `<span class="mini">Completed</span>`
             : `<div class="actions embossedActions compactActions queueActions"><button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>With Doctor</button></div>`;
-        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b></td><td>${action}</td></tr>`;
+        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b><div class="payStatusUnder">${statusLab}</div></td><td>${action}</td></tr>`;
     };
 
     let html = '';
     active.forEach((p, i) => { html += rowHtml(p, i, 'active'); });
     if (done.length) {
-        html += `<tr class="queueSectionBreak"><td colspan="8">—— Completed today (latest on top) ——</td></tr>`;
+        html += `<tr class="queueSectionBreak"><td colspan="8">Completed today</td></tr>`;
         done.forEach((p, i) => { html += rowHtml(p, i, 'done'); });
     }
     if (!active.length && !done.length) html = '<tr><td colspan="8">No patients today</td></tr>';
