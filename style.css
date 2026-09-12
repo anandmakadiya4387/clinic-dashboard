@@ -2656,6 +2656,7 @@ body[data-role="reception"] #queueStatusStrip{
   font-weight: 500;
 }
 
-/* PRO6 queue layout: Reception uses the same single table arrangement as Office. */
-#receptionPatients + #queueMobileCards { display:none !important; }
-.queueSectionBreak td { text-transform:none !important; }
+/* PRO8: today's patient queue is one continuous scrollable list — no pagination */
+.queueTableWrap { max-height: 62vh; overflow-y: auto; overflow-x: auto; }
+.queueTableWrap .queueTable thead th { position: sticky; top: 0; z-index: 3; }
+.queuePagination { min-height: 0 !important; margin: 6px 0 0 !important; padding: 0 !important; }

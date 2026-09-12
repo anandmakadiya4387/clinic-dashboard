@@ -1784,36 +1784,36 @@ function renderQueue() {
     const b = $('#queueBody');
     if (!b) return;
     const q = ($('#queueSearch')?.value || '').toLowerCase();
-    let arr = caseRows().filter(isTodayCase).filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile} ${p.address}`.toLowerCase().includes(q));
+    let arr = caseRows().filter(isTodayCase).filter(p => p.caseType === 'new' || p.caseType === 'old').filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile} ${p.address}`.toLowerCase().includes(q));
     const { active, done } = splitTodayQueue(arr);
-    // Active queue only for main list pagination; completed appended after
-    const totalPages = Math.max(1, Math.ceil(active.length / queuePageSize));
-    if (queuePage > totalPages) queuePage = totalPages;
-    if (queuePage < 1) queuePage = 1;
-    const slice = active.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
-    set('queueCountHint', `${active.length} active · ${done.length} completed today`);
-    const renderActiveRows = (items) => items.map((p, i) => {
-        const pending = pendingFor(p),
-            withDoc = !!p.withDoctor,
-            status = queueStatus(p);
-        const stPay = paymentStatusInfo(p);
-        const fullyReceived = stPay.kind === 'received';
+    const waiting = active.filter(p => queueStatus(p) !== 'doctor');
+    const doctor = active.filter(p => queueStatus(p) === 'doctor');
+    waiting.sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    doctor.sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    done.sort((a,b)=>patientCompletedTime(b).localeCompare(patientCompletedTime(a)));
+
+    // Queue is intentionally NOT paginated: show every today's entry in one
+    // vertically scrollable table so the user can see all patients by scrolling.
+    const sliceWaiting = waiting;
+    const sliceDoctor = doctor;
+    set('queueCountHint', `${waiting.length} waiting · ${doctor.length} with doctor · ${done.length} completed today`);
+
+    const rowHtml = (p, i, statusSection) => {
+        const pending = pendingFor(p), withDoc = !!p.withDoctor, status = queueStatus(p);
+        const stPay = paymentStatusInfo(p), fullyReceived = stPay.kind === 'received';
         const pulse = fullyReceived && p.completedAt && (Date.now() - new Date(p.completedAt).getTime() < 8000);
         const renewHighlight = renewalDue(p) && !hasRenewalPayment(p);
-        let rowClass = stPay.kind === 'foc' ? 'focRow' : (status === 'received' ? 'receivedRow' : status === 'doctor' ? 'doctorRow' : 'pendingRow');
+        let rowClass = stPay.kind === 'foc' ? 'focRow' : (status === 'doctor' ? 'doctorRow' : 'pendingRow');
         if (stPay.kind === 'partial') rowClass += ' partialPendingRow';
         if (renewHighlight) rowClass += ' renewDueRow';
-        let payLabel = paymentStatusHtml(p);
-        const locked = fullyReceived;
-        const dis = locked ? ' disabled' : '';
-        const lockCls = locked ? ' actLocked' : '';
-        const sr = (queuePage - 1) * queuePageSize + i + 1;
+        const payLabel = paymentStatusHtml(p);
+        const locked = fullyReceived, dis = locked ? ' disabled' : '', lockCls = locked ? ' actLocked' : '';
+        const sr = i + 1;
         return `<tr class="${rowClass}${pulse?' receivedPulse':''}">
    <td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
    <td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
-   <td class="amount">${money(feeTotal(p))}</td>
-   <td class="totalPayCell">${payLabel}</td>
-   <td><span class="queueStatusTag ${status}">${status==='doctor'?'With Doctor':status==='received'?'Completed':'Waiting'}</span></td>
+   <td class="amount">${money(feeTotal(p))}</td><td class="totalPayCell">${payLabel}</td>
+   <td><span class="queueStatusTag ${status}">${status==='doctor'?'With Doctor':'Waiting'}</span></td>
    <td><div class="actions embossedActions compactActions queueActions">
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>Doctor</button>`:''}
@@ -1821,67 +1821,28 @@ function renderQueue() {
     ${(role!=='reception'||receptionCanEdit('paymentEntry'))?`<button class="btn embossed actNeutral${lockCls}" onclick="pendingP('${p.id}')"${dis}>Pend</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button>`:''}
     </div></td></tr>`;
-    }).join('');
-    const waiting = slice.filter(p => queueStatus(p) === 'waiting');
-    const withDoctor = slice.filter(p => queueStatus(p) === 'doctor');
-    const waitingHtml = waiting.length
-        ? `<tr class="queueSectionBreak"><td colspan="9">Waiting Today</td></tr>${renderActiveRows(waiting)}`
-        : '';
-    const doctorHtml = withDoctor.length
-        ? `<tr class="queueSectionBreak"><td colspan="9">With Doctor Today</td></tr>${renderActiveRows(withDoctor)}`
-        : '';
-    const rowsActive = waitingHtml + doctorHtml;
-    let doneHtml = '';
+    };
+
+    let html = '';
+    if (sliceWaiting.length) {
+        html += `<tr class="queueSectionBreak"><td colspan="9">Waiting Today</td></tr>`;
+        sliceWaiting.forEach((p,i)=>html += rowHtml(p,i,'waiting'));
+    }
+    if (sliceDoctor.length) {
+        html += `<tr class="queueSectionBreak"><td colspan="9">With Doctor Today</td></tr>`;
+        sliceDoctor.forEach((p,i)=>html += rowHtml(p,i,'doctor'));
+    }
     if (done.length) {
-        doneHtml = `<tr class="queueSectionBreak"><td colspan="9">Completed today</td></tr>` + done.map((p, i) => {
-            const withDoc = !!p.withDoctor;
-            const stPay = paymentStatusInfo(p);
-            const fullyReceived = true;
-            const payLabel = paymentStatusHtml(p);
-            const renewHighlight = renewalDue(p) && !hasRenewalPayment(p);
-            const dis = '';
-            const lockCls = '';
-            // Office: keep all action buttons after complete; Reception handled in renderReceptionQueue
-            const actions = `<div class="actions embossedActions compactActions queueActions">
-    <button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>
-    <button class="btn embossed actNeutral" onclick="docP('${p.id}')">Doctor</button>
-    <button class="btn embossed actReceived" onclick="receiveP('${p.id}')">Receive</button>
-    <button class="btn embossed actNeutral" onclick="pendingP('${p.id}')">Pend</button>
-    <button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button>
-    </div>`;
-            return `<tr class="receivedRow">
-   <td>${i + 1}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
-   <td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
-   <td class="amount">${money(feeTotal(p))}</td>
-   <td class="totalPayCell">${payLabel}</td>
-   <td><span class="queueStatusTag received">Completed</span></td>
-   <td>${actions}</td></tr>`;
-        }).join('');
+        html += `<tr class="queueSectionBreak"><td colspan="9">Completed today</td></tr>`;
+        done.forEach((p,i)=>{
+            const payLabel=paymentStatusHtml(p);
+            html += `<tr class="receivedRow"><td>${i+1}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile||'')}</div></td><td class="amount">${money(feeTotal(p))}</td><td class="totalPayCell">${payLabel}</td><td><span class="queueStatusTag received">Completed</span></td><td><div class="actions embossedActions compactActions queueActions"><button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button><button class="btn embossed actNeutral" onclick="docP('${p.id}')">Doctor</button><button class="btn embossed actReceived" onclick="receiveP('${p.id}')">Receive</button><button class="btn embossed actNeutral" onclick="pendingP('${p.id}')">Pend</button><button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button></div></td></tr>`;
+        });
     }
-    b.innerHTML = (rowsActive || (done.length ? '' : '<tr><td colspan="9">No today\'s patients in the queue</td></tr>')) + doneHtml;
-    const pag = $('#queuePagination');
-    if (pag) {
-        if (active.length <= queuePageSize) {
-            pag.innerHTML = `<span class="mini">${active.length} active · ${done.length} completed</span>`;
-        } else {
-            let html = `<button type="button" class="btn embossed" data-qpg="prev" ${queuePage<=1?'disabled':''}>‹ Prev</button>`;
-            for (let i = 1; i <= totalPages; i++) {
-                html += `<button type="button" class="btn embossed ${i===queuePage?'active':''}" data-qpg="${i}">${i}</button>`;
-            }
-            html += `<button type="button" class="btn embossed" data-qpg="next" ${queuePage>=totalPages?'disabled':''}>Next ›</button>`;
-            html += `<span class="mini" style="margin-left:8px">Page ${queuePage}/${totalPages}</span>`;
-            pag.innerHTML = html;
-            pag.querySelectorAll('[data-qpg]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const v = btn.getAttribute('data-qpg');
-                    if (v === 'prev') queuePage = Math.max(1, queuePage - 1);
-                    else if (v === 'next') queuePage = Math.min(totalPages, queuePage + 1);
-                    else queuePage = Number(v) || 1;
-                    renderQueue();
-                });
-            });
-        }
-    }
+    if (!html) html = '<tr><td colspan="9">No new or old case entries today</td></tr>';
+    b.innerHTML = html;
+    const pag=$('#queuePagination');
+    if(pag) pag.innerHTML=`<span class="mini">${waiting.length} waiting · ${doctor.length} with doctor · ${done.length} completed today · all entries shown</span>`;
 }
 
 
@@ -4850,7 +4811,7 @@ function renderReceptionQueue() {
     const b = $('#receptionPatients');
     if (!b) return;
     const q = ($('#queueSearch')?.value || '').toLowerCase();
-    let arr = caseRows().filter(isTodayCase).filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile}`.toLowerCase().includes(q));
+    let arr = caseRows().filter(isTodayCase).filter(p => p.caseType === 'new' || p.caseType === 'old').filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile}`.toLowerCase().includes(q));
     const { active, done } = splitTodayQueue(arr);
     set('queueCountHint', `${active.length} active · ${done.length} completed today`);
 
@@ -4879,31 +4840,23 @@ function renderReceptionQueue() {
         return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b><div class="payStatusUnder">${statusLab}</div></td><td>${action}</td></tr>`;
     };
 
-    // Keep the same single-table arrangement as Office:
-    // Waiting Today → With Doctor Today → Completed today.
-    // Newest entry stays at the bottom of Waiting Today.
-    const waiting = active.filter(p => queueStatus(p) === 'waiting');
-    const withDoctor = active.filter(p => queueStatus(p) === 'doctor');
+    const waiting = active.filter(p => queueStatus(p) !== 'doctor').sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    const doctor = active.filter(p => queueStatus(p) === 'doctor').sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    done.sort((a,b)=>patientCompletedTime(b).localeCompare(patientCompletedTime(a)));
     let html = '';
-    if (waiting.length) {
-        html += `<tr class="queueSectionBreak"><td colspan="8">Waiting Today</td></tr>`;
-        waiting.forEach((p, i) => { html += rowHtml(p, i, 'active'); });
-    }
-    if (withDoctor.length) {
-        html += `<tr class="queueSectionBreak"><td colspan="8">With Doctor Today</td></tr>`;
-        withDoctor.forEach((p, i) => { html += rowHtml(p, i, 'active'); });
-    }
+    if (waiting.length) { html += `<tr class="queueSectionBreak"><td colspan="8">Waiting Today</td></tr>`; waiting.forEach((p,i)=>{ html += rowHtml(p,i,'active'); }); }
+    if (doctor.length) { html += `<tr class="queueSectionBreak"><td colspan="8">With Doctor Today</td></tr>`; doctor.forEach((p,i)=>{ html += rowHtml(p,i,'active'); }); }
     if (done.length) {
         html += `<tr class="queueSectionBreak"><td colspan="8">Completed today</td></tr>`;
         done.forEach((p, i) => { html += rowHtml(p, i, 'done'); });
     }
-    if (!waiting.length && !withDoctor.length && !done.length) html = '<tr><td colspan="8">No patients today</td></tr>';
+    if (!waiting.length && !doctor.length && !done.length) html = '<tr><td colspan="8">No new or old case entries today</td></tr>';
     b.innerHTML = html;
 
-    // Do not create separate patient boxes/cards in Reception.
+    // Keep the reception queue as the same single scrollable table; do not
+    // render a second card/pagination list below it.
     const mobR = $('#queueMobileCards');
     if (mobR) mobR.innerHTML = '';
-
     const pag = $('#queuePagination');
     if (pag) pag.innerHTML = `<span class="mini">${active.length} waiting/with doctor · ${done.length} completed</span>`;
 }

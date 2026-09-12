@@ -13,7 +13,7 @@
     <button type="button" class="navBtn navSubBtn" data-page="payments" data-pay-view="incomeExpense">Income &amp; Expenses</button>
     <button type="button" class="navBtn navSubBtn" data-page="payments" data-pay-view="spendEntries">Spend Entries</button>
   </div>
-<button class="navBtn" data-page="appointmentHistory">Appointment History</button><button class="navBtn" data-page="medicines">Medicine</button><button class="navBtn" data-page="clinic">Clinic Profile</button><button class="navBtn" data-page="connection">Server Connection</button><button class="navBtn" data-page="permissions">Reception Permissions</button><button class="navBtn" data-page="bill">Bill / Receipt</button><button class="navBtn" data-page="reports">Reports</button><button class="navBtn" data-page="backup">Backup / Restore</button></div></aside><main class="main"><header class="topbar"><button class="toggle embossed hamburgerBtn" id="toggleSide" type="button" aria-label="Toggle sidebar"><span class="hamIcon" aria-hidden="true">☰</span></button><span>Office</span><span class="appVersionBadge" title="Application version">PRO 5</span><span class="syncLiveBadge" id="syncLiveBadge" data-sync="1" title="LAN sync status">Offline</span><button class="btn embossed themeToggle" id="themeToggle">☾ Dark</button>
+<button class="navBtn" data-page="appointmentHistory">Appointment History</button><button class="navBtn" data-page="medicines">Medicine</button><button class="navBtn" data-page="clinic">Clinic Profile</button><button class="navBtn" data-page="connection">Server Connection</button><button class="navBtn" data-page="permissions">Reception Permissions</button><button class="navBtn" data-page="bill">Bill / Receipt</button><button class="navBtn" data-page="reports">Reports</button><button class="navBtn" data-page="backup">Backup / Restore</button></div></aside><main class="main"><header class="topbar"><button class="toggle embossed hamburgerBtn" id="toggleSide" type="button" aria-label="Toggle sidebar"><span class="hamIcon" aria-hidden="true">☰</span></button><span>Office</span><span class="appVersionBadge" title="Application version">PRO 7</span><span class="syncLiveBadge" id="syncLiveBadge" data-sync="1" title="LAN sync status">Offline</span><button class="btn embossed themeToggle" id="themeToggle">☾ Dark</button>
 <div class="globalSearchWrap">
   <input type="search" id="globalPatientSearch" class="globalPatientSearch" placeholder="Search patient: name, mobile, case no…" autocomplete="off" aria-label="Search patient">
   <div class="globalSearchResults hidden" id="globalSearchResults" role="listbox"></div>
@@ -37,7 +37,27 @@
   <div class="kpiCard kpi-slate glassCard kpiClickable" id="kpiEmptyStockClick" role="button" tabindex="0"><div class="kpiIcon">💊</div><div class="kpiBody"><span>Empty stock</span><b id="topLowStock">0</b></div></div>
 </div>
 
-<div class="card queueCard"><div class="cardHead"><h2>Patient Queue — Today</h2><span class="mini" id="queueCountHint">0 patients</span></div><div class="cardBody"><div class="search"><input id="queueSearch" placeholder="Search case no, name, mobile, address"></div><div class="tablewrap queueTableWrap"><table class="table queueTable"><thead><tr><th>Sr</th><th>Case</th><th>Date</th><th>Type</th><th>Patient</th><th>Fees</th><th>Payment</th><th>Action</th></tr></thead><tbody id="queueBody"></tbody></table></div><div class="pagination queuePagination" id="queuePagination"></div></div></div></section>
+<div class="card hidden patientFormCard newCasePanel" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label>Consultation Fees<input id="consultation" type="number" min="0" value="0"></label><label>Medicine Fees<input id="medicine" type="number" min="0" value="0"></label><label class="hidden" id="renewWrap">Renewal Fees (Annual)<input id="renewal" type="number" min="0" value="0"><span class="mini" id="renewDue"></span></label><label class="full backdatePendingWrap" style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px 12px;border-radius:12px;background:linear-gradient(165deg,#fffbeb,#fef3c7);border:1px solid #f0d78c">
+<input type="checkbox" id="backdatePending"> <span><b>Mark payment as Pending</b> <span class="mini">(back-dated entry only — leave unticked = Received automatically)</span></span>
+</label>
+<div class="full actions"><button type="submit" class="primary embossed" id="patientSubmitBtn">Update</button></div></form></div></div>
+<div class="card hidden oldCasePanel" id="oldAppointmentPanel">
+  <div class="cardHead">
+    <h2>Old Case — Find patient &amp; add appointment</h2>
+    <button type="button" class="btn embossed" id="oldApptClose">Close</button>
+  </div>
+  <div class="cardBody">
+    <p class="mini">Already registered patient ko name, mobile ya case number se dhoondhein. Full form nahi — sirf appointment + medicine charges.</p>
+    <div class="oldSearchBar">
+      <input type="search" id="oldApptSearch" class="oldApptSearchInput" placeholder="Name, mobile or case number…" autocomplete="off">
+      <button type="button" class="btn embossed" id="oldApptSearchBtn">Find</button>
+    </div>
+    <div id="oldApptResults" class="oldApptResults"></div>
+    <div id="oldApptSelected" class="oldApptSelected hidden"></div>
+  </div>
+</div>
+
+<div class="card queueCard"><div class="cardHead"><h2>Patient Queue — Today</h2><span class="mini" id="queueCountHint">0 patients</span></div><div class="cardBody"><div class="search"><input id="queueSearch" placeholder="Search case no, name, mobile, address"></div><div class="tablewrap queueTableWrap"><table class="table queueTable"><thead><tr><th>Sr</th><th>Case</th><th>Date</th><th>Type</th><th>Patient</th><th>Fees</th><th>Payment</th><th>Status</th><th>Action</th></tr></thead><tbody id="queueBody"></tbody></table></div><div class="queuePagination" id="queuePagination"></div></div></div></section>
 <section class="page" id="patients"><div class="hero"><div><h1>Patients</h1><p>Select Year / Month / Day to view cases with counts and full details. Simple to use.</p></div></div>
 <div class="filterBar embossed">
   <span>Year</span><select id="patientYear"></select>
