@@ -2660,3 +2660,127 @@ body[data-role="reception"] #queueStatusStrip{
 .queueTableWrap { max-height: 62vh; overflow-y: auto; overflow-x: auto; }
 .queueTableWrap .queueTable thead th { position: sticky; top: 0; z-index: 3; }
 .queuePagination { min-height: 0 !important; margin: 6px 0 0 !important; padding: 0 !important; }
+
+
+/* PRO 9 — compact receive form (one line) */
+.recvFormOneLine{
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px 10px !important;
+  align-items: flex-end !important;
+  grid-template-columns: none !important;
+}
+.recvFormOneLine .recvCompact{
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  margin: 0 !important;
+  min-width: 100px !important;
+  max-width: 130px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+.recvFormOneLine .recvCompact input{
+  padding: 6px 8px !important;
+  font-size: 13px !important;
+  min-height: 32px !important;
+  border-radius: 8px !important;
+}
+.recvFormOneLine .pendingCompact input{
+  background: #fff7ed !important;
+  border: 1px solid #fdba74 !important;
+  color: #9a3412 !important;
+  font-weight: 600 !important;
+}
+.recvFormOneLine .recvActions{
+  margin: 0 !important;
+  padding-bottom: 1px !important;
+}
+.recvFormOneLine .recvActions .btn{
+  min-height: 32px !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+}
+
+/* Reception payment breakup — smaller, tighter lines */
+body[data-role="reception"] .payBreakup{
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  color: #334155 !important;
+}
+body[data-role="reception"] .payBreakup div{
+  white-space: nowrap !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body[data-role="reception"] .payBreakup b{
+  font-weight: 600 !important;
+  font-size: 10px !important;
+}
+body[data-role="reception"] .payBreakCell{
+  min-width: 96px !important;
+  max-width: 120px !important;
+  padding: 4px 6px !important;
+  vertical-align: middle !important;
+}
+body[data-role="reception"] .queueTable td{
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+body[data-role="reception"] .totalCollectCell{
+  font-size: 12px !important;
+  padding: 4px 6px !important;
+}
+body[data-role="reception"] .totalCollectCell .payStatusUnder{
+  margin-top: 2px !important;
+  font-size: 10px !important;
+}
+body[data-role="reception"] .patientMain{
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+}
+body[data-role="reception"] .queueTable .mini{
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+}
+
+
+/* PRO 10 — renewal paid today row highlight */
+.renewPaidTodayRow{
+  background: linear-gradient(90deg, #f3e8ff 0%, #ede9fe 50%, #f5f3ff 100%) !important;
+  box-shadow: inset 3px 0 0 #7c3aed !important;
+}
+.renewPaidBadge{
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #7c3aed;
+  color: #fff;
+  vertical-align: middle;
+}
+.feeBreakup{font-size:11px;line-height:1.35;color:#1e3a5f}
+body[data-role="office"] .payBreakCell{min-width:120px;vertical-align:middle}
+#partialPendingEditWrap input{
+  border: 1px solid #fdba74;
+  background: #fff7ed;
+  color: #9a3412;
+  font-weight: 600;
+}
+
+
+/* PRO 11 */
+.partialPendLine{color:#9a3412;font-weight:600;font-size:10px;margin-top:2px}
+.statusCell{white-space:nowrap;vertical-align:middle}
+body[data-role="office"] .feeBreakup,
+body[data-role="office"] .payBreakup{font-size:11px;line-height:1.3}
+#partialPendingEditWrap{display:flex;flex-direction:column}
+#partialPendingEditWrap input{
+  border:1px solid #fdba74!important;
+  background:#fff7ed!important;
+  color:#9a3412!important;
+  font-weight:600!important;
+}
+.appVersionBadge{font-variant-numeric:normal!important}

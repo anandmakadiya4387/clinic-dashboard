@@ -1,4 +1,4 @@
-const APP_VERSION = 'PRO 5';
+const APP_VERSION = 'PRO';
 const role = document.body.dataset.role || 'office';
 const savedTheme = localStorage.getItem('anandClinicTheme') || 'light';
 document.documentElement.dataset.theme = savedTheme;
@@ -38,6 +38,21 @@ function dueDate(p) {
     return p.lastRenewalDate ? addYear(p.lastRenewalDate) : addYear(p.date)
 }
 
+function hasRenewalPaidToday(p) {
+    if (!p) return false;
+    const today = isoToday();
+    const key = String(permanentCaseNo(p));
+    const ids = active(DB.patients)
+        .filter(x => String(x.linkedCaseNo || x.caseNo || '') === key || String(x.id) === String(p.id))
+        .map(x => x.id);
+    if (!ids.includes(p.id)) ids.push(p.id);
+    return active(DB.payments).some(x =>
+        ids.includes(x.patientId) &&
+        (x.feeCategory === 'renewal' || x.caseType === 'renewal') &&
+        String(x.date || '') === today &&
+        Number(x.amount || 0) > 0
+    );
+}
 function renewalDue(p, as = isoToday()) {
     return !!dueDate(p) && dueDate(p) <= as
 }
@@ -1427,6 +1442,17 @@ function buildPatientForm(type, patient = null) {
     $('#consultation').value = patient?.consultation ?? 0;
     $('#medicine').value = patient?.medicine ?? 0;
     $('#renewal').value = patient?.renewal ?? 0;
+    try {
+      const pendEl = $('#partialPendingEdit');
+      const wrap = $('#partialPendingEditWrap');
+      if (pendEl) {
+        const curPend = patient ? pendingFor(patient) : 0;
+        pendEl.value = curPend > 0 ? curPend : 0;
+        // Office: always show for New Case + Edit
+        if (wrap) wrap.style.display = (role === 'office') ? '' : 'none';
+        if (role === 'office' && wrap) wrap.classList.remove('hidden');
+      }
+    } catch (e) {}
     // Reception: no fee entry / no mark-pending — Office handles payment
     try {
       const isRec = role === 'reception';
@@ -1699,6 +1725,52 @@ function registerCase(e) {
         p.medicine = Number(p.medicine || 0);
         p.renewal = Number(p.renewal || 0);
     }
+    // Office Edit: partial pending amount (next visit). 0 = clear pending so it does not show.
+    if (role === 'office' && !receivedLocked) {
+        try {
+            const wantPend = Math.max(0, Number($('#partialPendingEdit')?.value || 0));
+            // Temporarily assign fees so feeTotal works
+            const paid = paidFor(p.id);
+            let cons = Number(p.consultation || 0);
+            let med = Number(p.medicine || 0);
+            let ren = Number(p.renewal || 0);
+            const renPart = renewalDue(p) ? ren : 0;
+            let ft = cons + med + renPart;
+            let curPend = Math.max(0, ft - paid);
+            if (wantPend <= 0) {
+                // Clear all pending: shrink fees down to paid amounts
+                if (curPend > 0) {
+                    let over = curPend;
+                    if (med >= over) { med -= over; over = 0; }
+                    else { over -= med; med = 0; }
+                    if (over > 0 && renPart >= over) { ren -= over; over = 0; }
+                    else if (over > 0) { over -= Math.min(renPart, over); ren = Math.max(0, ren - renPart); }
+                    if (over > 0 && cons >= over) { cons -= over; over = 0; }
+                    else if (over > 0) { cons = Math.max(0, cons - over); }
+                    p.consultation = cons;
+                    p.medicine = med;
+                    p.renewal = ren;
+                }
+                if (pendingFor(p) <= 0 && paid > 0) {
+                    p.received = true;
+                    p.completedAt = p.completedAt || new Date().toISOString();
+                }
+            } else {
+                // Ensure pending equals wantPend by adjusting medicine
+                ft = Number(p.consultation || 0) + Number(p.medicine || 0) + (renewalDue(p) ? Number(p.renewal || 0) : 0);
+                curPend = Math.max(0, ft - paid);
+                if (curPend < wantPend) {
+                    p.medicine = Number(p.medicine || 0) + (wantPend - curPend);
+                } else if (curPend > wantPend) {
+                    const over = curPend - wantPend;
+                    p.medicine = Math.max(0, Number(p.medicine || 0) - over);
+                }
+                p.received = false;
+                p.completedAt = null;
+                p.foc = false;
+            }
+        } catch (e) {}
+    }
     if (!id) p._created = new Date().toISOString();
     markUpdated(p);
     // Robust replace by id (string-safe)
@@ -1806,14 +1878,20 @@ function renderQueue() {
         let rowClass = stPay.kind === 'foc' ? 'focRow' : (status === 'doctor' ? 'doctorRow' : 'pendingRow');
         if (stPay.kind === 'partial') rowClass += ' partialPendingRow';
         if (renewHighlight) rowClass += ' renewDueRow';
+        if (hasRenewalPaidToday(p)) rowClass += ' renewPaidTodayRow';
+        const consF = Number(p.consultation || 0);
+        const medF = Number(p.medicine || 0);
+        const renF = Number(p.renewal || 0);
+        const pendAmt = pendingFor(p);
+        const feeBreak = `<div class="payBreakup feeBreakup"><div>Consultation: <b>${money(consF)}</b></div><div>Medicine: <b>${money(medF)}</b></div><div>Renewal: <b>${money(renF)}</b></div>${pendAmt > 0 ? `<div class="partialPendLine">Partial pending: <b>${money(pendAmt)}</b></div>` : ''}</div>`;
         const payLabel = paymentStatusHtml(p);
         const locked = fullyReceived, dis = locked ? ' disabled' : '', lockCls = locked ? ' actLocked' : '';
         const sr = i + 1;
         return `<tr class="${rowClass}${pulse?' receivedPulse':''}">
    <td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
-   <td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
-   <td class="amount">${money(feeTotal(p))}</td><td class="totalPayCell">${payLabel}</td>
-   <td><span class="queueStatusTag ${status}">${status==='doctor'?'With Doctor':'Waiting'}</span></td>
+   <td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
+   <td class="payBreakCell">${feeBreak}</td><td class="amount totalCollectCell"><b>${money(consF + medF + renF)}</b></td>
+   <td><span class="queueStatusTag ${status}">${status==='doctor'?'With Doctor':(status==='received'?'Completed':'Waiting')}</span></td>
    <td><div class="actions embossedActions compactActions queueActions">
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>Doctor</button>`:''}
@@ -3581,59 +3659,105 @@ function receiveP(id) {
     const showRenewal = !!renewalDue(p);
     const renFee = showRenewal ? Number(p.renewal || 0) : 0;
     const renDue = Math.max(0, renFee - categoryPaid(p.id, 'renewal'));
-    const totalDue = consDue + medDue + renDue;
-    const renewBlock = showRenewal && renDue > 0
-        ? `<label>Renewal (due ${money(renDue)})<input name="renewal" id="recvRenewal" type="number" min="0" step="1" value="${renDue}"></label>`
+    // Existing unpaid balance (if any)
+    const alreadyPending = Math.max(0, pendingFor(p));
+    const renewBlock = showRenewal
+        ? `<label class="recvCompact">Renewal<input name="renewal" id="recvRenewal" type="number" min="0" step="1" value="${renDue}" placeholder="0"></label>`
         : `<input type="hidden" name="renewal" id="recvRenewal" value="0">`;
-    const html = `<form class="formgrid" id="receiveForm">
-      <label>Date<input name="date" type="date" value="${isTodayCase(p) ? isoToday() : (p.date || isoToday())}" required></label>
-      <label>Consultation (due ${money(consDue)})<input name="consultation" id="recvCons" type="number" min="0" step="1" value="${consDue}"></label>
-      <label>Medicine (due ${money(medDue)})<input name="medicine" id="recvMed" type="number" min="0" step="1" value="${medDue}"></label>
+    const html = `<form class="formgrid recvFormOneLine" id="receiveForm">
+      <label class="recvCompact">Date<input name="date" type="date" value="${isTodayCase(p) ? isoToday() : (p.date || isoToday())}" required></label>
+      <label class="recvCompact">Consultation<input name="consultation" id="recvCons" type="number" min="0" step="1" value="${consDue}"></label>
+      <label class="recvCompact">Medicine<input name="medicine" id="recvMed" type="number" min="0" step="1" value="${medDue}"></label>
       ${renewBlock}
-      <label class="full partialPendingBox">Partial pending payment (balance)
-        <input type="number" id="recvPartialPending" readonly value="${totalDue}" style="font-weight:800;color:#9a3412;background:#fff7ed;border:1px solid #fdba74">
-      </label>
-      <div class="full actions"><button class="primary embossed" type="submit">Confirm Receive</button></div>
+      <label class="recvCompact pendingCompact">Partial pending<input type="number" name="partialPending" id="recvPartialPending" min="0" step="1" value="0" placeholder="Next visit"></label>
+      <div class="recvActions"><button class="primary embossed" type="submit">Confirm Receive</button></div>
     </form>`;
     modal(`Receive payment — #${p.caseNo} ${esc(p.title)} ${esc(p.name)}`, html, e => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        // Cap each field at due so user cannot over-receive category
-        const c = Math.min(consDue, Math.max(0, Number(fd.get('consultation') || 0)));
-        const m = Math.min(medDue, Math.max(0, Number(fd.get('medicine') || 0)));
-        const r = Math.min(renDue, Math.max(0, Number(fd.get('renewal') || 0)));
+        let c = Math.max(0, Number(fd.get('consultation') || 0));
+        let m = Math.max(0, Number(fd.get('medicine') || 0));
+        let r = Math.max(0, Number(fd.get('renewal') || 0));
+        let pendExtra = Math.max(0, Number(fd.get('partialPending') || 0));
+        const payDate = fd.get('date') || isoToday();
+
+        // If renewal entered while due, ensure renewal fee on patient covers received amount
+        if (showRenewal && r > 0) {
+            const paidRen = categoryPaid(p.id, 'renewal');
+            p.renewal = Math.max(Number(p.renewal || 0), paidRen + r);
+        }
+        // Ensure consultation/medicine fees cover what is being received
+        if (c > 0) {
+            const paidC = categoryPaid(p.id, 'consultation');
+            p.consultation = Math.max(Number(p.consultation || 0), paidC + c);
+        }
+        if (m > 0) {
+            const paidM = categoryPaid(p.id, 'medicine');
+            p.medicine = Math.max(Number(p.medicine || 0), paidM + m);
+        }
+
         const result = applyReceiveAmounts(p, {
             consultation: c,
             medicine: m,
             renewal: r
-        }, fd.get('date'));
+        }, payDate);
+
+        // Editable partial pending → carry to next visit (increase medicine fee unpaid)
+        if (pendExtra > 0) {
+            const paidNow = pendingFor(p); // remaining after this receive
+            // We want at least pendExtra still unpaid
+            if (paidNow < pendExtra) {
+                const need = pendExtra - paidNow;
+                p.medicine = Number(p.medicine || 0) + need;
+            } else if (paidNow > pendExtra) {
+                // User asked for specific pending; if more remaining, reduce medicine fee carefully
+                // Keep simple: ensure medicine fee so pending becomes pendExtra
+                const totalPaid = paidFor(p.id);
+                const cons = Number(p.consultation || 0);
+                const ren = renewalDue(p) ? Number(p.renewal || 0) : Number(p.renewal || 0);
+                // feeTotal = cons + med + ren(if due) ; want feeTotal - totalPaid = pendExtra
+                const targetFeeTotal = totalPaid + pendExtra;
+                const medTarget = Math.max(0, targetFeeTotal - cons - (renewalDue(p) ? Number(p.renewal || 0) : 0));
+                p.medicine = medTarget;
+            }
+            p.received = false;
+            p.completedAt = null;
+            p.foc = false;
+        }
+
+        // Renewal received today → next renewal from this date
+        if (showRenewal && r > 0) {
+            p.lastRenewalDate = payDate;
+            const caseKey = String(permanentCaseNo(p));
+            active(DB.patients).forEach(x => {
+                if (String(x.linkedCaseNo || x.caseNo || '') === caseKey) {
+                    x.lastRenewalDate = payDate;
+                    markUpdated(x);
+                }
+            });
+        }
+
+        const left = pendingFor(p);
+        if (left <= 0) {
+            p.received = true;
+            p.completedAt = new Date().toISOString();
+        } else {
+            p.received = false;
+            p.completedAt = null;
+        }
+        markUpdated(p);
         saveLocal();
         closeModal();
         refreshAllPatientViews();
-        if (result.pending > 0) {
-            toast(`Received ${money(result.collected)} · Partial pending ${money(result.pending)}`);
+        if (left > 0) {
+            toast(`Received ${money(result.collected)} · Pending ${money(left)} (next visit)`);
         } else {
             toast('Fully received — case completed');
         }
         try { syncNow(true); } catch (e) {}
     });
-    // Live partial pending calculator
-    setTimeout(() => {
-        const upd = () => {
-            const c = Math.min(consDue, Math.max(0, Number($('#recvCons')?.value || 0)));
-            const m = Math.min(medDue, Math.max(0, Number($('#recvMed')?.value || 0)));
-            const r = Math.min(renDue, Math.max(0, Number($('#recvRenewal')?.value || 0)));
-            const bal = Math.max(0, totalDue - c - m - r);
-            const el = $('#recvPartialPending');
-            if (el) el.value = bal;
-        };
-        ['recvCons','recvMed','recvRenewal'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('input', upd);
-        });
-        upd();
-    }, 30);
 }
+
 
 function pendingP(id) {
     if (!enforceReceptionEdit('paymentEntry')) return;
@@ -4736,7 +4860,16 @@ function setupGlobalPatientSearch() {
 function setup() {
     setupNav();
     try { setupKpiCollapse(); } catch(e) {}
-    try { document.querySelectorAll('.appVersionBadge').forEach(el => { el.textContent = APP_VERSION; el.title = 'Application ' + APP_VERSION; }); } catch(e) {}
+    try {
+      const forceProBadge = () => {
+        document.querySelectorAll('.appVersionBadge').forEach(el => {
+          el.textContent = 'PRO';
+          el.title = 'Anand Clinic PRO';
+        });
+      };
+      forceProBadge();
+      setInterval(forceProBadge, 2000);
+    } catch(e) {}
     setupGlobalPatientSearch();
     setupOldAppointmentPanel();
     setupAppointmentHistory();
@@ -4828,8 +4961,9 @@ function renderReceptionQueue() {
         const med = Number(p.medicine || 0);
         const ren = Number(p.renewal || 0);
         const totalCol = cons + med + ren;
+        const pendAmt = pendingFor(p);
         const statusLab = receptionPayStatusLabel(p);
-        const payBreak = `<div class="payBreakup"><div>Consultation: <b>${money(cons)}</b></div><div>Medicine: <b>${money(med)}</b></div><div>Renewal: <b>${money(ren)}</b></div></div>`;
+        const payBreak = `<div class="payBreakup"><div>Consultation: <b>${money(cons)}</b></div><div>Medicine: <b>${money(med)}</b></div><div>Renewal: <b>${money(ren)}</b></div>${pendAmt > 0 ? `<div class="partialPendLine">Partial pending: <b>${money(pendAmt)}</b></div>` : ''}</div>`;
         const locked = fullyReceived;
         const dis = locked ? ' disabled' : '';
         const lockCls = locked ? ' actLocked' : '';
@@ -4837,7 +4971,7 @@ function renderReceptionQueue() {
         const action = section === 'done'
             ? `<span class="mini">Completed</span>`
             : `<div class="actions embossedActions compactActions queueActions"><button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>With Doctor</button></div>`;
-        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b><div class="payStatusUnder">${statusLab}</div></td><td>${action}</td></tr>`;
+        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b></td><td class="statusCell">${statusLab}</td><td>${action}</td></tr>`;
     };
 
     const waiting = active.filter(p => queueStatus(p) !== 'doctor').sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
@@ -4847,7 +4981,7 @@ function renderReceptionQueue() {
     if (waiting.length) { html += `<tr class="queueSectionBreak"><td colspan="8">Waiting Today</td></tr>`; waiting.forEach((p,i)=>{ html += rowHtml(p,i,'active'); }); }
     if (doctor.length) { html += `<tr class="queueSectionBreak"><td colspan="8">With Doctor Today</td></tr>`; doctor.forEach((p,i)=>{ html += rowHtml(p,i,'active'); }); }
     if (done.length) {
-        html += `<tr class="queueSectionBreak"><td colspan="8">Completed today</td></tr>`;
+        html += `<tr class="queueSectionBreak"><td colspan="9">Completed today</td></tr>`;
         done.forEach((p, i) => { html += rowHtml(p, i, 'done'); });
     }
     if (!waiting.length && !doctor.length && !done.length) html = '<tr><td colspan="8">No new or old case entries today</td></tr>';
