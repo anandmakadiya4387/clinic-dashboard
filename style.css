@@ -2784,3 +2784,553 @@ body[data-role="office"] .payBreakup{font-size:11px;line-height:1.3}
   font-weight:600!important;
 }
 .appVersionBadge{font-variant-numeric:normal!important}
+
+
+/* PRO 12 — partial pending separate; name one line; column align */
+.patientNameOneLine,
+.patientMain.patientNameOneLine{
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1.25 !important;
+}
+body[data-role="reception"] .patientNameOneLine,
+body[data-role="reception"] .patientMain.patientNameOneLine{
+  max-width: 220px;
+  font-size: 13px !important;
+}
+.queueTable th,
+.queueTable td{
+  vertical-align: middle !important;
+}
+.queueTable .payBreakCell{
+  white-space: normal;
+}
+body[data-role="reception"] .queueTable th:nth-child(5),
+body[data-role="reception"] .queueTable td:nth-child(5){
+  min-width: 140px;
+  max-width: 220px;
+}
+body[data-role="reception"] .queueTable th:last-child,
+body[data-role="reception"] .queueTable td:last-child{
+  white-space: nowrap;
+  width: 1%;
+  padding-left: 10px;
+}
+.partialPendLine{
+  color: #9a3412 !important;
+  font-weight: 600 !important;
+  font-size: 10px !important;
+  margin-top: 2px !important;
+}
+
+
+/* PRO 12b — name always one line; columns align under headers */
+.patientNameOneLine,
+.nameInline{
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1.3 !important;
+}
+.queueTable{
+  table-layout: auto;
+}
+.queueTable th,
+.queueTable td{
+  vertical-align: middle !important;
+}
+.queueTable td .mini{
+  white-space: nowrap;
+}
+body[data-role="reception"] .queueTable th:nth-child(5),
+body[data-role="reception"] .queueTable td:nth-child(5){
+  min-width: 160px;
+  max-width: 260px;
+}
+body[data-role="reception"] .queueTable td:last-child{
+  white-space: nowrap !important;
+  width: 110px;
+  text-align: right;
+  padding-left: 12px;
+}
+body[data-role="office"] .queueTable td:last-child{
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   THEME 4 — Deep Navy & Orange (Energetic & Modern)
+   Visual only — no functional changes
+   ========================================================= */
+html[data-ui-theme="navy-orange"] {
+  --navy-950:#060d1a;
+  --navy-900:#0a1628;
+  --navy-850:#0d1b30;
+  --navy-800:#122238;
+  --navy-700:#1a2f4a;
+  --navy-600:#243b5a;
+  --orange-500:#f15a24;
+  --orange-400:#ff6b35;
+  --orange-300:#ff8a5c;
+  --ink:#e8eef7;
+  --muted:#8fa3bd;
+  --line:rgba(255,255,255,.08);
+  --bg:#0a1628;
+  --card:#122238;
+  --green:#16a968;
+  --blue:#2b7fff;
+  --red:#ef4444;
+  --softgreen:rgba(22,169,104,.15);
+  --softred:rgba(239,68,68,.15);
+  --softblue:rgba(43,127,255,.15);
+  --shadow:0 12px 32px rgba(0,0,0,.35);
+}
+
+html[data-ui-theme="navy-orange"] html, html[data-ui-theme="navy-orange"] body {
+  background: var(--navy-900) !important;
+  color: var(--ink) !important;
+}
+
+/* Sidebar — deep navy + orange accent strip */
+html[data-ui-theme="navy-orange"] .sidebar {
+  background: linear-gradient(180deg, #0b1526 0%, #08111f 100%) !important;
+  border-right: 1px solid rgba(255,255,255,.06) !important;
+  box-shadow: 8px 0 28px rgba(0,0,0,.35) !important;
+  color: #dbe7f5 !important;
+}
+html[data-ui-theme="navy-orange"] .sidebar::before {
+  content:"";
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:4px;
+  background: linear-gradient(180deg, #ff6b35 0%, #f15a24 50%, #e8481a 100%);
+  border-radius:0 4px 4px 0;
+  pointer-events:none;
+  z-index:2;
+}
+/* brand restored below — do not theme logo zone here */
+.sidebar .nav button,
+html[data-ui-theme="navy-orange"] .nav button {
+  background: transparent !important;
+  color: #b8c9de !important;
+  border-radius: 12px !important;
+  font-weight: 500 !important;
+}
+html[data-ui-theme="navy-orange"] .nav button:hover {
+  background: rgba(255,107,53,.12) !important;
+  color: #fff !important;
+}
+html[data-ui-theme="navy-orange"] .nav button.active {
+  background: linear-gradient(135deg, rgba(255,107,53,.22), rgba(43,127,255,.18)) !important;
+  color: #fff !important;
+  box-shadow: inset 3px 0 0 #ff6b35 !important;
+}
+.groupTitle,
+html[data-ui-theme="navy-orange"] .navParent {
+  color: #7a90ab !important;
+}
+
+/* Main + topbar */
+html[data-ui-theme="navy-orange"] .main {
+  background: var(--navy-900) !important;
+  color: var(--ink) !important;
+}
+html[data-ui-theme="navy-orange"] .topbar {
+  background: rgba(10,22,40,.92) !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  backdrop-filter: blur(12px);
+  color: #e8eef7 !important;
+}
+.topbar span,
+html[data-ui-theme="navy-orange"] .topbar .appVersionBadge {
+  color: #e8eef7 !important;
+}
+html[data-ui-theme="navy-orange"] .appVersionBadge {
+  background: linear-gradient(135deg, #ff6b35, #f15a24) !important;
+  color: #fff !important;
+  border: none !important;
+  font-weight: 700 !important;
+  border-radius: 999px !important;
+  padding: 4px 12px !important;
+}
+html[data-ui-theme="navy-orange"] .toggle, html[data-ui-theme="navy-orange"] .hamburgerBtn {
+  background: var(--navy-700) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+}
+html[data-ui-theme="navy-orange"] .themeToggle, html[data-ui-theme="navy-orange"] .refreshBtn, html[data-ui-theme="navy-orange"] .btn.embossed {
+  background: var(--navy-700) !important;
+  color: #e8eef7 !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+}
+html[data-ui-theme="navy-orange"] .btn.primary, html[data-ui-theme="navy-orange"] .primary {
+  background: linear-gradient(135deg, #2b7fff, #1857b7) !important;
+  color: #fff !important;
+  border: none !important;
+}
+html[data-ui-theme="navy-orange"] .btn.green, html[data-ui-theme="navy-orange"] .green {
+  background: linear-gradient(135deg, #22c55e, #16a968) !important;
+  color: #fff !important;
+}
+html[data-ui-theme="navy-orange"] .syncLiveBadge {
+  border-radius: 999px !important;
+}
+
+/* Page content */
+html[data-ui-theme="navy-orange"] .page {
+  background: transparent !important;
+}
+html[data-ui-theme="navy-orange"] .hero h1, html[data-ui-theme="navy-orange"] .patientEntryTitle {
+  color: #f1f5fb !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="navy-orange"] .hero p, html[data-ui-theme="navy-orange"] .mini, html[data-ui-theme="navy-orange"] .calendarSelected {
+  color: var(--muted) !important;
+}
+
+/* Cards */
+html[data-ui-theme="navy-orange"] .card, html[data-ui-theme="navy-orange"] .queueCard, html[data-ui-theme="navy-orange"] .permissionCard, html[data-ui-theme="navy-orange"] .glassCard {
+  background: linear-gradient(165deg, #152a44 0%, #122238 100%) !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+  color: #e8eef7 !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.28) !important;
+  border-radius: 16px !important;
+}
+html[data-ui-theme="navy-orange"] .cardHead, html[data-ui-theme="navy-orange"] .cardHead h2 {
+  color: #f1f5fb !important;
+  border-bottom-color: rgba(255,255,255,.08) !important;
+}
+
+/* Patient Queue — orange energetic border like mock */
+html[data-ui-theme="navy-orange"] .queueCard {
+  border: 1.5px solid rgba(255,107,53,.45) !important;
+  box-shadow: 0 0 0 1px rgba(255,107,53,.12), 0 12px 32px rgba(0,0,0,.3) !important;
+}
+html[data-ui-theme="navy-orange"] .queueCard .cardHead {
+  background: linear-gradient(90deg, rgba(255,107,53,.18), transparent) !important;
+}
+
+/* KPI cards — vibrant mock palette */
+html[data-ui-theme="navy-orange"] .kpiCommand, html[data-ui-theme="navy-orange"] .premiumKpiGrid, html[data-ui-theme="navy-orange"] .medicalTechGrid {
+  gap: 12px !important;
+}
+html[data-ui-theme="navy-orange"] .kpiCard, html[data-ui-theme="navy-orange"] .kpi, html[data-ui-theme="navy-orange"] .countBox {
+  border: none !important;
+  border-radius: 16px !important;
+  color: #fff !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.25) !important;
+}
+html[data-ui-theme="navy-orange"] .kpiCard span, html[data-ui-theme="navy-orange"] .kpi span, html[data-ui-theme="navy-orange"] .countBox small, html[data-ui-theme="navy-orange"] .kpiCard small {
+  color: rgba(255,255,255,.9) !important;
+}
+html[data-ui-theme="navy-orange"] .kpiCard b, html[data-ui-theme="navy-orange"] .kpi b, html[data-ui-theme="navy-orange"] .countBox b {
+  color: #fff !important;
+}
+
+/* Colored KPI variants (common class names) */
+html[data-ui-theme="navy-orange"] .kpi-blue, html[data-ui-theme="navy-orange"] .kpiCard.kpi-blue, html[data-ui-theme="navy-orange"] .g.b, html[data-ui-theme="navy-orange"] .kpi.b { background: linear-gradient(145deg,#3b82f6,#1d4ed8) !important; }
+html[data-ui-theme="navy-orange"] .kpi-teal, html[data-ui-theme="navy-orange"] .kpiCard.kpi-teal, html[data-ui-theme="navy-orange"] .g { background: linear-gradient(145deg,#14b8a6,#0d9488) !important; }
+html[data-ui-theme="navy-orange"] .kpi-purple, html[data-ui-theme="navy-orange"] .kpiCard.kpi-purple { background: linear-gradient(145deg,#8b5cf6,#6d28d9) !important; }
+html[data-ui-theme="navy-orange"] .kpi-green, html[data-ui-theme="navy-orange"] .kpiCard.kpi-green { background: linear-gradient(145deg,#22c55e,#15803d) !important; }
+html[data-ui-theme="navy-orange"] .kpi-orange, html[data-ui-theme="navy-orange"] .kpiCard.kpi-orange, html[data-ui-theme="navy-orange"] .kpi.o { background: linear-gradient(145deg,#fb923c,#ea580c) !important; }
+html[data-ui-theme="navy-orange"] .kpi-amber, html[data-ui-theme="navy-orange"] .kpiCard.kpi-amber, html[data-ui-theme="navy-orange"] .kpi.y { background: linear-gradient(145deg,#fbbf24,#d97706) !important; }
+html[data-ui-theme="navy-orange"] .kpi-yellow, html[data-ui-theme="navy-orange"] .kpiCard.kpi-yellow { background: linear-gradient(145deg,#facc15,#ca8a04) !important; color:#1a1a1a !important; }
+html[data-ui-theme="navy-orange"] .kpi-pink, html[data-ui-theme="navy-orange"] .kpiCard.kpi-pink { background: linear-gradient(145deg,#f472b6,#db2777) !important; }
+html[data-ui-theme="navy-orange"] .kpi-red, html[data-ui-theme="navy-orange"] .kpiCard.kpi-red { background: linear-gradient(145deg,#f87171,#dc2626) !important; }
+
+/* Fallback cycle for generic kpi cards without type class */
+.premiumKpiGrid .kpiCard:nth-child(1),
+.medicalTechGrid .kpiCard:nth-child(1),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(1) { background: linear-gradient(145deg,#3b82f6,#1d4ed8) !important; }
+.premiumKpiGrid .kpiCard:nth-child(2),
+.medicalTechGrid .kpiCard:nth-child(2),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(2) { background: linear-gradient(145deg,#14b8a6,#0d9488) !important; }
+.premiumKpiGrid .kpiCard:nth-child(3),
+.medicalTechGrid .kpiCard:nth-child(3),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(3) { background: linear-gradient(145deg,#8b5cf6,#6d28d9) !important; }
+.premiumKpiGrid .kpiCard:nth-child(4),
+.medicalTechGrid .kpiCard:nth-child(4),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(4) { background: linear-gradient(145deg,#22c55e,#15803d) !important; }
+.premiumKpiGrid .kpiCard:nth-child(5),
+.medicalTechGrid .kpiCard:nth-child(5),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(5) { background: linear-gradient(145deg,#fb923c,#ea580c) !important; }
+.premiumKpiGrid .kpiCard:nth-child(6),
+.medicalTechGrid .kpiCard:nth-child(6),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(6) { background: linear-gradient(145deg,#fbbf24,#d97706) !important; }
+.premiumKpiGrid .kpiCard:nth-child(7),
+.medicalTechGrid .kpiCard:nth-child(7),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(7) { background: linear-gradient(145deg,#facc15,#ca8a04) !important; }
+.premiumKpiGrid .kpiCard:nth-child(8),
+.medicalTechGrid .kpiCard:nth-child(8),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(8) { background: linear-gradient(145deg,#38bdf8,#0284c7) !important; }
+.premiumKpiGrid .kpiCard:nth-child(9),
+.medicalTechGrid .kpiCard:nth-child(9),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(9) { background: linear-gradient(145deg,#f472b6,#db2777) !important; }
+.premiumKpiGrid .kpiCard:nth-child(10),
+.medicalTechGrid .kpiCard:nth-child(10),
+html[data-ui-theme="navy-orange"] .kpiCommand .kpiCard:nth-child(10) { background: linear-gradient(145deg,#a78bfa,#7c3aed) !important; }
+
+/* Queue status strip */
+html[data-ui-theme="navy-orange"] .queueStrip, html[data-ui-theme="navy-orange"] .premiumQueueStrip, html[data-ui-theme="navy-orange"] .medicalTechQueue {
+  background: transparent !important;
+  gap: 10px !important;
+}
+html[data-ui-theme="navy-orange"] .queueStat {
+  background: var(--navy-800) !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+  color: #e8eef7 !important;
+  border-radius: 14px !important;
+}
+html[data-ui-theme="navy-orange"] .queueStat.wait { border-top: 3px solid #f59e0b !important; }
+html[data-ui-theme="navy-orange"] .queueStat.doctor { border-top: 3px solid #3b82f6 !important; }
+html[data-ui-theme="navy-orange"] .queueStat.done { border-top: 3px solid #22c55e !important; }
+html[data-ui-theme="navy-orange"] .queueStat b { color: #fff !important; }
+html[data-ui-theme="navy-orange"] .queueStat small { color: #9eb2c9 !important; }
+
+/* Tables */
+html[data-ui-theme="navy-orange"] .table, html[data-ui-theme="navy-orange"] .queueTable {
+  color: #e2eaf4 !important;
+}
+html[data-ui-theme="navy-orange"] .table th, html[data-ui-theme="navy-orange"] .queueTable th {
+  background: rgba(255,255,255,.04) !important;
+  color: #9eb2c9 !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+}
+html[data-ui-theme="navy-orange"] .table td, html[data-ui-theme="navy-orange"] .queueTable td {
+  border-bottom: 1px solid rgba(255,255,255,.05) !important;
+  color: #e2eaf4 !important;
+}
+html[data-ui-theme="navy-orange"] .tablewrap {
+  background: transparent !important;
+}
+html[data-ui-theme="navy-orange"] .pendingRow { background: rgba(245,158,11,.08) !important; }
+html[data-ui-theme="navy-orange"] .doctorRow { background: rgba(59,130,246,.12) !important; }
+html[data-ui-theme="navy-orange"] .receivedRow { background: rgba(34,197,94,.1) !important; }
+html[data-ui-theme="navy-orange"] .partialPendingRow { background: rgba(251,146,60,.1) !important; }
+html[data-ui-theme="navy-orange"] .focRow { background: rgba(139,92,246,.1) !important; }
+html[data-ui-theme="navy-orange"] .renewPaidTodayRow {
+  background: linear-gradient(90deg, rgba(124,58,237,.2), rgba(124,58,237,.08)) !important;
+}
+
+/* Forms */
+.formgrid input, .formgrid select, .formgrid textarea,
+.search input, .oldApptSearchInput, .globalPatientSearch,
+html[data-ui-theme="navy-orange"] input, html[data-ui-theme="navy-orange"] select, html[data-ui-theme="navy-orange"] textarea {
+  background: #0d1b30 !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+  color: #e8eef7 !important;
+  border-radius: 10px !important;
+}
+html[data-ui-theme="navy-orange"] .formgrid label, html[data-ui-theme="navy-orange"] label {
+  color: #b8c9de !important;
+}
+#partialPendingEditWrap input,
+html[data-ui-theme="navy-orange"] .pendingCompact input {
+  background: rgba(251,146,60,.12) !important;
+  border-color: rgba(251,146,60,.45) !important;
+  color: #fdba74 !important;
+}
+
+/* New/old case panels keep slight tint but on navy */
+body #patientForm.patientFormCard,
+body #patientForm.newCasePanel,
+body .card.patientFormCard,
+html[data-ui-theme="navy-orange"] body .card.newCasePanel {
+  background: linear-gradient(165deg, #14304a 0%, #0f2740 100%) !important;
+  border: 1px solid rgba(56,189,248,.25) !important;
+}
+body #oldAppointmentPanel.oldCasePanel,
+html[data-ui-theme="navy-orange"] body .card.oldCasePanel {
+  background: linear-gradient(165deg, #3a2818 0%, #2a1c10 100%) !important;
+  border: 1px solid rgba(251,146,60,.3) !important;
+}
+
+/* Calendar */
+html[data-ui-theme="navy-orange"] .calendarStrip {
+  background: var(--navy-800) !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+  border-radius: 14px !important;
+}
+html[data-ui-theme="navy-orange"] #calendarBtn, html[data-ui-theme="navy-orange"] .calendarStrip .btn {
+  background: linear-gradient(135deg, #ff6b35, #f15a24) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* Status tags */
+html[data-ui-theme="navy-orange"] .queueStatusTag.waiting, html[data-ui-theme="navy-orange"] .queueStatusTag.pending {
+  background: rgba(245,158,11,.2) !important;
+  color: #fbbf24 !important;
+}
+html[data-ui-theme="navy-orange"] .queueStatusTag.doctor {
+  background: rgba(59,130,246,.25) !important;
+  color: #93c5fd !important;
+}
+html[data-ui-theme="navy-orange"] .queueStatusTag.received {
+  background: rgba(34,197,94,.2) !important;
+  color: #86efac !important;
+}
+html[data-ui-theme="navy-orange"] .payPendingTag { background: rgba(239,68,68,.2)!important; color:#fca5a5!important; }
+html[data-ui-theme="navy-orange"] .payReceivedTag { background: rgba(34,197,94,.2)!important; color:#86efac!important; }
+html[data-ui-theme="navy-orange"] .payPartialTag { background: rgba(251,146,60,.2)!important; color:#fdba74!important; }
+html[data-ui-theme="navy-orange"] .payFocTag { background: rgba(139,92,246,.2)!important; color:#c4b5fd!important; }
+html[data-ui-theme="navy-orange"] .tag.new { background: rgba(59,130,246,.25)!important; color:#93c5fd!important; }
+html[data-ui-theme="navy-orange"] .tag.old { background: rgba(34,197,94,.2)!important; color:#86efac!important; }
+
+/* Modal */
+html[data-ui-theme="navy-orange"] .modal { background: rgba(4,10,20,.72) !important; }
+html[data-ui-theme="navy-orange"] .modalBox {
+  background: #122238 !important;
+  color: #e8eef7 !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+}
+html[data-ui-theme="navy-orange"] .modalHead { background: #0a1628 !important; color: #fff !important; }
+
+/* Toast */
+html[data-ui-theme="navy-orange"] .toast { background: #1a2f4a !important; color: #fff !important; }
+html[data-ui-theme="navy-orange"] .toast.bad { background: #991b1b !important; }
+
+/* Search bar */
+html[data-ui-theme="navy-orange"] .globalPatientSearch, html[data-ui-theme="navy-orange"] .search input {
+  background: #0d1b30 !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+  color: #e8eef7 !important;
+}
+html[data-ui-theme="navy-orange"] .globalSearchResults {
+  background: #122238 !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+  color: #e8eef7 !important;
+}
+
+/* Section breaks */
+html[data-ui-theme="navy-orange"] .queueSectionBreak td {
+  background: rgba(255,107,53,.12) !important;
+  color: #fdba74 !important;
+  border-color: rgba(255,107,53,.25) !important;
+}
+
+/* Payment breakup text */
+html[data-ui-theme="navy-orange"] .payBreakup, html[data-ui-theme="navy-orange"] .feeBreakup { color: #c5d4e8 !important; }
+html[data-ui-theme="navy-orange"] .partialPendLine { color: #fdba74 !important; }
+html[data-ui-theme="navy-orange"] .totalCollectCell { color: #93c5fd !important; }
+
+/* Brand logo/name: NOT themed — original design kept (override at end of file) */
+
+/* Dark mode already on — keep consistent if theme toggle */
+html[data-ui-theme="navy-orange"] body.dark, html[data-ui-theme="navy-orange"] body[data-theme="dark"] {
+  background: var(--navy-900) !important;
+}
+
+
+/* =========================================================
+   CLINIC LOGO + NAME — original (no Theme 4 colours)
+   Deep Navy & Orange applies everywhere EXCEPT this zone
+   ========================================================= */
+.sidebar .brand,
+.brand{
+  background: #4a0e0e !important;
+  background-image: linear-gradient(180deg, #5c1212 0%, #3d0a0a 55%, #2a0606 100%) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255,255,255,.06) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 10px 8px !important;
+  /* neutralize theme orange strip bleed on brand only */
+  position: relative;
+  z-index: 3;
+}
+.brandInner.brandLogoOnly,
+.brandInner{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  min-height: 72px !important;
+}
+/* Logo image: original colours — no theme filters */
+.brandFullLogo,
+.brand img.brandFullLogo,
+.sidebar .brand img,
+.sidebar .brand .brandFullLogo{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  filter: none !important;
+  max-height: 92px !important;
+  width: 100% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+}
+/* Text brand names if ever shown — original gold/teal, not theme */
+.brandAnand{ color: #f3e6a8 !important; }
+.brandHomeo{ color: #b8e6d9 !important; }
+.brandClinic{ color: #f0d78c !important; }
+
+
+/* Theme selector topbar */
+.themeSelectWrap{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-left:4px;
+}
+.themeSelectWrap label{
+  font-size:12px;
+  color:inherit;
+  opacity:.85;
+  white-space:nowrap;
+}
+#themeSelect, .themeSelect{
+  border-radius:10px !important;
+  padding:8px 12px !important;
+  font-size:13px !important;
+  font-weight:600 !important;
+  cursor:pointer !important;
+  min-width:160px;
+  border:1px solid rgba(0,0,0,.12) !important;
+  background:#fff !important;
+  color:#16304d !important;
+}
+html[data-ui-theme="navy-orange"] #themeSelect,
+html[data-ui-theme="navy-orange"] .themeSelect{
+  background:#122238 !important;
+  color:#e8eef7 !important;
+  border:1px solid rgba(255,255,255,.15) !important;
+}
+
+/* Classic = default PRO12b — no navy forced */
+html[data-ui-theme="classic"] body{
+  /* inherit original styles */
+}
+
+/* Logo zone always original — highest priority */
+html[data-ui-theme="classic"] .sidebar .brand,
+html[data-ui-theme="classic"] .brand,
+html[data-ui-theme="navy-orange"] .sidebar .brand,
+html[data-ui-theme="navy-orange"] .brand{
+  background: #4a0e0e !important;
+  background-image: linear-gradient(180deg, #5c1212 0%, #3d0a0a 55%, #2a0606 100%) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255,255,255,.06) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+html[data-ui-theme="classic"] .brandFullLogo,
+html[data-ui-theme="classic"] .brand img.brandFullLogo,
+html[data-ui-theme="navy-orange"] .brandFullLogo,
+html[data-ui-theme="navy-orange"] .brand img.brandFullLogo{
+  filter: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
