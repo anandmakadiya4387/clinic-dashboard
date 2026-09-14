@@ -2,9 +2,7 @@ const APP_VERSION = 'PRO';
 const role = document.body.dataset.role || 'office';
 const savedTheme = localStorage.getItem('anandClinicTheme') || 'light';
 document.documentElement.dataset.theme = savedTheme;
-// UI theme: classic (PRO12b) | navy-orange (Theme 4)
-const savedUiTheme = localStorage.getItem('anandClinicUiTheme') || 'classic';
-document.documentElement.setAttribute('data-ui-theme', savedUiTheme === 'navy-orange' ? 'navy-orange' : 'classic');
+try { document.documentElement.removeAttribute('data-ui-theme'); } catch(e) {}
 const KEY = 'anandClinicV16_' + role;
 const OLD_KEYS = ['anandClinicV15_' + role, 'anandClinicV14_' + role, 'anandClinicV13_' + role, 'anandClinicV12_' + role];
 const SERVER_KEY = 'anandClinicServerV27';
@@ -4913,26 +4911,18 @@ function setup() {
     $('#modalClose')?.addEventListener('click', closeModal);
     $('#testConn')?.addEventListener('click', testConn);
     $('#refreshBtn')?.addEventListener('click', forceRefresh);
-    // Theme selector: Classic ↔ Deep Navy & Orange (logo/name colours never change)
-    const applyUiTheme = (name) => {
-        const t = (name === 'navy-orange') ? 'navy-orange' : 'classic';
-        document.documentElement.setAttribute('data-ui-theme', t);
-        localStorage.setItem('anandClinicUiTheme', t);
-        const sel = $('#themeSelect');
-        if (sel) sel.value = t;
+    // Optional dark mode only
+    const syncDarkBtn = () => {
+        const dark = document.documentElement.dataset.theme === 'dark';
+        if ($('#themeToggle')) $('#themeToggle').textContent = dark ? '☀ Light' : '☾ Dark';
     };
-    applyUiTheme(localStorage.getItem('anandClinicUiTheme') || 'classic');
-    $('#themeSelect')?.addEventListener('change', (e) => {
-        applyUiTheme(e.target.value);
+    syncDarkBtn();
+    $('#themeToggle')?.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem('anandClinicTheme', next);
+        syncDarkBtn();
     });
-    // Legacy dark button support if still present
-    if ($('#themeToggle') && !$('#themeSelect')) {
-        $('#themeToggle').textContent = 'Theme';
-        $('#themeToggle').addEventListener('click', () => {
-            const cur = document.documentElement.getAttribute('data-ui-theme') || 'classic';
-            applyUiTheme(cur === 'navy-orange' ? 'classic' : 'navy-orange');
-        });
-    }
     $('#connectBtn')?.addEventListener('click', async () => {
         server = $('#serverUrl').value.trim().replace(/\/$/, '');
         localStorage.setItem(SERVER_KEY, server);

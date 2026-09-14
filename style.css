@@ -3738,3 +3738,540 @@ html[data-ui-theme="navy-orange"] .queueSectionBreak td {
 .actions .btn {
   font-weight: 600 !important;
 }
+
+
+/* =========================================================
+   TEAL GLASS / SOFT-CARD UI  (single theme + optional dark)
+   Removes Classic / Navy-Orange dual theme
+   Clinic logo image colours UNCHANGED
+   ========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --teal-700: #0f766e;
+  --teal-600: #0d9488;
+  --teal-500: #14b8a6;
+  --teal-100: #ccfbf1;
+  --teal-50: #f0fdfa;
+  --ink: #0f172a;
+  --ink-2: #1e293b;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --bg: #f0f4f8;
+  --bg-2: #e8eef5;
+  --card: rgba(255,255,255,.78);
+  --card-solid: #ffffff;
+  --shadow: 0 4px 24px rgba(15, 23, 42, .06), 0 1px 3px rgba(15,23,42,.04);
+  --shadow-md: 0 8px 30px rgba(15, 23, 42, .08);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --green: #059669;
+  --blue: #2563eb;
+  --orange: #ea580c;
+  --red: #dc2626;
+  --transition: .2s ease;
+}
+
+html, body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif !important;
+  background: linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 50%, #eef7f6 100%) !important;
+  color: var(--ink) !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Sidebar: soft teal ---- */
+.sidebar {
+  background: linear-gradient(180deg, #0f4c4a 0%, #0d5c58 40%, #0a4543 100%) !important;
+  border-right: none !important;
+  box-shadow: 4px 0 24px rgba(15, 76, 74, .2) !important;
+  color: #e6fffa !important;
+  transition: width var(--transition), transform var(--transition) !important;
+}
+.sidebar::before { display: none !important; content: none !important; }
+
+/* Logo zone — soft match to teal sidebar, LOGO IMAGE unchanged */
+.sidebar .brand,
+.brand {
+  background: linear-gradient(180deg, #0c3d3b 0%, #0a3533 100%) !important;
+  background-image: linear-gradient(180deg, #0c3d3b 0%, #0a3533 100%) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 12px 10px !important;
+}
+.brandInner, .brandInner.brandLogoOnly {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.brandFullLogo,
+.brand img.brandFullLogo,
+.sidebar .brand img {
+  filter: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  max-height: 90px !important;
+  object-fit: contain !important;
+}
+
+.nav button,
+.sidebar .nav button {
+  background: transparent !important;
+  color: #b6ebe6 !important;
+  border-radius: 12px !important;
+  font-weight: 500 !important;
+  font-size: 13.5px !important;
+  transition: background var(--transition), color var(--transition), transform var(--transition) !important;
+  margin: 2px 0 !important;
+  padding: 11px 14px !important;
+}
+.nav button:hover {
+  background: rgba(255,255,255,.1) !important;
+  color: #fff !important;
+}
+.nav button.active {
+  background: rgba(20,184,166,.28) !important;
+  color: #fff !important;
+  box-shadow: inset 3px 0 0 #2dd4bf !important;
+  font-weight: 600 !important;
+}
+.groupTitle, .navParent {
+  color: #7dd3c8 !important;
+  font-size: 11px !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+  font-weight: 600 !important;
+}
+
+/* ---- Main / topbar glass ---- */
+.main {
+  background: transparent !important;
+  color: var(--ink) !important;
+}
+.topbar {
+  background: rgba(255,255,255,.72) !important;
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid rgba(226,232,240,.9) !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,.8) !important;
+  color: var(--ink) !important;
+}
+.topbar span { color: var(--ink-2) !important; }
+.appVersionBadge {
+  background: linear-gradient(135deg, var(--teal-600), var(--teal-700)) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  padding: 4px 12px !important;
+  font-size: 12px !important;
+}
+.toggle, .hamburgerBtn {
+  background: var(--teal-700) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 12px !important;
+  transition: transform var(--transition), box-shadow var(--transition) !important;
+}
+.toggle:hover, .hamburgerBtn:hover { transform: translateY(-1px); }
+.themeToggle, .btn.embossed.themeToggle {
+  background: #fff !important;
+  color: var(--ink-2) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: var(--shadow) !important;
+}
+.syncLiveBadge {
+  border-radius: 999px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+}
+
+/* ---- Soft cards / glass ---- */
+.card, .queueCard, .permissionCard, .glassCard, .reportBox {
+  background: var(--card-solid) !important;
+  border: 1px solid rgba(226,232,240,.95) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow) !important;
+  color: var(--ink) !important;
+  transition: box-shadow var(--transition), transform var(--transition) !important;
+}
+.queueCard {
+  border: 1px solid rgba(13,148,136,.2) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.cardHead, .cardHead h2 {
+  color: var(--ink) !important;
+  border-bottom: 1px solid var(--line) !important;
+  font-weight: 700 !important;
+  font-size: 15px !important;
+}
+.hero h1, .patientEntryTitle {
+  color: var(--ink) !important;
+  font-weight: 700 !important;
+  font-size: 22px !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* ---- Buttons ---- */
+.btn, .primary, .green, .orange, .danger {
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  transition: transform var(--transition), box-shadow var(--transition), background var(--transition) !important;
+}
+.btn:hover, .primary:hover { transform: translateY(-1px); }
+.primary, .btn.primary {
+  background: linear-gradient(135deg, var(--teal-500), var(--teal-700)) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(13,148,136,.25) !important;
+}
+.green, .btn.green {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: #fff !important;
+}
+.btn.embossed:not(.primary):not(.green):not(.danger):not(.themeToggle) {
+  background: #fff !important;
+  color: var(--ink-2) !important;
+  border: 1px solid var(--line) !important;
+}
+
+/* ---- KPI soft colourful cards ---- */
+.kpiCard, .kpi, .countBox {
+  border-radius: 14px !important;
+  border: none !important;
+  box-shadow: var(--shadow) !important;
+  color: #fff !important;
+  transition: transform var(--transition), box-shadow var(--transition) !important;
+}
+.kpiCard:hover, .kpi:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.kpiCard span, .kpi span, .countBox small,
+.kpiCard b, .kpi b, .countBox b {
+  color: #fff !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.2) !important;
+  opacity: 1 !important;
+}
+.premiumKpiGrid .kpiCard:nth-child(1), .medicalTechGrid .kpiCard:nth-child(1), .kpiCommand .kpiCard:nth-child(1) { background: linear-gradient(145deg,#14b8a6,#0f766e) !important; }
+.premiumKpiGrid .kpiCard:nth-child(2), .medicalTechGrid .kpiCard:nth-child(2), .kpiCommand .kpiCard:nth-child(2) { background: linear-gradient(145deg,#2dd4bf,#0d9488) !important; }
+.premiumKpiGrid .kpiCard:nth-child(3), .medicalTechGrid .kpiCard:nth-child(3), .kpiCommand .kpiCard:nth-child(3) { background: linear-gradient(145deg,#6366f1,#4f46e5) !important; }
+.premiumKpiGrid .kpiCard:nth-child(4), .medicalTechGrid .kpiCard:nth-child(4), .kpiCommand .kpiCard:nth-child(4) { background: linear-gradient(145deg,#22c55e,#15803d) !important; }
+.premiumKpiGrid .kpiCard:nth-child(5), .medicalTechGrid .kpiCard:nth-child(5), .kpiCommand .kpiCard:nth-child(5) { background: linear-gradient(145deg,#f59e0b,#d97706) !important; }
+.premiumKpiGrid .kpiCard:nth-child(6), .medicalTechGrid .kpiCard:nth-child(6), .kpiCommand .kpiCard:nth-child(6) { background: linear-gradient(145deg,#38bdf8,#0284c7) !important; }
+.premiumKpiGrid .kpiCard:nth-child(7), .medicalTechGrid .kpiCard:nth-child(7), .kpiCommand .kpiCard:nth-child(7) { background: linear-gradient(145deg,#a78bfa,#7c3aed) !important; }
+.premiumKpiGrid .kpiCard:nth-child(8), .medicalTechGrid .kpiCard:nth-child(8), .kpiCommand .kpiCard:nth-child(8) { background: linear-gradient(145deg,#fb7185,#e11d48) !important; }
+.premiumKpiGrid .kpiCard:nth-child(9), .medicalTechGrid .kpiCard:nth-child(9), .kpiCommand .kpiCard:nth-child(9) { background: linear-gradient(145deg,#f472b6,#db2777) !important; }
+.premiumKpiGrid .kpiCard:nth-child(10), .medicalTechGrid .kpiCard:nth-child(10), .kpiCommand .kpiCard:nth-child(10) { background: linear-gradient(145deg,#94a3b8,#475569) !important; }
+
+/* Queue status strip */
+.queueStat {
+  background: #fff !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  color: var(--ink) !important;
+  box-shadow: var(--shadow) !important;
+  transition: transform var(--transition) !important;
+}
+.queueStat b { color: var(--ink) !important; font-weight: 800 !important; }
+.queueStat small { color: var(--muted) !important; }
+.queueStat.wait { border-top: 3px solid #f59e0b !important; }
+.queueStat.doctor { border-top: 3px solid #3b82f6 !important; }
+.queueStat.done { border-top: 3px solid #10b981 !important; }
+
+/* ---- Compact tables ---- */
+.table, .queueTable {
+  font-size: 13px !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  color: var(--ink) !important;
+}
+.table th, .queueTable th {
+  background: #f8fafc !important;
+  color: #334155 !important;
+  font-weight: 700 !important;
+  font-size: 11.5px !important;
+  text-transform: uppercase !important;
+  letter-spacing: .04em !important;
+  padding: 10px 12px !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+.table td, .queueTable td {
+  padding: 10px 12px !important;
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  vertical-align: middle !important;
+  background: transparent !important;
+}
+.tablewrap {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--line) !important;
+}
+.patientMain, .nameInline {
+  color: #0f172a !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+}
+.mini { color: #475569 !important; font-size: 12px !important; }
+.payBreakup, .feeBreakup {
+  color: #1e293b !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+.partialPendLine { color: #c2410c !important; font-weight: 700 !important; }
+.totalCollectCell, .amount { color: #0f766e !important; font-weight: 700 !important; }
+
+/* Status rows — soft tints + dark text */
+tr.pendingRow { background: #fffbeb !important; }
+tr.doctorRow { background: #eff6ff !important; }
+tr.receivedRow { background: #ecfdf5 !important; }
+tr.partialPendingRow { background: #fff7ed !important; }
+tr.focRow { background: #f5f3ff !important; }
+tr.pendingRow td, tr.doctorRow td, tr.receivedRow td,
+tr.partialPendingRow td, tr.focRow td {
+  color: #0f172a !important;
+}
+
+/* ---- Status badges ---- */
+.queueStatusTag, .tag, .statusCell .payPendingTag, .payReceivedTag, .payPartialTag, .payFocTag {
+  display: inline-flex !important;
+  align-items: center !important;
+  border-radius: 999px !important;
+  padding: 3px 10px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em !important;
+  border: none !important;
+}
+.queueStatusTag.waiting, .queueStatusTag.pending {
+  background: #fef3c7 !important; color: #92400e !important;
+}
+.queueStatusTag.doctor {
+  background: #dbeafe !important; color: #1e40af !important;
+}
+.queueStatusTag.received {
+  background: #d1fae5 !important; color: #065f46 !important;
+}
+.tag.new { background: #dbeafe !important; color: #1e3a8a !important; }
+.tag.old { background: #d1fae5 !important; color: #065f46 !important; }
+.statusCell { color: #0f172a !important; font-weight: 600 !important; }
+.payPendingTag { background: #fee2e2 !important; color: #991b1b !important; }
+.payReceivedTag { background: #d1fae5 !important; color: #065f46 !important; }
+.payPartialTag { background: #ffedd5 !important; color: #9a3412 !important; }
+.payFocTag { background: #ede9fe !important; color: #5b21b6 !important; }
+
+.queueSectionBreak td {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  letter-spacing: .03em !important;
+  text-transform: uppercase !important;
+  padding: 8px 12px !important;
+}
+
+/* ---- Forms — clear dark text ---- */
+.formgrid input, .formgrid select, .formgrid textarea,
+.search input, .oldApptSearchInput, .globalPatientSearch,
+#patientForm input, #patientForm select, #patientForm textarea,
+#oldAppointmentPanel input, input[type="text"], input[type="number"],
+input[type="date"], input[type="search"], input[type="tel"], select, textarea {
+  background: #fff !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  transition: border-color var(--transition), box-shadow var(--transition) !important;
+  box-shadow: 0 1px 2px rgba(15,23,42,.03) !important;
+}
+.formgrid input:focus, .formgrid select:focus, .formgrid textarea:focus,
+.search input:focus, input:focus, select:focus, textarea:focus {
+  border-color: var(--teal-500) !important;
+  box-shadow: 0 0 0 3px rgba(20,184,166,.2) !important;
+  outline: none !important;
+}
+.formgrid label, label {
+  color: #334155 !important;
+  font-weight: 600 !important;
+  font-size: 12.5px !important;
+}
+input::placeholder, textarea::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+}
+#partialPendingEdit, #oldApptPayPending, #recvPartialPending {
+  color: #9a3412 !important;
+  -webkit-text-fill-color: #9a3412 !important;
+  background: #fff7ed !important;
+  border: 1px solid #fdba74 !important;
+  font-weight: 700 !important;
+}
+
+/* Form panels */
+#patientForm.patientFormCard, .card.patientFormCard, .card.newCasePanel {
+  background: #fff !important;
+  border: 1px solid rgba(13,148,136,.25) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.card.oldCasePanel, #oldAppointmentPanel.oldCasePanel {
+  background: #fff !important;
+  border: 1px solid rgba(245,158,11,.3) !important;
+}
+
+/* Calendar */
+.calendarStrip {
+  background: #fff !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow) !important;
+}
+#calendarBtn, .calendarStrip .btn {
+  background: linear-gradient(135deg, var(--teal-500), var(--teal-700)) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 12px !important;
+}
+.calendarSelected { color: var(--muted) !important; }
+
+/* Modal */
+.modal { background: rgba(15,23,42,.45) !important; backdrop-filter: blur(4px); }
+.modalBox {
+  background: #fff !important;
+  color: var(--ink) !important;
+  border-radius: 18px !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: 0 20px 50px rgba(15,23,42,.18) !important;
+}
+.modalHead {
+  background: #f8fafc !important;
+  color: var(--ink) !important;
+  border-radius: 18px 18px 0 0 !important;
+}
+
+/* Search */
+.globalPatientSearch, .search input {
+  border-radius: 999px !important;
+}
+
+/* Action buttons compact */
+.queueActions .btn, .actions.compactActions .btn {
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+}
+
+/* Smooth page */
+.page { transition: opacity var(--transition); }
+
+/* ========== OPTIONAL DARK MODE ========== */
+html[data-theme="dark"] {
+  --ink: #e2e8f0;
+  --ink-2: #f1f5f9;
+  --muted: #94a3b8;
+  --line: #334155;
+  --bg: #0f172a;
+  --bg-2: #1e293b;
+  --card-solid: #1e293b;
+}
+html[data-theme="dark"] body,
+html[data-theme="dark"] .main {
+  background: linear-gradient(160deg, #0b1220 0%, #0f172a 50%, #0c1a1a 100%) !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] .topbar {
+  background: rgba(15,23,42,.85) !important;
+  border-bottom-color: #334155 !important;
+}
+html[data-theme="dark"] .topbar span { color: #e2e8f0 !important; }
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .queueCard,
+html[data-theme="dark"] .permissionCard {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] .cardHead h2,
+html[data-theme="dark"] .hero h1,
+html[data-theme="dark"] .patientEntryTitle { color: #f8fafc !important; }
+html[data-theme="dark"] .table th, html[data-theme="dark"] .queueTable th {
+  background: #0f172a !important;
+  color: #cbd5e1 !important;
+}
+html[data-theme="dark"] .table td, html[data-theme="dark"] .queueTable td,
+html[data-theme="dark"] .patientMain, html[data-theme="dark"] .nameInline,
+html[data-theme="dark"] .payBreakup, html[data-theme="dark"] .feeBreakup {
+  color: #f1f5f9 !important;
+}
+html[data-theme="dark"] .mini { color: #94a3b8 !important; }
+html[data-theme="dark"] .totalCollectCell { color: #5eead4 !important; }
+html[data-theme="dark"] tr.pendingRow { background: rgba(245,158,11,.12) !important; }
+html[data-theme="dark"] tr.doctorRow { background: rgba(59,130,246,.15) !important; }
+html[data-theme="dark"] tr.receivedRow { background: rgba(16,185,129,.12) !important; }
+html[data-theme="dark"] tr.pendingRow td,
+html[data-theme="dark"] tr.doctorRow td,
+html[data-theme="dark"] tr.receivedRow td { color: #f1f5f9 !important; }
+html[data-theme="dark"] .formgrid input,
+html[data-theme="dark"] .formgrid select,
+html[data-theme="dark"] .formgrid textarea,
+html[data-theme="dark"] .search input,
+html[data-theme="dark"] input[type="text"],
+html[data-theme="dark"] input[type="number"],
+html[data-theme="dark"] input[type="date"],
+html[data-theme="dark"] select, html[data-theme="dark"] textarea {
+  background: #0f172a !important;
+  color: #f1f5f9 !important;
+  -webkit-text-fill-color: #f1f5f9 !important;
+  border-color: #475569 !important;
+}
+html[data-theme="dark"] .formgrid label, html[data-theme="dark"] label {
+  color: #cbd5e1 !important;
+}
+html[data-theme="dark"] .modalBox {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] .modalHead {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+}
+html[data-theme="dark"] .queueStat {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] .queueStat b { color: #f8fafc !important; }
+html[data-theme="dark"] .themeToggle {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  border-color: #475569 !important;
+}
+html[data-theme="dark"] .tablewrap { border-color: #334155 !important; }
+html[data-theme="dark"] .queueSectionBreak td {
+  background: #0f172a !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] #patientForm.patientFormCard,
+html[data-theme="dark"] .card.newCasePanel,
+html[data-theme="dark"] .card.oldCasePanel {
+  background: #1e293b !important;
+}
+
+/* Logo stays same in dark mode — only zone bg */
+html[data-theme="dark"] .sidebar .brand,
+html[data-theme="dark"] .brand {
+  background: linear-gradient(180deg, #0c3d3b 0%, #0a3533 100%) !important;
+  background-image: linear-gradient(180deg, #0c3d3b 0%, #0a3533 100%) !important;
+}
+html[data-theme="dark"] .brandFullLogo,
+html[data-theme="dark"] .brand img.brandFullLogo {
+  filter: none !important;
+}
