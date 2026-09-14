@@ -169,7 +169,7 @@ const DEFAULT = {
     },
     clinic: {
         name: 'Anand Homoeopathy Multi Speciality Clinic',
-        logo: 'clinic-logo.svg',
+        logo: 'clinic-logo.png',
         address: '',
         phone: '',
         _updated: ''
@@ -5152,7 +5152,7 @@ function buildBillHtml(mode) {
     const header = skipHeader ? '' : `
       <div class="billPremHeader">
         <div class="billPremLogoWrap" style="text-align:center; padding:8px 8px 4px;">
-          <img src="clinic-logo.svg" alt="ANAND Homoeopathy Multi Speciality Clinic" class="billPremLogo" width="280" height="84" style="max-width:100%;height:auto;">
+          <img src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic" class="billPremLogo" width="280" height="84" style="max-width:100%;height:auto;">
         </div>
         <div class="billTextHeader" style="text-align:center; padding:4px 16px 12px; border-bottom:3px solid #1a4f8b; margin-bottom:15px; font-family:Arial, sans-serif;">
           <div style="font-size:12px; color:#64748b; margin-top:2px;">

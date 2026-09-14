@@ -5274,3 +5274,33 @@ img.billPremLogo,
   width: auto !important;
   height: auto !important;
 }
+
+/* User official logo image — keep app background unchanged */
+.brandFullLogo {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: 90px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  filter: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.sidebar.collapsed .brandFullLogo { max-height: 40px !important; }
+.logoFit {
+  display: block !important;
+  max-width: 360px !important;
+  width: 100% !important;
+  height: auto !important;
+  margin: 0 auto 10px !important;
+}
+.billPremLogo {
+  display: inline-block !important;
+  max-width: 420px !important;
+  max-height: 100px !important;
+  width: auto !important;
+  height: auto !important;
+}
