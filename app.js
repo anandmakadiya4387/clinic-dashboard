@@ -169,7 +169,7 @@ const DEFAULT = {
     },
     clinic: {
         name: 'Anand Homoeopathy Multi Speciality Clinic',
-        logo: 'clinic-logo.jpg',
+        logo: '',
         address: '',
         phone: '',
         _updated: ''
@@ -5148,11 +5148,19 @@ function buildBillHtml(mode) {
         return row;
     }).join('') || `<tr><td colspan="3" class="mini">No fee lines selected</td></tr>`;
 
-    // Full-width logo banner (transparent bg) — left to right; NO email
+    // High-Speed Text-Based Header (Zero Bandwidth — no image files)
     const header = skipHeader ? '' : `
       <div class="billPremHeader">
-        <div class="billPremLogoWrap">
-          <img src="clinic-bill-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic" class="billPremLogo">
+        <div class="billTextHeader" style="text-align:center; padding:16px; border-bottom:3px solid #1a4f8b; margin-bottom:15px; font-family:Arial, sans-serif;">
+          <div style="font-size:24px; font-weight:bold; color:#1a4f8b; text-transform:uppercase; letter-spacing:1px;">
+            Anand Homoeopathy MultiSpeciality Clinic
+          </div>
+          <div style="font-size:13px; color:#475569; margin-top:4px; font-weight:500;">
+            Advanced Classical Homoeopathy &amp; MultiSpeciality Care
+          </div>
+          <div style="font-size:12px; color:#64748b; margin-top:3px;">
+            FF-01, Rameshwar Residency, Near Ghuma Bus Stand, Ghuma, Ahmedabad, Gujarat
+          </div>
         </div>
         <div class="billPremDocs">
           <div class="billPremDoc">

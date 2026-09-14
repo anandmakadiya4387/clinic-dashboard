@@ -1973,7 +1973,7 @@ tr.doctorRow td,
 }
 .billSheet .billBgLayer{
   position:absolute;inset:0;
-  background:url('clinic-letterhead.jpg') no-repeat center top;
+  background:none;
   background-size:100% 100%;
   z-index:0;
 }
@@ -5103,3 +5103,104 @@ body[data-role="reception"] .card.oldCasePanel {
   color: #1c1410 !important;
   font-weight: 400 !important;
 }
+
+
+/* Bill header — text only, no image bandwidth */
+.billPremLogoWrap, .billPremLogo, .billBannerLogo, img.billPremLogo {
+  display: none !important;
+}
+.billTextHeader {
+  width: 100%;
+  box-sizing: border-box;
+}
+.billPrintRoot.billFullMode,
+.billPrintRoot.billLetterheadMode,
+#billPreview,
+.billPreviewBox {
+  background-image: none !important;
+}
+.billPremHeader {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+
+/* =========================================================
+   TEXT LOGO — zero image bandwidth (sidebar + clinic page)
+   Colours match clinic branding on dark brown sidebar
+   ========================================================= */
+.brandInner.brandTextLogo,
+.brandTextLogo {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-height: 72px !important;
+  padding: 8px 6px !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.textLogoMark {
+  text-align: center;
+  line-height: 1.15;
+  width: 100%;
+}
+.textLogoAnand {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #f3e6a8;
+  text-transform: uppercase;
+}
+.textLogoHomeo {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #b8e6d9;
+  margin-top: 3px;
+}
+.textLogoClinic {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f0d78c;
+  margin-top: 2px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+/* Clinic profile page — readable on light brown */
+.textLogoClinicPage {
+  padding: 12px 8px 8px;
+  margin-bottom: 6px;
+}
+.textLogoClinicPage .textLogoAnand {
+  color: #5c3a28;
+  font-size: 28px;
+}
+.textLogoClinicPage .textLogoHomeo {
+  color: #0f766e;
+  font-size: 15px;
+}
+.textLogoClinicPage .textLogoClinic {
+  color: #7a4f38;
+  font-size: 12px;
+}
+
+/* Never load image logos */
+img.brandFullLogo,
+img.logoFit,
+img.billPremLogo,
+.brandFullLogo,
+.logoFit {
+  display: none !important;
+  content: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  max-height: 0 !important;
+}
+.sidebar.collapsed .textLogoAnand { font-size: 12px; letter-spacing: 0.5px; }
+.sidebar.collapsed .textLogoHomeo,
+.sidebar.collapsed .textLogoClinic { display: none; }
+.sidebar.collapsed .brandTextLogo { min-height: 40px; padding: 4px; }
