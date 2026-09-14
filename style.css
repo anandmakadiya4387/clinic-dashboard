@@ -3453,3 +3453,288 @@ html[data-ui-theme="navy-orange"] #recvPartialPending{
 html[data-ui-theme="navy-orange"] .partialCarryHint{
   color: #fdba74 !important;
 }
+
+
+/* =========================================================
+   GLOBAL TEXT READABILITY — every theme, every status row
+   Never washed-out white on light backgrounds
+   ========================================================= */
+
+/* Default body/table text — strong dark ink */
+html, body, .main, .page, .card, .queueCard, .cardBody,
+.table, .queueTable, .table td, .queueTable td,
+.patientMain, .patientNameOneLine, .nameInline, .mini,
+.payBreakup, .feeBreakup, .amount, .totalCollectCell,
+.statusCell, .queueStatusTag, .payStatusUnder {
+  /* base; rows override below */
+}
+
+html[data-ui-theme="classic"] body,
+html[data-ui-theme="classic"] .main,
+html:not([data-ui-theme="navy-orange"]) body,
+html:not([data-ui-theme="navy-orange"]) .main {
+  color: #0f172a !important;
+}
+
+html[data-ui-theme="classic"] .card,
+html[data-ui-theme="classic"] .queueCard,
+html[data-ui-theme="classic"] .cardBody,
+html:not([data-ui-theme="navy-orange"]) .card,
+html:not([data-ui-theme="navy-orange"]) .queueCard {
+  color: #0f172a !important;
+  background: #ffffff !important;
+}
+
+/* Table headers & cells — classic */
+html[data-ui-theme="classic"] .table th,
+html[data-ui-theme="classic"] .queueTable th,
+html:not([data-ui-theme="navy-orange"]) .table th,
+html:not([data-ui-theme="navy-orange"]) .queueTable th {
+  color: #1e293b !important;
+  background: #f1f5f9 !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="classic"] .table td,
+html[data-ui-theme="classic"] .queueTable td,
+html:not([data-ui-theme="navy-orange"]) .table td,
+html:not([data-ui-theme="navy-orange"]) .queueTable td {
+  color: #0f172a !important;
+  background: transparent !important;
+}
+html[data-ui-theme="classic"] .patientMain,
+html[data-ui-theme="classic"] .nameInline,
+html[data-ui-theme="classic"] .payBreakup,
+html[data-ui-theme="classic"] .feeBreakup,
+html[data-ui-theme="classic"] .amount,
+html[data-ui-theme="classic"] .totalCollectCell,
+html[data-ui-theme="classic"] .mini,
+html:not([data-ui-theme="navy-orange"]) .patientMain,
+html:not([data-ui-theme="navy-orange"]) .nameInline,
+html:not([data-ui-theme="navy-orange"]) .payBreakup,
+html:not([data-ui-theme="navy-orange"]) .feeBreakup,
+html:not([data-ui-theme="navy-orange"]) .amount,
+html:not([data-ui-theme="navy-orange"]) .totalCollectCell {
+  color: #0f172a !important;
+}
+html[data-ui-theme="classic"] .mini,
+html:not([data-ui-theme="navy-orange"]) .mini {
+  color: #334155 !important;
+}
+html[data-ui-theme="classic"] .partialPendLine,
+html:not([data-ui-theme="navy-orange"]) .partialPendLine {
+  color: #9a3412 !important;
+  font-weight: 700 !important;
+}
+
+/* Status rows — classic: tinted bg + dark text always */
+html[data-ui-theme="classic"] tr.pendingRow td,
+html[data-ui-theme="classic"] tr.doctorRow td,
+html[data-ui-theme="classic"] tr.receivedRow td,
+html[data-ui-theme="classic"] tr.partialPendingRow td,
+html[data-ui-theme="classic"] tr.focRow td,
+html[data-ui-theme="classic"] tr.renewPaidTodayRow td,
+html:not([data-ui-theme="navy-orange"]) tr.pendingRow td,
+html:not([data-ui-theme="navy-orange"]) tr.doctorRow td,
+html:not([data-ui-theme="navy-orange"]) tr.receivedRow td,
+html:not([data-ui-theme="navy-orange"]) tr.partialPendingRow td,
+html:not([data-ui-theme="navy-orange"]) tr.focRow td {
+  color: #0f172a !important;
+}
+html[data-ui-theme="classic"] tr.pendingRow,
+html:not([data-ui-theme="navy-orange"]) tr.pendingRow {
+  background: #fff7ed !important;
+}
+html[data-ui-theme="classic"] tr.doctorRow,
+html:not([data-ui-theme="navy-orange"]) tr.doctorRow {
+  background: #eff6ff !important;
+}
+html[data-ui-theme="classic"] tr.receivedRow,
+html:not([data-ui-theme="navy-orange"]) tr.receivedRow {
+  background: #ecfdf5 !important;
+}
+html[data-ui-theme="classic"] tr.partialPendingRow,
+html:not([data-ui-theme="navy-orange"]) tr.partialPendingRow {
+  background: #fff1e6 !important;
+}
+html[data-ui-theme="classic"] tr.focRow,
+html:not([data-ui-theme="navy-orange"]) tr.focRow {
+  background: #f5f3ff !important;
+}
+
+/* Tags / status pills — high contrast */
+html[data-ui-theme="classic"] .queueStatusTag.waiting,
+html[data-ui-theme="classic"] .queueStatusTag.pending,
+html:not([data-ui-theme="navy-orange"]) .queueStatusTag.waiting {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="classic"] .queueStatusTag.doctor,
+html:not([data-ui-theme="navy-orange"]) .queueStatusTag.doctor {
+  background: #dbeafe !important;
+  color: #1e40af !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="classic"] .queueStatusTag.received,
+html:not([data-ui-theme="navy-orange"]) .queueStatusTag.received {
+  background: #d1fae5 !important;
+  color: #065f46 !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="classic"] .tag.new,
+html:not([data-ui-theme="navy-orange"]) .tag.new {
+  background: #dbeafe !important;
+  color: #1e3a8a !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="classic"] .tag.old,
+html:not([data-ui-theme="navy-orange"]) .tag.old {
+  background: #d1fae5 !important;
+  color: #065f46 !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="classic"] .statusCell,
+html:not([data-ui-theme="navy-orange"]) .statusCell {
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+/* Section headers in queue */
+html[data-ui-theme="classic"] .queueSectionBreak td,
+html:not([data-ui-theme="navy-orange"]) .queueSectionBreak td {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+/* Search bar text */
+html[data-ui-theme="classic"] .search input,
+html:not([data-ui-theme="navy-orange"]) .search input {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  background: #fff !important;
+}
+
+/* Headings */
+html[data-ui-theme="classic"] h1,
+html[data-ui-theme="classic"] h2,
+html[data-ui-theme="classic"] .patientEntryTitle,
+html[data-ui-theme="classic"] .cardHead h2,
+html:not([data-ui-theme="navy-orange"]) h1,
+html:not([data-ui-theme="navy-orange"]) h2,
+html:not([data-ui-theme="navy-orange"]) .patientEntryTitle {
+  color: #0f172a !important;
+}
+
+/* KPI / dashboard boxes — white text on coloured gradients is OK;
+   force white + shadow for clarity */
+.kpiCard, .kpi, .countBox,
+.kpiCard span, .kpi span, .countBox small,
+.kpiCard b, .kpi b, .countBox b {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.35) !important;
+}
+.kpiCard span, .kpi span, .countBox small {
+  opacity: 1 !important;
+  font-weight: 600 !important;
+}
+
+/* Queue strip status boxes */
+.queueStat b { color: inherit !important; font-weight: 800 !important; }
+html[data-ui-theme="classic"] .queueStat,
+html:not([data-ui-theme="navy-orange"]) .queueStat {
+  background: #fff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+html[data-ui-theme="classic"] .queueStat b,
+html:not([data-ui-theme="navy-orange"]) .queueStat b {
+  color: #0f172a !important;
+}
+html[data-ui-theme="classic"] .queueStat small,
+html:not([data-ui-theme="navy-orange"]) .queueStat small {
+  color: #475569 !important;
+}
+
+/* Navy Orange — light text on dark surfaces, strong contrast */
+html[data-ui-theme="navy-orange"] body,
+html[data-ui-theme="navy-orange"] .main,
+html[data-ui-theme="navy-orange"] .page {
+  color: #f1f5f9 !important;
+}
+html[data-ui-theme="navy-orange"] .table th,
+html[data-ui-theme="navy-orange"] .queueTable th {
+  color: #e2e8f0 !important;
+  background: rgba(15,23,42,.6) !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="navy-orange"] .table td,
+html[data-ui-theme="navy-orange"] .queueTable td,
+html[data-ui-theme="navy-orange"] .patientMain,
+html[data-ui-theme="navy-orange"] .nameInline,
+html[data-ui-theme="navy-orange"] .payBreakup,
+html[data-ui-theme="navy-orange"] .feeBreakup,
+html[data-ui-theme="navy-orange"] .amount,
+html[data-ui-theme="navy-orange"] .totalCollectCell,
+html[data-ui-theme="navy-orange"] .statusCell {
+  color: #f8fafc !important;
+}
+html[data-ui-theme="navy-orange"] .mini {
+  color: #cbd5e1 !important;
+}
+html[data-ui-theme="navy-orange"] .partialPendLine {
+  color: #fdba74 !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="navy-orange"] tr.pendingRow {
+  background: rgba(245,158,11,.18) !important;
+}
+html[data-ui-theme="navy-orange"] tr.doctorRow {
+  background: rgba(59,130,246,.22) !important;
+}
+html[data-ui-theme="navy-orange"] tr.receivedRow {
+  background: rgba(34,197,94,.18) !important;
+}
+html[data-ui-theme="navy-orange"] tr.pendingRow td,
+html[data-ui-theme="navy-orange"] tr.doctorRow td,
+html[data-ui-theme="navy-orange"] tr.receivedRow td,
+html[data-ui-theme="navy-orange"] tr.partialPendingRow td {
+  color: #f8fafc !important;
+}
+html[data-ui-theme="navy-orange"] .queueStatusTag.waiting {
+  background: #92400e !important;
+  color: #fffbeb !important;
+}
+html[data-ui-theme="navy-orange"] .queueStatusTag.doctor {
+  background: #1e40af !important;
+  color: #eff6ff !important;
+}
+html[data-ui-theme="navy-orange"] .queueStatusTag.received {
+  background: #065f46 !important;
+  color: #ecfdf5 !important;
+}
+html[data-ui-theme="navy-orange"] .tag.new {
+  background: #1e40af !important;
+  color: #eff6ff !important;
+}
+html[data-ui-theme="navy-orange"] .tag.old {
+  background: #065f46 !important;
+  color: #ecfdf5 !important;
+}
+html[data-ui-theme="navy-orange"] h1,
+html[data-ui-theme="navy-orange"] h2,
+html[data-ui-theme="navy-orange"] .patientEntryTitle,
+html[data-ui-theme="navy-orange"] .cardHead h2 {
+  color: #f8fafc !important;
+}
+html[data-ui-theme="navy-orange"] .queueSectionBreak td {
+  background: rgba(255,107,53,.2) !important;
+  color: #ffedd5 !important;
+  font-weight: 700 !important;
+}
+
+/* Action buttons always readable */
+.queueActions .btn,
+.actions .btn {
+  font-weight: 600 !important;
+}
