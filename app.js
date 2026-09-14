@@ -1906,7 +1906,7 @@ function renderQueue() {
         return `<tr class="${rowClass}${pulse?' receivedPulse':''}">
    <td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
    <td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
-   <td class="payBreakCell">${feeBreak}</td><td class="amount totalCollectCell"><b>${money(consF + medF + renF + Math.max(0, Number(p.partialPending || 0)))}</b></td>
+   <td class="payBreakCell">${feeBreak}</td><td class="amount totalCollectCell"><b>${money(consF + medF + renF)}</b></td>
    <td><span class="queueStatusTag ${status}">${status==='doctor'?'With Doctor':(status==='received'?'Completed':'Waiting')}</span></td>
    <td><div class="actions embossedActions compactActions queueActions">
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>`:''}
@@ -4967,7 +4967,7 @@ function renderReceptionQueue() {
         const med = Number(p.medicine || 0);
         const ren = Number(p.renewal || 0);
         const pendAmt = Math.max(0, Number(p.partialPending || 0));
-        const totalCol = cons + med + ren + pendAmt;
+        const totalCol = cons + med + ren; // partial pending is NOT part of total collection
         const statusLab = receptionPayStatusLabel(p);
         const payBreak = `<div class="payBreakup"><div>Consultation: <b>${money(cons)}</b></div><div>Medicine: <b>${money(med)}</b></div><div>Renewal: <b>${money(ren)}</b></div>${pendAmt > 0 ? `<div class="partialPendLine">Partial pending: <b>${money(pendAmt)}</b></div>` : ''}</div>`;
         const locked = fullyReceived;

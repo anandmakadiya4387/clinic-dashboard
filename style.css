@@ -4275,3 +4275,445 @@ html[data-theme="dark"] .brandFullLogo,
 html[data-theme="dark"] .brand img.brandFullLogo {
   filter: none !important;
 }
+
+
+/* =========================================================
+   BROWN CLINIC UI — dark brown sidebar, light brown surfaces
+   High-contrast readable text everywhere
+   Soft nav hover (no heavy box)
+   Compact always-visible action buttons
+   ========================================================= */
+
+:root {
+  --brown-950: #2a1810;
+  --brown-900: #3d2418;
+  --brown-800: #4a2e1f;
+  --brown-700: #5c3a28;
+  --brown-600: #7a4f38;
+  --brown-500: #a67c52;
+  --brown-400: #c4a484;
+  --brown-300: #dcc4a8;
+  --brown-200: #ebe0d2;
+  --brown-100: #f5efe8;
+  --brown-50: #faf7f3;
+  --ink: #1c1410;
+  --ink-2: #2c2118;
+  --muted: #6b5344;
+  --line: #e0d4c6;
+  --card: #fffdfb;
+  --teal-600: #7a4f38;
+  --teal-500: #a67c52;
+  --teal-700: #5c3a28;
+  --shadow: 0 4px 18px rgba(61, 36, 24, .08);
+  --shadow-md: 0 8px 28px rgba(61, 36, 24, .1);
+}
+
+html, body {
+  background: linear-gradient(165deg, #f7f1ea 0%, #f0e6da 45%, #ebe0d2 100%) !important;
+  color: #1c1410 !important;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif !important;
+}
+
+/* Sidebar — dark brown */
+.sidebar {
+  background: linear-gradient(180deg, #3d2418 0%, #2f1c12 50%, #26160e 100%) !important;
+  border-right: none !important;
+  box-shadow: 4px 0 24px rgba(42, 24, 16, .25) !important;
+  color: #f5efe8 !important;
+}
+.sidebar::before { display: none !important; content: none !important; }
+
+/* Logo zone — dark brown match (logo image unchanged) */
+.sidebar .brand,
+.brand {
+  background: linear-gradient(180deg, #2a1810 0%, #1f120c 100%) !important;
+  background-image: linear-gradient(180deg, #2a1810 0%, #1f120c 100%) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 12px 10px !important;
+}
+.brandFullLogo,
+.brand img.brandFullLogo,
+.sidebar .brand img {
+  filter: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Nav — soft light hover like reference site (no heavy box) */
+.nav button,
+.sidebar .nav button {
+  background: transparent !important;
+  color: #e8dcd0 !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  font-size: 13.5px !important;
+  box-shadow: none !important;
+  border: none !important;
+  transition: color .15s ease, background .15s ease !important;
+  margin: 1px 0 !important;
+  padding: 10px 14px !important;
+}
+.nav button:hover,
+.sidebar .nav button:hover {
+  background: rgba(255,255,255,.1) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+.nav button.active,
+.sidebar .nav button.active {
+  background: rgba(255,255,255,.14) !important;
+  color: #fff !important;
+  box-shadow: inset 3px 0 0 #d4a574 !important;
+  font-weight: 600 !important;
+}
+.groupTitle, .navParent {
+  color: #c4a484 !important;
+  font-size: 11px !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+}
+
+/* Topbar / main */
+.main { background: transparent !important; color: #1c1410 !important; }
+.topbar {
+  background: rgba(255,253,251,.9) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #e0d4c6 !important;
+  color: #1c1410 !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,.8) !important;
+}
+.topbar span { color: #2c2118 !important; }
+.appVersionBadge {
+  background: linear-gradient(135deg, #7a4f38, #5c3a28) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+}
+.toggle, .hamburgerBtn {
+  background: #5c3a28 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 10px !important;
+}
+.themeToggle, .btn.embossed.themeToggle {
+  background: #fffdfb !important;
+  color: #2c2118 !important;
+  border: 1px solid #dcc4a8 !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+}
+
+/* Soft cards — light brown tint */
+.card, .queueCard, .permissionCard, .glassCard, .reportBox {
+  background: #fffdfb !important;
+  border: 1px solid #e0d4c6 !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow) !important;
+  color: #1c1410 !important;
+}
+.queueCard {
+  border: 1px solid #d4b896 !important;
+}
+.cardHead, .cardHead h2 {
+  color: #1c1410 !important;
+  border-bottom-color: #e0d4c6 !important;
+  font-weight: 700 !important;
+}
+.hero h1, .patientEntryTitle {
+  color: #1c1410 !important;
+  font-weight: 700 !important;
+}
+
+/* Buttons */
+.primary, .btn.primary {
+  background: linear-gradient(135deg, #a67c52, #5c3a28) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+}
+.green, .btn.green {
+  background: linear-gradient(135deg, #6b8f71, #3d6b45) !important;
+  color: #fff !important;
+}
+.btn.embossed:not(.primary):not(.green):not(.danger):not(.themeToggle) {
+  background: #fffdfb !important;
+  color: #2c2118 !important;
+  border: 1px solid #dcc4a8 !important;
+}
+
+/* KPI boxes — soft brown-family colours + WHITE readable text */
+.kpiCard, .kpi, .countBox {
+  border-radius: 12px !important;
+  border: none !important;
+  box-shadow: var(--shadow) !important;
+  color: #fff !important;
+}
+.kpiCard span, .kpi span, .countBox small,
+.kpiCard b, .kpi b, .countBox b {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.35) !important;
+  opacity: 1 !important;
+  font-weight: 700 !important;
+}
+/* Soft earth tones for KPIs */
+.premiumKpiGrid .kpiCard:nth-child(1), .medicalTechGrid .kpiCard:nth-child(1), .kpiCommand .kpiCard:nth-child(1) { background: linear-gradient(145deg,#a67c52,#7a4f38) !important; }
+.premiumKpiGrid .kpiCard:nth-child(2), .medicalTechGrid .kpiCard:nth-child(2), .kpiCommand .kpiCard:nth-child(2) { background: linear-gradient(145deg,#c4a484,#8b6914) !important; }
+.premiumKpiGrid .kpiCard:nth-child(3), .medicalTechGrid .kpiCard:nth-child(3), .kpiCommand .kpiCard:nth-child(3) { background: linear-gradient(145deg,#8b7355,#5c4a32) !important; }
+.premiumKpiGrid .kpiCard:nth-child(4), .medicalTechGrid .kpiCard:nth-child(4), .kpiCommand .kpiCard:nth-child(4) { background: linear-gradient(145deg,#6b8f71,#3d6b45) !important; }
+.premiumKpiGrid .kpiCard:nth-child(5), .medicalTechGrid .kpiCard:nth-child(5), .kpiCommand .kpiCard:nth-child(5) { background: linear-gradient(145deg,#d4a017,#a67c00) !important; }
+.premiumKpiGrid .kpiCard:nth-child(6), .medicalTechGrid .kpiCard:nth-child(6), .kpiCommand .kpiCard:nth-child(6) { background: linear-gradient(145deg,#7a6b5a,#4a3f35) !important; }
+.premiumKpiGrid .kpiCard:nth-child(7), .medicalTechGrid .kpiCard:nth-child(7), .kpiCommand .kpiCard:nth-child(7) { background: linear-gradient(145deg,#b8956c,#7a5c3a) !important; }
+.premiumKpiGrid .kpiCard:nth-child(8), .medicalTechGrid .kpiCard:nth-child(8), .kpiCommand .kpiCard:nth-child(8) { background: linear-gradient(145deg,#9a6b4f,#6b4430) !important; }
+.premiumKpiGrid .kpiCard:nth-child(9), .medicalTechGrid .kpiCard:nth-child(9), .kpiCommand .kpiCard:nth-child(9) { background: linear-gradient(145deg,#c49a6c,#8a6840) !important; }
+.premiumKpiGrid .kpiCard:nth-child(10), .medicalTechGrid .kpiCard:nth-child(10), .kpiCommand .kpiCard:nth-child(10) { background: linear-gradient(145deg,#8c7a66,#5a4d40) !important; }
+
+.queueStat {
+  background: #fffdfb !important;
+  border: 1px solid #e0d4c6 !important;
+  border-radius: 12px !important;
+  color: #1c1410 !important;
+  box-shadow: var(--shadow) !important;
+}
+.queueStat b { color: #1c1410 !important; font-weight: 800 !important; }
+.queueStat small { color: #6b5344 !important; }
+
+/* Tables — dark ink always */
+.table, .queueTable { color: #1c1410 !important; font-size: 13px !important; }
+.table th, .queueTable th {
+  background: #f0e6da !important;
+  color: #2c2118 !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: .03em !important;
+  padding: 9px 10px !important;
+  border-bottom: 1px solid #dcc4a8 !important;
+}
+.table td, .queueTable td {
+  color: #1c1410 !important;
+  padding: 9px 10px !important;
+  border-bottom: 1px solid #efe6db !important;
+  vertical-align: middle !important;
+  background: transparent !important;
+}
+.patientMain, .nameInline { color: #1c1410 !important; font-weight: 600 !important; }
+.mini { color: #5c4638 !important; }
+.payBreakup, .feeBreakup { color: #2c2118 !important; font-size: 12px !important; }
+.partialPendLine { color: #9a3412 !important; font-weight: 700 !important; }
+.totalCollectCell, .amount { color: #5c3a28 !important; font-weight: 700 !important; }
+
+tr.pendingRow { background: #fff8ef !important; }
+tr.doctorRow { background: #f3ebe3 !important; }
+tr.receivedRow { background: #eef6ef !important; }
+tr.partialPendingRow { background: #fff4e8 !important; }
+tr.pendingRow td, tr.doctorRow td, tr.receivedRow td, tr.partialPendingRow td {
+  color: #1c1410 !important;
+}
+
+/* Status badges — high contrast */
+.queueStatusTag, .tag {
+  border-radius: 999px !important;
+  padding: 3px 10px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+}
+.queueStatusTag.waiting, .queueStatusTag.pending {
+  background: #fde68a !important; color: #78350f !important;
+}
+.queueStatusTag.doctor {
+  background: #e7d5c4 !important; color: #3d2418 !important;
+}
+.queueStatusTag.received {
+  background: #bbf7d0 !important; color: #14532d !important;
+}
+.tag.new { background: #e7d5c4 !important; color: #3d2418 !important; }
+.tag.old { background: #d1fae5 !important; color: #065f46 !important; }
+.statusCell { color: #1c1410 !important; font-weight: 600 !important; }
+
+.queueSectionBreak td {
+  background: #ebe0d2 !important;
+  color: #1c1410 !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+}
+
+/* Forms — dark text on cream fields */
+.formgrid input, .formgrid select, .formgrid textarea,
+.search input, .oldApptSearchInput, .globalPatientSearch,
+#patientForm input, #patientForm select, #patientForm textarea,
+input[type="text"], input[type="number"], input[type="date"],
+input[type="search"], input[type="tel"], select, textarea {
+  background: #fffdfb !important;
+  color: #1c1410 !important;
+  -webkit-text-fill-color: #1c1410 !important;
+  caret-color: #1c1410 !important;
+  border: 1px solid #dcc4a8 !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+}
+.formgrid input:focus, input:focus, select:focus, textarea:focus {
+  border-color: #a67c52 !important;
+  box-shadow: 0 0 0 3px rgba(166,124,82,.22) !important;
+  outline: none !important;
+}
+.formgrid label, label { color: #3d2a1c !important; font-weight: 600 !important; }
+input::placeholder, textarea::placeholder {
+  color: #9a8575 !important;
+  -webkit-text-fill-color: #9a8575 !important;
+}
+#partialPendingEdit, #oldApptPayPending, #recvPartialPending {
+  color: #9a3412 !important;
+  -webkit-text-fill-color: #9a3412 !important;
+  background: #fff7ed !important;
+  border: 1px solid #fdba74 !important;
+  font-weight: 700 !important;
+}
+
+#patientForm.patientFormCard, .card.newCasePanel, .card.oldCasePanel {
+  background: #fffdfb !important;
+  border: 1px solid #dcc4a8 !important;
+}
+
+.calendarStrip {
+  background: #fffdfb !important;
+  border: 1px solid #e0d4c6 !important;
+  border-radius: 12px !important;
+}
+#calendarBtn, .calendarStrip .btn {
+  background: linear-gradient(135deg, #a67c52, #5c3a28) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* ===== Action buttons always visible ===== */
+.queueTable td:last-child,
+.queueTable th:last-child {
+  white-space: nowrap !important;
+  min-width: 220px !important;
+  width: auto !important;
+}
+.queueActions, .actions.compactActions.queueActions {
+  display: inline-flex !important;
+  flex-wrap: nowrap !important;
+  gap: 4px !important;
+  align-items: center !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+.queueActions .btn, .actions.compactActions .btn {
+  padding: 5px 8px !important;
+  font-size: 11.5px !important;
+  border-radius: 8px !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  min-width: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+.tablewrap.queueTableWrap,
+.queueTableWrap {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+.queueTable {
+  min-width: 980px !important;
+}
+
+/* Dark mode — deeper brown */
+html[data-theme="dark"] {
+  --ink: #f5efe8;
+  --ink-2: #fffdfb;
+  --muted: #c4a484;
+  --line: #5c3a28;
+  --bg: #1f120c;
+  --card: #2a1810;
+}
+html[data-theme="dark"] body,
+html[data-theme="dark"] .main {
+  background: linear-gradient(165deg, #1a100a 0%, #24160f 50%, #1f120c 100%) !important;
+  color: #f5efe8 !important;
+}
+html[data-theme="dark"] .topbar {
+  background: rgba(42,24,16,.92) !important;
+  border-bottom-color: #5c3a28 !important;
+}
+html[data-theme="dark"] .topbar span { color: #f5efe8 !important; }
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .queueCard,
+html[data-theme="dark"] .permissionCard {
+  background: #2a1810 !important;
+  border-color: #5c3a28 !important;
+  color: #f5efe8 !important;
+}
+html[data-theme="dark"] .cardHead h2,
+html[data-theme="dark"] .hero h1,
+html[data-theme="dark"] .patientEntryTitle { color: #fffdfb !important; }
+html[data-theme="dark"] .table th, html[data-theme="dark"] .queueTable th {
+  background: #1f120c !important;
+  color: #e8dcd0 !important;
+}
+html[data-theme="dark"] .table td, html[data-theme="dark"] .queueTable td,
+html[data-theme="dark"] .patientMain, html[data-theme="dark"] .nameInline,
+html[data-theme="dark"] .payBreakup, html[data-theme="dark"] .feeBreakup {
+  color: #f5efe8 !important;
+}
+html[data-theme="dark"] .mini { color: #c4a484 !important; }
+html[data-theme="dark"] .totalCollectCell { color: #e8c9a0 !important; }
+html[data-theme="dark"] tr.pendingRow { background: rgba(212,160,23,.12) !important; }
+html[data-theme="dark"] tr.doctorRow { background: rgba(166,124,82,.15) !important; }
+html[data-theme="dark"] tr.receivedRow { background: rgba(107,143,113,.12) !important; }
+html[data-theme="dark"] tr.pendingRow td,
+html[data-theme="dark"] tr.doctorRow td,
+html[data-theme="dark"] tr.receivedRow td { color: #f5efe8 !important; }
+html[data-theme="dark"] .formgrid input,
+html[data-theme="dark"] .formgrid select,
+html[data-theme="dark"] .formgrid textarea,
+html[data-theme="dark"] .search input,
+html[data-theme="dark"] input[type="text"],
+html[data-theme="dark"] input[type="number"],
+html[data-theme="dark"] input[type="date"],
+html[data-theme="dark"] select, html[data-theme="dark"] textarea {
+  background: #1f120c !important;
+  color: #f5efe8 !important;
+  -webkit-text-fill-color: #f5efe8 !important;
+  border-color: #7a4f38 !important;
+}
+html[data-theme="dark"] .formgrid label, html[data-theme="dark"] label {
+  color: #e0d4c6 !important;
+}
+html[data-theme="dark"] .themeToggle {
+  background: #2a1810 !important;
+  color: #f5efe8 !important;
+  border-color: #7a4f38 !important;
+}
+html[data-theme="dark"] .queueStat {
+  background: #2a1810 !important;
+  border-color: #5c3a28 !important;
+  color: #f5efe8 !important;
+}
+html[data-theme="dark"] .queueStat b { color: #fffdfb !important; }
+html[data-theme="dark"] .modalBox {
+  background: #2a1810 !important;
+  color: #f5efe8 !important;
+}
+html[data-theme="dark"] .modalHead {
+  background: #1f120c !important;
+  color: #fffdfb !important;
+}
+html[data-theme="dark"] .sidebar .brand,
+html[data-theme="dark"] .brand {
+  background: linear-gradient(180deg, #2a1810 0%, #1f120c 100%) !important;
+  background-image: linear-gradient(180deg, #2a1810 0%, #1f120c 100%) !important;
+}
+html[data-theme="dark"] .brandFullLogo,
+html[data-theme="dark"] .brand img.brandFullLogo {
+  filter: none !important;
+}
