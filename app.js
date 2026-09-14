@@ -364,6 +364,26 @@ function pendingFor(p) {
 }
 
 /** Unified payment status: foc | pending | partial | received */
+
+/** Latest explicit partialPending for this permanent case (next-visit carry). */
+function getCarryPartialPending(caseNo) {
+    const key = String(caseNo || '').trim();
+    if (!key) return 0;
+    let best = 0;
+    let bestTs = '';
+    active(DB.patients).forEach(x => {
+        if (String(x.linkedCaseNo || x.caseNo || '') !== key) return;
+        const pp = Math.max(0, Number(x.partialPending || 0));
+        if (pp <= 0) return;
+        const ts = String(x._updated || x.completedAt || x.date || x._created || '');
+        if (ts >= bestTs) {
+            bestTs = ts;
+            best = pp;
+        }
+    });
+    return best;
+}
+
 function paymentStatusInfo(p) {
     if (!p) return { kind: 'foc', label: 'FOC', pending: 0, paid: 0, fees: 0, locked: false };
     const fees = feeTotal(p);
@@ -1229,6 +1249,8 @@ function selectOldApptPatient(id) {
         priorPend = pendingFor(p);
         if (priorPend > 0) priorPendIds = [p.id];
     }
+    // Explicit partial pending from last visit (carry to next visit)
+    const carryPartial = getCarryPartialPending(p.linkedCaseNo || p.caseNo);
     const todayStr = isoToday();
     if (role === 'reception') {
       box.innerHTML = `
@@ -1245,10 +1267,11 @@ function selectOldApptPatient(id) {
         </label>
         <input type="hidden" id="oldApptMedicine" value="0">
         <input type="hidden" id="oldApptRenewal" value="0">
-        <input type="hidden" id="oldApptPayPending" value="0">
+        <input type="hidden" id="oldApptPayPending" value="${carryPartial}">
         <input type="hidden" id="oldApptFoc" value="">
         <button type="button" class="btn embossed primary" id="oldApptConfirm">Add appointment</button>
       </div>
+      ${carryPartial > 0 ? `<p class="mini partialCarryHint">Partial pending from last visit: <b>${money(carryPartial)}</b> (Office will update when paid)</p>` : ''}
       <p class="mini">Reception: only add today's appointment. Payment is done in Office after With Doctor.</p>
     `;
     } else {
@@ -1270,8 +1293,9 @@ function selectOldApptPatient(id) {
           <input type="number" id="oldApptRenewal" min="0" step="1" value="${renewFee}" class="renewHighlightInput">
         </label>` : `<input type="hidden" id="oldApptRenewal" value="0">`}
         <label class="oldMedLabel pendingPayLabel">Partial pending amount (₹)
-          <input type="number" id="oldApptPayPending" min="0" step="1" value="0" title="Separate from medicine — next visit only. Not added to Total Collection">
+          <input type="number" id="oldApptPayPending" min="0" step="1" value="${carryPartial}" title="Carried from last visit if any. Separate from medicine. 0 = clear">
         </label>
+        ${carryPartial > 0 ? `<span class="mini partialCarryHint">Last visit se carry: ${money(carryPartial)}</span>` : ''}
         <label class="oldMedLabel">Appointment date
           <input type="date" id="oldApptDate" value="${todayStr}">
         </label>
@@ -1370,7 +1394,8 @@ function confirmOldAppointment(sourceId) {
         appt.consultation = 0;
         appt.medicine = 0;
         appt.renewal = 0;
-        appt.partialPending = 0;
+        // Keep partial pending so Reception can SHOW carry amount (Office updates/pays)
+        appt.partialPending = payPend;
     } else if (isFoc) {
         appt.received = true;
         appt.foc = true;
@@ -1456,7 +1481,11 @@ function buildPatientForm(type, patient = null) {
       const pendEl = $('#partialPendingEdit');
       const wrap = $('#partialPendingEditWrap');
       if (pendEl) {
-        const curPend = patient ? Math.max(0, Number(patient.partialPending || 0)) : 0;
+        let curPend = patient ? Math.max(0, Number(patient.partialPending || 0)) : 0;
+        if (patient && curPend <= 0) {
+          const carried = getCarryPartialPending(patient.linkedCaseNo || patient.caseNo);
+          if (carried > 0) curPend = carried;
+        }
         pendEl.value = curPend;
         // Office: always show for New Case + Edit
         if (wrap) wrap.style.display = (role === 'office') ? '' : 'none';
@@ -1745,6 +1774,18 @@ function registerCase(e) {
                 p.received = false;
                 p.completedAt = null;
                 p.foc = false;
+            } else {
+                // Cleared — also clear older visits of same case so next visit does not re-carry
+                try {
+                    const key = String(p.linkedCaseNo || p.caseNo || '');
+                    active(DB.patients).forEach(x => {
+                        if (x.id === p.id) return;
+                        if (String(x.linkedCaseNo || x.caseNo || '') === key && Number(x.partialPending || 0) > 0) {
+                            x.partialPending = 0;
+                            markUpdated(x);
+                        }
+                    });
+                } catch (e) {}
             }
         } catch (e) {}
     }

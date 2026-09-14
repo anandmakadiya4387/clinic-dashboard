@@ -3334,3 +3334,122 @@ html[data-ui-theme="navy-orange"] .brand img.brandFullLogo{
   border: none !important;
   box-shadow: none !important;
 }
+
+
+/* =========================================================
+   Form text — clean & clear (both Classic + Navy Orange)
+   ========================================================= */
+.formgrid input,
+.formgrid select,
+.formgrid textarea,
+.search input,
+.oldApptSearchInput,
+.globalPatientSearch,
+.oldMedLabel input,
+.oldApptActions input,
+.oldApptActions select,
+#patientForm input,
+#patientForm select,
+#patientForm textarea,
+#oldAppointmentPanel input,
+#oldAppointmentPanel select,
+.modalBox input,
+.modalBox select,
+.modalBox textarea,
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="search"],
+input[type="tel"],
+select,
+textarea{
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a !important;
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  font-weight: 500 !important;
+}
+.formgrid input::placeholder,
+.formgrid textarea::placeholder,
+.search input::placeholder,
+input::placeholder,
+textarea::placeholder{
+  color: #64748b !important;
+  -webkit-text-fill-color: #64748b !important;
+  opacity: 1 !important;
+}
+.formgrid label,
+#patientForm label,
+#oldAppointmentPanel label,
+label{
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+/* Navy Orange: dark fields, light readable text */
+html[data-ui-theme="navy-orange"] .formgrid input,
+html[data-ui-theme="navy-orange"] .formgrid select,
+html[data-ui-theme="navy-orange"] .formgrid textarea,
+html[data-ui-theme="navy-orange"] .search input,
+html[data-ui-theme="navy-orange"] .oldApptSearchInput,
+html[data-ui-theme="navy-orange"] .globalPatientSearch,
+html[data-ui-theme="navy-orange"] .oldMedLabel input,
+html[data-ui-theme="navy-orange"] #patientForm input,
+html[data-ui-theme="navy-orange"] #patientForm select,
+html[data-ui-theme="navy-orange"] #patientForm textarea,
+html[data-ui-theme="navy-orange"] #oldAppointmentPanel input,
+html[data-ui-theme="navy-orange"] .modalBox input,
+html[data-ui-theme="navy-orange"] .modalBox select,
+html[data-ui-theme="navy-orange"] .modalBox textarea,
+html[data-ui-theme="navy-orange"] input[type="text"],
+html[data-ui-theme="navy-orange"] input[type="number"],
+html[data-ui-theme="navy-orange"] input[type="date"],
+html[data-ui-theme="navy-orange"] input[type="search"],
+html[data-ui-theme="navy-orange"] input[type="tel"],
+html[data-ui-theme="navy-orange"] select,
+html[data-ui-theme="navy-orange"] textarea{
+  color: #f1f5f9 !important;
+  -webkit-text-fill-color: #f1f5f9 !important;
+  caret-color: #f1f5f9 !important;
+  background-color: #0d1b30 !important;
+  border: 1px solid rgba(148,163,184,.35) !important;
+}
+html[data-ui-theme="navy-orange"] .formgrid input::placeholder,
+html[data-ui-theme="navy-orange"] input::placeholder,
+html[data-ui-theme="navy-orange"] textarea::placeholder{
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+}
+html[data-ui-theme="navy-orange"] .formgrid label,
+html[data-ui-theme="navy-orange"] #patientForm label,
+html[data-ui-theme="navy-orange"] label{
+  color: #cbd5e1 !important;
+}
+
+/* Partial pending field always readable */
+#partialPendingEdit,
+#oldApptPayPending,
+#recvPartialPending{
+  color: #9a3412 !important;
+  -webkit-text-fill-color: #9a3412 !important;
+  background-color: #fff7ed !important;
+  border: 1px solid #fdba74 !important;
+  font-weight: 700 !important;
+}
+html[data-ui-theme="navy-orange"] #partialPendingEdit,
+html[data-ui-theme="navy-orange"] #oldApptPayPending,
+html[data-ui-theme="navy-orange"] #recvPartialPending{
+  color: #fdba74 !important;
+  -webkit-text-fill-color: #fdba74 !important;
+  background-color: rgba(251,146,60,.15) !important;
+  border: 1px solid rgba(251,146,60,.5) !important;
+}
+.partialCarryHint{
+  color: #c2410c !important;
+  font-weight: 600 !important;
+  margin: 4px 0 8px !important;
+}
+html[data-ui-theme="navy-orange"] .partialCarryHint{
+  color: #fdba74 !important;
+}
