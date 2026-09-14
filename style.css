@@ -4942,3 +4942,164 @@ html[data-theme="dark"] .kpiCard {
   box-shadow: inset 3px 0 0 #d4a574 !important;
 }
 .groupTitle, .navParent { color: #c4a484 !important; }
+
+
+/* =========================================================
+   FORCE: Patient Queue header + New/Old Case forms
+   Very light brown + dark text, font-weight normal (no bold)
+   ========================================================= */
+
+/* Patient Queue — Today header (was blue) */
+.queueCard .cardHead,
+#dashboard .queueCard .cardHead,
+body[data-role="office"] .queueCard .cardHead,
+body[data-role="reception"] .queueCard .cardHead {
+  background: #f3ebe0 !important;
+  background-image: none !important;
+  color: #1c1410 !important;
+  border-bottom: 1px solid #e0d0bc !important;
+  border-radius: 12px 12px 0 0 !important;
+}
+.queueCard .cardHead h2,
+#dashboard .queueCard .cardHead h2,
+body[data-role="office"] .queueCard .cardHead h2,
+body[data-role="reception"] .queueCard .cardHead h2 {
+  color: #1c1410 !important;
+  font-weight: 400 !important;
+  background: none !important;
+  -webkit-text-fill-color: #1c1410 !important;
+}
+.queueCard .cardHead .mini,
+#dashboard .queueCard .cardHead .mini {
+  color: #5c4638 !important;
+  font-weight: 400 !important;
+}
+
+/* New Case Registration form — very light brown */
+#patientForm.patientFormCard,
+#patientForm.newCasePanel,
+.card.patientFormCard,
+.card.newCasePanel,
+body[data-role="office"] #patientForm,
+body[data-role="reception"] #patientForm,
+body[data-role="office"] #patientForm.patientFormCard,
+body[data-role="reception"] #patientForm.patientFormCard,
+body[data-role="office"] #patientForm.newCasePanel,
+body[data-role="reception"] #patientForm.newCasePanel,
+body[data-role="office"] .card.patientFormCard,
+body[data-role="reception"] .card.patientFormCard,
+body[data-role="office"] .card.newCasePanel,
+body[data-role="reception"] .card.newCasePanel {
+  background: #faf6f1 !important;
+  background-image: none !important;
+  border: 1px solid #e0d0bc !important;
+  box-shadow: 0 2px 12px rgba(61,36,24,.06) !important;
+  color: #1c1410 !important;
+}
+#patientForm .cardHead,
+.newCasePanel .cardHead,
+#patientForm .cardBody,
+.newCasePanel .cardBody {
+  background: #faf6f1 !important;
+  background-image: none !important;
+  color: #1c1410 !important;
+  border-bottom-color: #e0d0bc !important;
+}
+#patientForm .cardHead h2,
+.newCasePanel .cardHead h2,
+#formTitle {
+  color: #1c1410 !important;
+  font-weight: 400 !important;
+  background: none !important;
+  -webkit-text-fill-color: #1c1410 !important;
+}
+#patientForm label,
+.newCasePanel label,
+#patientForm .mini,
+.newCasePanel .mini {
+  color: #3d2a1c !important;
+  font-weight: 400 !important;
+}
+#patientForm input,
+#patientForm select,
+#patientForm textarea,
+.newCasePanel input,
+.newCasePanel select,
+.newCasePanel textarea {
+  background: #fffdfb !important;
+  color: #1c1410 !important;
+  -webkit-text-fill-color: #1c1410 !important;
+  border: 1px solid #e0d0bc !important;
+  font-weight: 400 !important;
+}
+
+/* Old Case form — very light brown (not dark) */
+#oldAppointmentPanel.oldCasePanel,
+.card.oldCasePanel,
+#oldAppointmentPanel,
+body[data-role="office"] #oldAppointmentPanel,
+body[data-role="reception"] #oldAppointmentPanel,
+body[data-role="office"] #oldAppointmentPanel.oldCasePanel,
+body[data-role="reception"] #oldAppointmentPanel.oldCasePanel,
+body[data-role="office"] .card.oldCasePanel,
+body[data-role="reception"] .card.oldCasePanel {
+  background: #faf6f1 !important;
+  background-image: none !important;
+  border: 1px solid #e0d0bc !important;
+  box-shadow: 0 2px 12px rgba(61,36,24,.06) !important;
+  color: #1c1410 !important;
+}
+#oldAppointmentPanel .cardHead,
+.oldCasePanel .cardHead,
+#oldAppointmentPanel .cardBody,
+.oldCasePanel .cardBody {
+  background: #faf6f1 !important;
+  background-image: none !important;
+  color: #1c1410 !important;
+  border-bottom-color: #e0d0bc !important;
+}
+#oldAppointmentPanel .cardHead h2,
+.oldCasePanel .cardHead h2 {
+  color: #1c1410 !important;
+  font-weight: 400 !important;
+  background: none !important;
+  -webkit-text-fill-color: #1c1410 !important;
+}
+#oldAppointmentPanel label,
+.oldCasePanel label,
+#oldAppointmentPanel .mini,
+.oldCasePanel .mini,
+#oldAppointmentPanel p,
+.oldCasePanel p {
+  color: #3d2a1c !important;
+  font-weight: 400 !important;
+}
+#oldAppointmentPanel input,
+#oldAppointmentPanel select,
+#oldAppointmentPanel textarea,
+.oldCasePanel input,
+.oldCasePanel select,
+.oldCasePanel textarea,
+.oldApptSearchInput {
+  background: #fffdfb !important;
+  color: #1c1410 !important;
+  -webkit-text-fill-color: #1c1410 !important;
+  border: 1px solid #e0d0bc !important;
+  font-weight: 400 !important;
+}
+/* Old case selected line / dark bars inside panel */
+#oldAppointmentPanel .oldApptLine,
+#oldAppointmentPanel .oldSearchBar,
+#oldAppointmentPanel .oldApptActions,
+.oldCasePanel .oldApptLine,
+.oldCasePanel .oldSearchBar {
+  background: #f3ebe0 !important;
+  color: #1c1410 !important;
+  border-color: #e0d0bc !important;
+}
+#oldAppointmentPanel .oldLineName,
+#oldAppointmentPanel .oldLineCase,
+#oldAppointmentPanel .oldLineMeta {
+  color: #1c1410 !important;
+  font-weight: 400 !important;
+}
