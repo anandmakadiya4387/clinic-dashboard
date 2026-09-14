@@ -5204,3 +5204,73 @@ img.billPremLogo,
 .sidebar.collapsed .textLogoHomeo,
 .sidebar.collapsed .textLogoClinic { display: none; }
 .sidebar.collapsed .brandTextLogo { min-height: 40px; padding: 4px; }
+
+
+/* Lightweight SVG logo (few KB) — show images again */
+img.brandFullLogo,
+.brandFullLogo {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: 88px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  margin: 0 auto !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+.sidebar.collapsed .brandFullLogo {
+  max-height: 40px !important;
+}
+img.logoFit,
+.logoFit {
+  display: block !important;
+  max-width: 280px !important;
+  width: 100% !important;
+  height: auto !important;
+  margin: 0 auto 8px !important;
+}
+img.billPremLogo,
+.billPremLogo {
+  display: inline-block !important;
+  max-width: 280px !important;
+  max-height: 90px !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+}
+.billPremLogoWrap {
+  display: block !important;
+  text-align: center !important;
+}
+
+/* Official logo SVG — match user brand colours */
+.brandFullLogo {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: 78px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  filter: none !important;
+  background: transparent !important;
+}
+.sidebar.collapsed .brandFullLogo { max-height: 36px !important; }
+.logoFit {
+  display: block !important;
+  max-width: 360px !important;
+  width: 100% !important;
+  height: auto !important;
+  margin: 0 auto 10px !important;
+}
+.billPremLogo {
+  display: inline-block !important;
+  max-width: 420px !important;
+  max-height: 100px !important;
+  width: auto !important;
+  height: auto !important;
+}

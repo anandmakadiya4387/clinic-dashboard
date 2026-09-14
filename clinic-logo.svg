@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" width="560" height="120" role="img" aria-label="ANAND Homoeopathy Multi Speciality Clinic">
+  <!-- Symbol -->
+  <g transform="translate(4,6) scale(1.05)">
+    <!-- outer blue flame left -->
+    <path d="M18 88 C10 70 6 48 14 28 C22 18 28 32 26 48 C24 62 20 74 18 88 Z" fill="#1e6fd9"/>
+    <!-- green mid left -->
+    <path d="M28 90 C20 72 16 50 24 30 C34 18 40 34 36 52 C34 66 30 78 28 90 Z" fill="#2e9b3a"/>
+    <!-- orange center flame -->
+    <path d="M42 92 C32 70 28 48 38 24 C48 10 56 28 52 50 C50 66 46 80 42 92 Z" fill="#f15a24"/>
+    <!-- green right of orange -->
+    <path d="M54 90 C48 72 48 52 56 32 C66 18 72 36 68 54 C66 68 60 80 54 90 Z" fill="#2e9b3a"/>
+    <!-- blue right outer -->
+    <path d="M66 88 C62 70 64 50 72 30 C82 16 88 34 84 54 C82 68 74 80 66 88 Z" fill="#1e6fd9"/>
+    <!-- people heads (simplified) -->
+    <circle cx="34" cy="42" r="5.5" fill="#1e6fd9"/>
+    <circle cx="48" cy="36" r="6" fill="#f15a24"/>
+    <circle cx="62" cy="42" r="5.5" fill="#1e6fd9"/>
+    <!-- people bodies hint -->
+    <path d="M28 52 C32 48 36 48 40 52 C36 58 32 58 28 52 Z" fill="#1e6fd9" opacity="0.9"/>
+    <path d="M42 48 C46 42 50 42 54 48 C50 56 46 56 42 48 Z" fill="#f15a24" opacity="0.95"/>
+    <path d="M56 52 C60 48 64 48 68 52 C64 58 60 58 56 52 Z" fill="#1e6fd9" opacity="0.9"/>
+    <!-- leaves bottom -->
+    <path d="M22 92 C12 88 8 96 18 100 C26 98 28 94 22 92 Z" fill="#2e9b3a"/>
+    <path d="M38 96 C28 100 22 108 34 108 C44 104 44 98 38 96 Z" fill="#2e9b3a"/>
+    <path d="M52 96 C48 104 56 112 66 106 C68 98 58 94 52 96 Z" fill="#2e9b3a"/>
+    <!-- white outline soft -->
+    <path d="M18 88 C10 70 6 48 14 28 C22 12 48 8 72 30 C88 48 84 78 66 88 C54 100 30 100 18 88 Z" fill="none" stroke="#ffffff" stroke-width="2.2" opacity="0.85"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="118" y="52" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="36" font-weight="900" fill="#1f9d36" letter-spacing="1">ANAND</text>
+  <text x="268" y="52" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700" fill="#1e5fd0">Homoeopathy</text>
+  <text x="118" y="96" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="34" font-weight="900" fill="#f15a24" letter-spacing="0.5">Multi Speciality</text>
+  <text x="392" y="96" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="800" fill="#1e5fd0">Clinic</text>
+  <!-- green dot on i in Clinic -->
+  <circle cx="430" cy="72" r="4.5" fill="#2e9b3a"/>
+</svg>
