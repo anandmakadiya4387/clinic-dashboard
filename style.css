@@ -4717,3 +4717,228 @@ html[data-theme="dark"] .brandFullLogo,
 html[data-theme="dark"] .brand img.brandFullLogo {
   filter: none !important;
 }
+
+
+/* =========================================================
+   VERY LIGHT BROWN — main content only
+   Sidebar stays dark brown (no change)
+   No dark-mode toggle
+   ========================================================= */
+
+/* Force light always */
+html[data-theme="dark"],
+html {
+  color-scheme: light !important;
+}
+html[data-theme="dark"] body,
+html[data-theme="dark"] .main,
+body, .main {
+  background: #faf6f1 !important;
+  color: #1c1410 !important;
+}
+
+/* Top bar — very light brown */
+.topbar {
+  background: #faf6f1 !important;
+  border-bottom: 1px solid #e8dccf !important;
+  box-shadow: none !important;
+  color: #1c1410 !important;
+  backdrop-filter: none !important;
+}
+.topbar span { color: #2c2118 !important; }
+.appVersionBadge {
+  background: #5c3a28 !important;
+  color: #fff !important;
+}
+.toggle, .hamburgerBtn {
+  background: #5c3a28 !important;
+  color: #fff !important;
+}
+.themeToggle { display: none !important; }
+
+/* Page / cards / queue — cream light brown */
+.page, .card, .queueCard, .permissionCard, .glassCard, .reportBox,
+.card.patientFormCard, .card.newCasePanel, .card.oldCasePanel,
+#patientForm, #oldAppointmentPanel, .modalBox {
+  background: #faf6f1 !important;
+  border-color: #e5d5c3 !important;
+  color: #1c1410 !important;
+  box-shadow: 0 2px 12px rgba(61,36,24,.06) !important;
+}
+.queueCard {
+  border: 1px solid #e0d0bc !important;
+}
+.cardHead, .cardHead h2, .hero h1, .patientEntryTitle, h1, h2 {
+  color: #1c1410 !important;
+  border-bottom-color: #e8dccf !important;
+}
+
+/* KPI + status boxes — very light brown, DARK text (readable) */
+.kpiCard, .kpi, .countBox,
+.premiumKpiGrid .kpiCard, .medicalTechGrid .kpiCard, .kpiCommand .kpiCard,
+.premiumKpiGrid .kpiCard:nth-child(n),
+.medicalTechGrid .kpiCard:nth-child(n),
+.kpiCommand .kpiCard:nth-child(n) {
+  background: #f3ebe0 !important;
+  background-image: none !important;
+  border: 1px solid #e0d0bc !important;
+  color: #1c1410 !important;
+  box-shadow: 0 2px 8px rgba(61,36,24,.05) !important;
+}
+.kpiCard span, .kpi span, .countBox small,
+.kpiCard b, .kpi b, .countBox b,
+.premiumKpiGrid .kpiCard span, .premiumKpiGrid .kpiCard b,
+.medicalTechGrid .kpiCard span, .medicalTechGrid .kpiCard b,
+.kpiCommand .kpiCard span, .kpiCommand .kpiCard b {
+  color: #1c1410 !important;
+  text-shadow: none !important;
+  opacity: 1 !important;
+  font-weight: 700 !important;
+}
+
+/* Waiting / With Doctor / Completed strip */
+.queueStat, .queueStrip .queueStat, .premiumQueueStrip .queueStat {
+  background: #f3ebe0 !important;
+  border: 1px solid #e0d0bc !important;
+  color: #1c1410 !important;
+  box-shadow: none !important;
+}
+.queueStat b { color: #1c1410 !important; }
+.queueStat small { color: #5c4638 !important; }
+.queueStat.wait, .queueStat.doctor, .queueStat.done {
+  border-top: 3px solid #a67c52 !important;
+}
+
+/* Calendar strip */
+.calendarStrip {
+  background: #faf6f1 !important;
+  border: 1px solid #e8dccf !important;
+}
+#calendarBtn, .calendarStrip .btn {
+  background: #5c3a28 !important;
+  color: #fff !important;
+}
+.calendarSelected { color: #5c4638 !important; }
+
+/* Tables */
+.table, .queueTable { color: #1c1410 !important; }
+.table th, .queueTable th {
+  background: #f0e6da !important;
+  color: #1c1410 !important;
+  border-bottom: 1px solid #e0d0bc !important;
+}
+.table td, .queueTable td {
+  color: #1c1410 !important;
+  background: transparent !important;
+  border-bottom: 1px solid #efe6db !important;
+}
+.tablewrap, .queueTableWrap {
+  background: #faf6f1 !important;
+  border-color: #e8dccf !important;
+}
+.patientMain, .nameInline, .payBreakup, .feeBreakup, .amount, .totalCollectCell, .statusCell {
+  color: #1c1410 !important;
+}
+.mini { color: #5c4638 !important; }
+.partialPendLine { color: #9a3412 !important; font-weight: 700 !important; }
+.totalCollectCell, .amount { color: #3d2418 !important; font-weight: 700 !important; }
+
+tr.pendingRow { background: #f8f0e6 !important; }
+tr.doctorRow { background: #f3ebe0 !important; }
+tr.receivedRow { background: #eef6ef !important; }
+tr.partialPendingRow { background: #fff4e8 !important; }
+tr.pendingRow td, tr.doctorRow td, tr.receivedRow td, tr.partialPendingRow td {
+  color: #1c1410 !important;
+}
+
+.queueSectionBreak td {
+  background: #efe6db !important;
+  color: #1c1410 !important;
+}
+
+/* Status badges — still readable on light brown */
+.queueStatusTag.waiting, .queueStatusTag.pending {
+  background: #f5e6c8 !important; color: #5c3a14 !important;
+}
+.queueStatusTag.doctor {
+  background: #e8dccf !important; color: #3d2418 !important;
+}
+.queueStatusTag.received {
+  background: #d1fae5 !important; color: #14532d !important;
+}
+.tag.new { background: #e8dccf !important; color: #3d2418 !important; }
+.tag.old { background: #d1fae5 !important; color: #065f46 !important; }
+
+/* Forms — light brown fields, dark text */
+.formgrid input, .formgrid select, .formgrid textarea,
+.search input, .oldApptSearchInput, .globalPatientSearch,
+#patientForm input, #patientForm select, #patientForm textarea,
+#oldAppointmentPanel input, input[type="text"], input[type="number"],
+input[type="date"], input[type="search"], input[type="tel"], select, textarea {
+  background: #fffdfb !important;
+  color: #1c1410 !important;
+  -webkit-text-fill-color: #1c1410 !important;
+  border: 1px solid #e0d0bc !important;
+}
+.formgrid label, label { color: #3d2a1c !important; }
+input::placeholder, textarea::placeholder {
+  color: #9a8575 !important;
+  -webkit-text-fill-color: #9a8575 !important;
+}
+
+/* Buttons on light surface */
+.primary, .btn.primary {
+  background: #5c3a28 !important;
+  color: #fff !important;
+}
+.green, .btn.green {
+  background: #3d6b45 !important;
+  color: #fff !important;
+}
+.btn.embossed:not(.primary):not(.green):not(.danger) {
+  background: #f3ebe0 !important;
+  color: #1c1410 !important;
+  border: 1px solid #e0d0bc !important;
+}
+
+/* Modal */
+.modal { background: rgba(61,36,24,.35) !important; }
+.modalBox { background: #faf6f1 !important; color: #1c1410 !important; }
+.modalHead { background: #f0e6da !important; color: #1c1410 !important; }
+
+/* Kill any leftover dark-mode overrides on main content */
+html[data-theme="dark"] .topbar,
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .queueCard,
+html[data-theme="dark"] .main,
+html[data-theme="dark"] .page,
+html[data-theme="dark"] .table td,
+html[data-theme="dark"] .queueTable td,
+html[data-theme="dark"] .kpiCard {
+  background: #faf6f1 !important;
+  color: #1c1410 !important;
+}
+
+/* ===== SIDEBAR — keep dark brown (do not lighten) ===== */
+.sidebar {
+  background: linear-gradient(180deg, #3d2418 0%, #2f1c12 50%, #26160e 100%) !important;
+}
+.sidebar .brand, .brand {
+  background: linear-gradient(180deg, #2a1810 0%, #1f120c 100%) !important;
+  background-image: linear-gradient(180deg, #2a1810 0%, #1f120c 100%) !important;
+}
+.brandFullLogo, .brand img.brandFullLogo { filter: none !important; }
+.nav button, .sidebar .nav button {
+  background: transparent !important;
+  color: #e8dcd0 !important;
+}
+.nav button:hover, .sidebar .nav button:hover {
+  background: rgba(255,255,255,.1) !important;
+  color: #ffffff !important;
+}
+.nav button.active, .sidebar .nav button.active {
+  background: rgba(255,255,255,.14) !important;
+  color: #fff !important;
+  box-shadow: inset 3px 0 0 #d4a574 !important;
+}
+.groupTitle, .navParent { color: #c4a484 !important; }

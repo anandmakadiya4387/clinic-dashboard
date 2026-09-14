@@ -1,7 +1,8 @@
 const APP_VERSION = 'PRO';
 const role = document.body.dataset.role || 'office';
-const savedTheme = localStorage.getItem('anandClinicTheme') || 'light';
-document.documentElement.dataset.theme = savedTheme;
+const savedTheme = 'light';
+document.documentElement.dataset.theme = 'light';
+try { localStorage.setItem('anandClinicTheme', 'light'); } catch(e) {}
 try { document.documentElement.removeAttribute('data-ui-theme'); } catch(e) {}
 const KEY = 'anandClinicV16_' + role;
 const OLD_KEYS = ['anandClinicV15_' + role, 'anandClinicV14_' + role, 'anandClinicV13_' + role, 'anandClinicV12_' + role];
@@ -4911,18 +4912,9 @@ function setup() {
     $('#modalClose')?.addEventListener('click', closeModal);
     $('#testConn')?.addEventListener('click', testConn);
     $('#refreshBtn')?.addEventListener('click', forceRefresh);
-    // Optional dark mode only
-    const syncDarkBtn = () => {
-        const dark = document.documentElement.dataset.theme === 'dark';
-        if ($('#themeToggle')) $('#themeToggle').textContent = dark ? '☀ Light' : '☾ Dark';
-    };
-    syncDarkBtn();
-    $('#themeToggle')?.addEventListener('click', () => {
-        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-        document.documentElement.dataset.theme = next;
-        localStorage.setItem('anandClinicTheme', next);
-        syncDarkBtn();
-    });
+    // Dark mode disabled — single light brown UI only
+    document.documentElement.dataset.theme = 'light';
+
     $('#connectBtn')?.addEventListener('click', async () => {
         server = $('#serverUrl').value.trim().replace(/\/$/, '');
         localStorage.setItem(SERVER_KEY, server);
