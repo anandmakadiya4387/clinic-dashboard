@@ -1916,7 +1916,7 @@ function renderQueue() {
         const stPay = paymentStatusInfo(p), fullyReceived = stPay.kind === 'received';
         const pulse = fullyReceived && p.completedAt && (Date.now() - new Date(p.completedAt).getTime() < 8000);
         const renewHighlight = renewalDue(p) && !hasRenewalPayment(p);
-        let rowClass = stPay.kind === 'foc' ? 'focRow' : (status === 'doctor' ? 'doctorRow' : 'pendingRow');
+        let rowClass = stPay.kind === 'foc' ? 'focRow' : (statusSection === 'done' || status === 'received' ? 'receivedRow' : (status === 'doctor' ? 'doctorRow' : 'pendingRow'));
         if (stPay.kind === 'partial') rowClass += ' partialPendingRow';
         if (renewHighlight) rowClass += ' renewDueRow';
         if (hasRenewalPaidToday(p)) rowClass += ' renewPaidTodayRow';
@@ -1932,7 +1932,7 @@ function renderQueue() {
    <td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
    <td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
    <td class="payBreakCell">${feeBreak}</td><td class="amount totalCollectCell"><b>${money(consF + medF + renF)}</b></td>
-   <td><span class="queueStatusTag ${status}">${status==='doctor'?'With Doctor':(status==='received'?'Completed':'Waiting')}</span></td>
+   <td class="statusCell"><span class="queueStatusTag ${statusSection==='done'||status==='received'?'received':status}">${statusSection==='done'||status==='received'?'Completed':(status==='doctor'?'With Doctor':'Waiting')}</span></td>
    <td><div class="actions embossedActions compactActions queueActions">
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>Doctor</button>`:''}
@@ -1953,10 +1953,7 @@ function renderQueue() {
     }
     if (done.length) {
         html += `<tr class="queueSectionBreak"><td colspan="9">Completed today</td></tr>`;
-        done.forEach((p,i)=>{
-            const payLabel=paymentStatusHtml(p);
-            html += `<tr class="receivedRow"><td>${i+1}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile||'')}</div></td><td class="amount">${money(feeTotal(p))}</td><td class="totalPayCell">${payLabel}</td><td><span class="queueStatusTag received">Completed</span></td><td><div class="actions embossedActions compactActions queueActions"><button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button><button class="btn embossed actNeutral" onclick="docP('${p.id}')">Doctor</button><button class="btn embossed actReceived" onclick="receiveP('${p.id}')">Rec</button><button class="btn embossed actNeutral" onclick="pendingP('${p.id}')">Pend</button><button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button></div></td></tr>`;
-        });
+        done.forEach((p,i)=>{ html += rowHtml(p, i, 'done'); });
     }
     if (!html) html = '<tr><td colspan="9">No new or old case entries today</td></tr>';
     b.innerHTML = html;

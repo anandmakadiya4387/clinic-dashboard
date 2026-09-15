@@ -6050,3 +6050,95 @@ table.histTable {
   table-layout: fixed !important;
   width: 100% !important;
 }
+
+
+/* ===== Final queue layout polish ===== */
+.queueTable {
+  table-layout: fixed !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+.queueTableWrap {
+  overflow-x: auto !important;
+}
+
+/* Tighter CASE + DATE so ACTION/Del fits fully */
+.queueTable th:nth-child(1), .queueTable td:nth-child(1) { width: 32px !important; } /* SR */
+.queueTable th:nth-child(2), .queueTable td:nth-child(2) { width: 72px !important; } /* CASE */
+.queueTable th:nth-child(3), .queueTable td:nth-child(3) { width: 78px !important; } /* DATE */
+.queueTable th:nth-child(4), .queueTable td:nth-child(4) {
+  width: 52px !important;
+  text-align: center !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+} /* TYPE — no dots */
+.queueTable th:nth-child(5), .queueTable td:nth-child(5) { width: 150px !important; } /* PATIENT */
+.queueTable th:nth-child(6), .queueTable td:nth-child(6) { width: 140px !important; } /* PAYMENT breakup */
+.queueTable th:nth-child(7), .queueTable td:nth-child(7) { width: 88px !important; } /* TOTAL */
+.queueTable th:nth-child(8), .queueTable td:nth-child(8) {
+  width: 88px !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+} /* STATUS — no ... dots */
+.queueTable th:nth-child(9), .queueTable td:nth-child(9) {
+  width: 240px !important;
+  min-width: 220px !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+} /* ACTION full buttons */
+
+.queueTable td,
+.queueTable th {
+  text-overflow: clip !important;
+}
+.queueTable .tag,
+.queueTable td:nth-child(4) .tag {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+}
+.queueTable .queueStatusTag {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  display: inline-block !important;
+}
+.queueTable .queueActions {
+  flex-wrap: nowrap !important;
+  justify-content: center !important;
+  gap: 3px !important;
+}
+.queueTable .queueActions .btn {
+  padding: 3px 6px !important;
+  font-size: 10.5px !important;
+  flex-shrink: 0 !important;
+}
+
+/* Patient list TYPE — kill .. ellipsis dots next to NEW/OLD */
+.patientListTable td:nth-child(3),
+.patientListTable th:nth-child(3) {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  width: 7% !important;
+}
+.patientListTable .tag,
+.patientListTable td:nth-child(3) .tag {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  display: inline-block !important;
+}
+.patientListTable td {
+  text-overflow: clip !important;
+}
+.patientListTable th:nth-child(8),
+.patientListTable td:nth-child(8) {
+  width: 22% !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
