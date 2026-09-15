@@ -5373,3 +5373,209 @@ button#oldCase.green:hover {
 /* Hide duplicate hero title if form card already has head */
 #newCasePage .hero { margin-bottom: 8px; }
 #oldCasePage .hero { margin-bottom: 8px; }
+
+
+/* Solid colours — no gradient shade on key buttons */
+.appVersionBadge {
+  color: #ffffff !important;
+  font-weight: 400 !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Old Case = solid dark green (like New Case solid style) */
+#oldCase,
+button#oldCase,
+button#oldCase.green,
+.hero .actions button#oldCase,
+.btn.green#oldCase {
+  background: #14532d !important;
+  background-image: none !important;
+  background-color: #14532d !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+}
+#oldCase:hover {
+  background: #166534 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+}
+
+/* New Case solid (keep primary look, no odd shade) */
+#newCase,
+button#newCase.primary {
+  background: #1e3a5f !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* Refresh + Reconnect — full solid dark brown, no shaded corners */
+#refreshBtn,
+#reconnectBtn,
+button#refreshBtn,
+button#reconnectBtn,
+.topbar #refreshBtn,
+.topbar #reconnectBtn,
+.topbar button.btn[id*="efresh"],
+.topbar button.btn[id*="econnect"] {
+  background: #3d2418 !important;
+  background-image: none !important;
+  background-color: #3d2418 !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 10px !important;
+}
+
+/* Calendar button — solid dark brown, no shade */
+#calendarBtn,
+button#calendarBtn,
+.calendarStrip #calendarBtn,
+.calendarStrip .btn {
+  background: #3d2418 !important;
+  background-image: none !important;
+  background-color: #3d2418 !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 10px !important;
+}
+
+
+/* ===== Case form FULL SCREEN overlay (no page hang) ===== */
+body.caseFormOpen .page#dashboard > *:not(.caseOverlayOpen) {
+  /* keep dashboard mounted but form covers all */
+}
+#patientForm.caseOverlayOpen,
+#oldAppointmentPanel.caseOverlayOpen {
+  display: block !important;
+  position: fixed !important;
+  top: 64px !important;
+  left: 270px !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 1200 !important;
+  margin: 0 !important;
+  max-width: none !important;
+  width: auto !important;
+  border-radius: 0 !important;
+  overflow: auto !important;
+  background: #faf6f1 !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 20px 24px 40px !important;
+}
+.sidebar.collapsed ~ .main #patientForm.caseOverlayOpen,
+.sidebar.collapsed ~ .main #oldAppointmentPanel.caseOverlayOpen,
+body.sidebar-collapsed #patientForm.caseOverlayOpen,
+body.sidebar-collapsed #oldAppointmentPanel.caseOverlayOpen {
+  left: 72px !important;
+}
+@media (max-width: 700px) {
+  #patientForm.caseOverlayOpen,
+  #oldAppointmentPanel.caseOverlayOpen {
+    left: 0 !important;
+    top: 56px !important;
+  }
+}
+
+/* ===== SOLID buttons — no white shadow, no gradient ===== */
+#newCase,
+button#newCase,
+button#newCase.primary,
+.hero .actions #newCase {
+  background: #1e3a5f !important;
+  background-image: none !important;
+  background-color: #1e3a5f !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  border-radius: 10px !important;
+}
+#oldCase,
+button#oldCase,
+button#oldCase.green,
+.hero .actions #oldCase {
+  background: #14532d !important;
+  background-image: none !important;
+  background-color: #14532d !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  border-radius: 10px !important;
+}
+#oldCase:hover { background: #166534 !important; color: #fff !important; box-shadow: none !important; }
+
+#calendarBtn,
+button#calendarBtn,
+.calendarStrip #calendarBtn,
+.calendarStrip > div > .btn {
+  background: #3d2418 !important;
+  background-image: none !important;
+  background-color: #3d2418 !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  border-radius: 10px !important;
+}
+#refreshBtn,
+#reconnectBtn,
+button#refreshBtn,
+button#reconnectBtn,
+.topbar #refreshBtn,
+.topbar #reconnectBtn {
+  background: #3d2418 !important;
+  background-image: none !important;
+  background-color: #3d2418 !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  border-radius: 10px !important;
+}
+.appVersionBadge {
+  color: #ffffff !important;
+  font-weight: 400 !important;
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* Kill embossed white edge on these controls */
+#newCase.embossed, #oldCase.embossed, #calendarBtn.embossed,
+#refreshBtn.embossed, #reconnectBtn.embossed,
+#newCase.btn, #oldCase.btn {
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Forms live under main — full viewport overlay */
+main .card.caseOverlayOpen,
+#patientForm.caseOverlayOpen,
+#oldAppointmentPanel.caseOverlayOpen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 5000 !important;
+  background: #faf6f1 !important;
+  overflow: auto !important;
+  padding: 72px 24px 40px 24px !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  max-width: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+}

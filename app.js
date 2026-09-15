@@ -1092,41 +1092,36 @@ function openPatientProfile(id) {
 
 
 function openPage(id) {
-    // Leaving case pages → hide embedded panels
-    if (id !== 'newCasePage') {
-        // keep form visible only on newCasePage
-    }
-    if (id === 'dashboard') {
-        try { $('#patientForm')?.classList.add('hidden'); } catch (e) {}
-        try { $('#oldAppointmentPanel')?.classList.add('hidden'); } catch (e) {}
-    }
-
-    // Parent menu (Patients / Payment) has no data-page — never navigate on empty id
     if (!id || id === 'undefined' || id === 'null') return;
     if (role === 'reception') {
         const map = {dashboard:'dashboard', patients:'patient', payments:'payment', medicines:'medicine', clinic:'clinic', reports:'reports', appointmentHistory:'dashboard'};
         const mod = map[id];
         if (mod && !receptionCanView(mod)) {
             toast('This interface is hidden by Office', true);
-            return
+            return;
         }
     }
-    // ALWAYS close Patients / Payment submenus when changing page (esp. Dashboard)
     try {
         $('#patientsNavSub')?.classList.remove('open');
         $('#paymentNavSub')?.classList.remove('open');
     } catch (e) {}
-    try { closeOldAppointmentPanel(); } catch (e) {}
     try { closeModal(); } catch (e) {}
+    // Do NOT auto-close case overlays here when id is dashboard after opening form —
+    // only hide overlays when navigating to OTHER pages (not dashboard / not form hosts)
+    if (id !== 'dashboard' && id !== 'newCasePage' && id !== 'oldCasePage') {
+        try { closeForm(); } catch (e) {}
+        try { closeOldAppointmentPanel(); } catch (e) {}
+    }
     try {
-        $('#patientForm')?.classList.add('hidden');
         document.querySelectorAll('#oldApptPanel, .oldApptPanel, #patientFormWrap').forEach(el => {
             el.classList.add('hidden'); el.classList.remove('open','active');
         });
     } catch (e) {}
+    // Map legacy case page ids → dashboard (forms are overlays)
+    if (id === 'newCasePage' || id === 'oldCasePage') id = 'dashboard';
     $$('.page').forEach(x => x.classList.remove('active'));
-    $('#' + id)?.classList.add('active');
-    // Only mark leaf nav buttons active (not parent toggles)
+    const pageEl = $('#' + id);
+    if (pageEl) pageEl.classList.add('active');
     $$('.navBtn').forEach(b => {
         if (b.classList.contains('navParent')) {
             b.classList.remove('active');
@@ -1135,8 +1130,9 @@ function openPage(id) {
         b.classList.toggle('active', b.dataset.page === id);
     });
     if (window.innerWidth < 700) $('#side')?.classList.remove('open');
-    renderPage(id)
+    try { renderPage(id); } catch (e) { console.warn('renderPage', e); }
 }
+
 
 function renderPage(id) {
     if (id === 'dashboard') { renderDashboard(); try { setupKpiCollapse(); } catch (e) {} }
@@ -1161,14 +1157,16 @@ function openOldAppointmentPanel() {
         toast('Not allowed by Office permissions', true);
         return;
     }
-    $('#patientForm')?.classList.add('hidden');
+    try { $('#patientForm')?.classList.add('hidden'); $('#patientForm')?.classList.remove('caseOverlayOpen'); } catch (e) {}
     const panel = $('#oldAppointmentPanel');
     if (!panel) {
         toast('Old appointment panel missing', true);
         return;
     }
+    try { openPage('dashboard'); } catch (e) {}
     panel.classList.remove('hidden');
-    try { openPage('oldCasePage'); } catch (e) {}
+    panel.classList.add('caseOverlayOpen');
+    try { document.body.classList.add('caseFormOpen'); } catch (e) {}
     const inp = $('#oldApptSearch');
     if (inp) {
         inp.value = '';
@@ -1182,8 +1180,11 @@ function openOldAppointmentPanel() {
 }
 
 function closeOldAppointmentPanel() {
-    $('#oldAppointmentPanel')?.classList.add('hidden');
-    try { openPage('dashboard'); } catch (e) {}
+    try {
+        const p = $('#oldAppointmentPanel');
+        if (p) { p.classList.add('hidden'); p.classList.remove('caseOverlayOpen'); }
+    } catch (e) {}
+    try { document.body.classList.remove('caseFormOpen'); } catch (e) {}
 }
 
 function runOldApptSearch() {
@@ -1470,15 +1471,15 @@ function setupOldAppointmentPanel() {
 function buildPatientForm(type, patient = null) {
     const f = $('#patientForm');
     if (!f) return;
-    f.classList.remove('hidden');
     $('#formTitle').textContent = patient ? 'Edit Case' : (type === 'new' ? 'New Case Registration' : 'Old Case Registration');
-    // Full separate page — hide dashboard chrome
-    if (!patient) {
-        try { openPage(type === 'old' ? 'oldCasePage' : 'newCasePage'); } catch (e) {}
-    } else {
-        // Edit: open new case page as host for the form
-        try { openPage('newCasePage'); } catch (e) {}
-    }
+    // Full-screen overlay (no openPage — avoids hang/loops)
+    try { $('#oldAppointmentPanel')?.classList.add('hidden'); } catch (e) {}
+    try { openPage('dashboard'); } catch (e) {}
+    f.classList.remove('hidden');
+    f.classList.add('caseOverlayOpen');
+    try { document.body.classList.add('caseFormOpen'); } catch (e) {}
+    try { f.scrollIntoView({ behavior: 'instant', block: 'start' }); } catch (e) {}
+
     const fb = $('#patientForm button.primary');
     if (fb) fb.textContent = patient ? 'Update' : 'Register';
     $('#caseType').value = type;
@@ -1821,10 +1822,13 @@ function registerCase(e) {
 }
 
 function closeForm() {
-    $('#patientForm')?.classList.add('hidden');
+    try {
+        const f = $('#patientForm');
+        if (f) { f.classList.add('hidden'); f.classList.remove('caseOverlayOpen'); }
+    } catch (e) {}
     const ei = $('#editId');
     if (ei) ei.value = '';
-    try { openPage('dashboard'); } catch (e) {}
+    try { document.body.classList.remove('caseFormOpen'); } catch (e) {}
 }
 
 /** After any patient / payment change — refresh every related screen */

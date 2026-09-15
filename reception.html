@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anand Homoeopathy Multi Speciality Clinic — Reception</title><link rel="stylesheet" href="style.css?v=fullpage-case"></head><body data-role="reception"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button>
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anand Homoeopathy Multi Speciality Clinic — Reception</title><link rel="stylesheet" href="style.css?v=overlay2"></head><body data-role="reception"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button>
 <button class="navBtn" data-page="appointmentHistory">Appointment History</button><button class="navBtn hidden" data-page="payments">Payment</button><button class="navBtn hidden" data-page="medicines">Medicine</button><button class="navBtn" data-page="connection">Server Connection</button><button class="navBtn" data-page="bill">Bill / Receipt</button><button class="navBtn" data-page="backup">Backup / Restore</button></div></aside><main class="main"><header class="topbar"><button class="toggle embossed hamburgerBtn" id="toggleSide" type="button" aria-label="Toggle sidebar"><span class="hamIcon" aria-hidden="true">☰</span></button><span>Reception</span><span class="appVersionBadge" title="Application version">PRO</span><span class="syncLiveBadge" id="syncLiveBadge">Offline</span>
 <div class="globalSearchWrap">
   <input type="search" id="globalPatientSearch" class="globalPatientSearch" placeholder="Search patient: name, mobile, case no…" autocomplete="off" aria-label="Search patient">
@@ -15,31 +15,8 @@
 
 
 <div class="card queueCard"><div class="cardHead"><h2>Reception Patient List — Today</h2><span class="mini" id="queueCountHint">0 patients</span></div><div class="cardBody"><div class="search"><input id="queueSearch" placeholder="Search case no, name, mobile"></div><div class="tablewrap queueTableWrap"><table class="table queueTable"><thead><tr><th>Sr</th><th>Case</th><th>Date</th><th>Type</th><th>Patient</th><th>Payment</th><th>Total Collection</th><th>Status</th><th>Action</th></tr></thead><tbody id="receptionPatients"></tbody></table></div><div class="queuePagination" id="queueMobileCards"></div><div class="queuePagination" id="queuePagination"></div></div></div></section>
-<section class="page" id="newCasePage">
-  <div class="hero"><div><h1 class="patientEntryTitle">New Case Registration</h1></div></div>
-  <div class="card patientFormCard newCasePanel" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label class="full backdatePendingWrap" style="display:none!important" data-reception-hide="1">
-<input type="checkbox" id="backdatePending"> <span><b>Mark payment as Pending</b> <span class="mini">(back-dated entry only — leave unticked = Received automatically)</span></span>
-</label>
-<div class="full actions"><button type="submit" class="primary embossed" id="patientSubmitBtn">Update</button></div></form></div></div>
-</section>
-<section class="page" id="oldCasePage">
-  <div class="hero"><div><h1 class="patientEntryTitle">Old Case — Find patient &amp; add appointment</h1></div></div>
-  <div class="card oldCasePanel" id="oldAppointmentPanel">
-  <div class="cardHead">
-    <h2>Old Case — Find patient &amp; add appointment</h2>
-    <button type="button" class="btn embossed" id="oldApptClose">Close</button>
-  </div>
-  <div class="cardBody">
-    <p class="mini">Already registered patient ko name, mobile ya case number se dhoondhein. Full form nahi — sirf appointment + medicine charges.</p>
-    <div class="oldSearchBar">
-      <input type="search" id="oldApptSearch" class="oldApptSearchInput" placeholder="Name, mobile or case number…" autocomplete="off">
-      <button type="button" class="btn embossed" id="oldApptSearchBtn">Find</button>
-    </div>
-    <div id="oldApptResults" class="oldApptResults"></div>
-    <div id="oldApptSelected" class="oldApptSelected hidden"></div>
-  </div>
-</div>
-</section>
+
+
 
 
 
@@ -151,4 +128,25 @@
 <p class="mini" style="margin-top:12px">Last auto backup: <b id="lastAutoBackupTime">Never</b></p>
 </div></div>
 </section>
-</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=fullpage-case"></script></body></html>
+
+<!-- case overlays (outside .page so fixed overlay works) -->
+<div class="card hidden patientFormCard newCasePanel" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label class="full backdatePendingWrap" style="display:none!important" data-reception-hide="1">
+<input type="checkbox" id="backdatePending"> <span><b>Mark payment as Pending</b> <span class="mini">(back-dated entry only — leave unticked = Received automatically)</span></span>
+</label>
+<div class="full actions"><button type="submit" class="primary embossed" id="patientSubmitBtn">Update</button></div></form></div></div>
+<div class="card hidden oldCasePanel" id="oldAppointmentPanel">
+  <div class="cardHead">
+    <h2>Old Case — Find patient &amp; add appointment</h2>
+    <button type="button" class="btn embossed" id="oldApptClose" data-go-dashboard="1">Close</button>
+  </div>
+  <div class="cardBody">
+    <p class="mini">Already registered patient ko name, mobile ya case number se dhoondhein. Full form nahi — sirf appointment + medicine charges.</p>
+    <div class="oldSearchBar">
+      <input type="search" id="oldApptSearch" class="oldApptSearchInput" placeholder="Name, mobile or case number…" autocomplete="off">
+      <button type="button" class="btn embossed" id="oldApptSearchBtn">Find</button>
+    </div>
+    <div id="oldApptResults" class="oldApptResults"></div>
+    <div id="oldApptSelected" class="oldApptSelected hidden"></div>
+  </div>
+</div>
+</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=overlay2"></script></body></html>
