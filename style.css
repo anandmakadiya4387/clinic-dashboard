@@ -5743,3 +5743,151 @@ body[data-role="reception"] .queueActions {
 .queueTable {
   min-width: 100% !important;
 }
+
+
+/* =========================================================
+   QUEUE — fix cut TOTAL COLLECTION + TYPE alignment
+   ========================================================= */
+.queueTable,
+table.queueTable {
+  table-layout: fixed !important;
+  width: 100% !important;
+  min-width: 980px !important;
+  border-collapse: collapse !important;
+}
+.queueTable th,
+.queueTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 7px 6px !important;
+  vertical-align: middle !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.queueTable th {
+  white-space: normal !important;
+  line-height: 1.2 !important;
+  word-break: break-word !important;
+  font-size: 10.5px !important;
+  text-align: center !important;
+  background: #f0e6da !important;
+}
+
+/* Explicit column widths so headers don't truncate badly */
+.queueTable th:nth-child(1), .queueTable td:nth-child(1) { width: 36px !important; text-align: center !important; } /* SR */
+.queueTable th:nth-child(2), .queueTable td:nth-child(2) { width: 88px !important; text-align: center !important; } /* CASE */
+.queueTable th:nth-child(3), .queueTable td:nth-child(3) { width: 88px !important; text-align: center !important; } /* DATE */
+.queueTable th:nth-child(4), .queueTable td:nth-child(4) {
+  width: 64px !important;
+  text-align: center !important;
+  overflow: visible !important;
+} /* TYPE — tag stays in cell */
+.queueTable th:nth-child(5), .queueTable td:nth-child(5) { width: 170px !important; text-align: left !important; } /* PATIENT */
+.queueTable th:nth-child(6), .queueTable td:nth-child(6) { width: 130px !important; text-align: left !important; } /* PAYMENT */
+.queueTable th:nth-child(7), .queueTable td:nth-child(7) {
+  width: 100px !important;
+  text-align: center !important;
+  white-space: normal !important;
+  overflow: visible !important;
+} /* TOTAL COLLECTION */
+.queueTable th:nth-child(8), .queueTable td:nth-child(8) { width: 90px !important; text-align: center !important; } /* STATUS */
+.queueTable th:nth-child(9), .queueTable td:nth-child(9) { width: 210px !important; text-align: center !important; } /* ACTION */
+
+/* TYPE tag must stay inside TYPE column only */
+.queueTable td:nth-child(4) .tag,
+.queueTable .tag.new,
+.queueTable .tag.old {
+  display: inline-block !important;
+  max-width: 100% !important;
+  margin: 0 auto !important;
+  float: none !important;
+  position: static !important;
+  font-size: 10px !important;
+  padding: 2px 6px !important;
+  white-space: nowrap !important;
+}
+.queueTable td:nth-child(4) {
+  text-align: center !important;
+}
+
+/* TOTAL COLLECTION header never cut */
+.queueTable thead th:nth-child(7) {
+  font-size: 10px !important;
+  letter-spacing: 0 !important;
+  padding: 8px 4px !important;
+}
+
+/* =========================================================
+   PATIENTS REPORT + FOLLOW-UP + RENEWAL tables — grid lines
+   ========================================================= */
+#patientReportBody table,
+.patientReportTable,
+table.reportTable,
+#reportBodyPatients table,
+.patientsTable,
+.tablewrap table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+#patientReportBody th,
+#patientReportBody td,
+.patientReportTable th,
+.patientReportTable td,
+table.reportTable th,
+table.reportTable td,
+.patientsTable th,
+.patientsTable td,
+.tablewrap table th,
+.tablewrap table td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 7px 8px !important;
+  vertical-align: middle !important;
+  color: #1c1410 !important;
+  background: #fffdfb !important;
+}
+#patientReportBody th,
+.patientReportTable th,
+table.reportTable th,
+.patientsTable th,
+.tablewrap table th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-align: center !important;
+  white-space: normal !important;
+}
+/* patient name no overlap */
+#patientReportBody td,
+.patientReportTable td,
+.patientsTable td {
+  overflow: hidden !important;
+  word-break: break-word !important;
+}
+
+/* =========================================================
+   MEDICINE TABLE — grid + pagination note
+   ========================================================= */
+.medTable,
+#medBody,
+table.medTable {
+  border-collapse: collapse !important;
+  width: 100% !important;
+}
+.medTable th,
+.medTable td,
+#medHead th,
+#medBody td,
+table.medTable th,
+table.medTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 7px 8px !important;
+  vertical-align: middle !important;
+  background: #fffdfb !important;
+  color: #1c1410 !important;
+}
+.medTable th,
+#medHead th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+}
