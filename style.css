@@ -5579,3 +5579,167 @@ main .card.caseOverlayOpen,
   height: 100% !important;
   display: block !important;
 }
+
+
+/* =========================================================
+   QUEUE TABLE — grid lines + no name overlap + compact actions
+   ========================================================= */
+
+.tablewrap.queueTableWrap,
+.queueTableWrap {
+  overflow-x: auto !important;
+  border: 1px solid #c4b5a5 !important;
+  border-radius: 8px !important;
+  background: #fffdfb !important;
+}
+
+.queueTable,
+table.queueTable,
+.table.queueTable {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  font-size: 12.5px !important;
+}
+
+/* Spreadsheet-style vertical + horizontal lines (like reference app) */
+.queueTable th,
+.queueTable td,
+table.queueTable th,
+table.queueTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 8px 8px !important;
+  vertical-align: middle !important;
+  background: #fffdfb !important;
+  color: #1c1410 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.queueTable th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.03em !important;
+  text-align: center !important;
+  color: #1c1410 !important;
+}
+
+/* Column widths — patient gets more room; collection+status tighter */
+.queueTable th:nth-child(1),
+.queueTable td:nth-child(1) { width: 3% !important; text-align: center !important; } /* SR */
+.queueTable th:nth-child(2),
+.queueTable td:nth-child(2) { width: 9% !important; text-align: center !important; } /* CASE */
+.queueTable th:nth-child(3),
+.queueTable td:nth-child(3) { width: 8% !important; text-align: center !important; } /* DATE */
+.queueTable th:nth-child(4),
+.queueTable td:nth-child(4) { width: 5% !important; text-align: center !important; } /* TYPE */
+.queueTable th:nth-child(5),
+.queueTable td:nth-child(5) { width: 18% !important; text-align: left !important; } /* PATIENT */
+.queueTable th:nth-child(6),
+.queueTable td:nth-child(6) { width: 14% !important; text-align: left !important; } /* PAYMENT */
+.queueTable th:nth-child(7),
+.queueTable td:nth-child(7) { width: 9% !important; text-align: center !important; } /* TOTAL COLLECTION */
+.queueTable th:nth-child(8),
+.queueTable td:nth-child(8) { width: 9% !important; text-align: center !important; } /* STATUS */
+.queueTable th:nth-child(9),
+.queueTable td:nth-child(9) { width: 25% !important; text-align: center !important; } /* ACTION */
+
+/* Patient name — no overlap, wrap within cell */
+.queueTable .patientMain,
+.queueTable .patientNameOneLine,
+.queueTable .nameInline {
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  line-height: 1.25 !important;
+  max-width: 100% !important;
+  font-weight: 600 !important;
+  color: #1c1410 !important;
+}
+.queueTable td:nth-child(5) .mini {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  display: block !important;
+}
+
+/* Payment breakup compact */
+.queueTable .payBreakup,
+.queueTable .feeBreakup {
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  white-space: normal !important;
+}
+
+/* Total collection + status tight */
+.queueTable .totalCollectCell,
+.queueTable .amount {
+  white-space: nowrap !important;
+  font-size: 13px !important;
+  text-align: center !important;
+}
+.queueTable .statusCell,
+.queueTable td:nth-child(8) {
+  text-align: center !important;
+}
+
+/* ACTION header + buttons centered as a group */
+.queueTable th:last-child,
+.queueTable td:last-child {
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+.queueActions,
+.actions.compactActions.queueActions,
+.queueTable .queueActions {
+  display: inline-flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 4px !important;
+  max-width: 100% !important;
+  margin: 0 auto !important;
+  float: none !important;
+}
+.queueActions .btn,
+.queueTable .queueActions .btn {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  min-width: 0 !important;
+  border-radius: 6px !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Section break rows keep grid */
+.queueTable tr.queueSectionBreak td {
+  border: 1px solid #d4c4b0 !important;
+  background: #ebe0d2 !important;
+  text-align: left !important;
+  font-weight: 700 !important;
+}
+
+/* Reception queue same grid */
+body[data-role="reception"] .queueTable th,
+body[data-role="reception"] .queueTable td,
+.receptionQueueTable th,
+.receptionQueueTable td {
+  border: 1px solid #d4c4b0 !important;
+}
+body[data-role="reception"] .queueActions,
+body[data-role="reception"] .queueTable td:last-child {
+  text-align: center !important;
+}
+body[data-role="reception"] .queueActions {
+  justify-content: center !important;
+}
+
+/* Remove forced min-width that caused horizontal scroll */
+.queueTable {
+  min-width: 100% !important;
+}

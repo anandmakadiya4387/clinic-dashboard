@@ -1936,7 +1936,7 @@ function renderQueue() {
    <td><div class="actions embossedActions compactActions queueActions">
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>Doctor</button>`:''}
-    ${(role!=='reception'||receptionCanEdit('paymentEntry'))?`<button class="btn embossed ${fullyReceived?'actReceived':'actNeutral'}${lockCls}" onclick="receiveP('${p.id}')"${fullyReceived?' disabled':''}>Receive</button>`:''}
+    ${(role!=='reception'||receptionCanEdit('paymentEntry'))?`<button class="btn embossed ${fullyReceived?'actReceived':'actNeutral'}${lockCls}" onclick="receiveP('${p.id}')"${fullyReceived?' disabled':''}>Rec</button>`:''}
     ${(role!=='reception'||receptionCanEdit('paymentEntry'))?`<button class="btn embossed actNeutral${lockCls}" onclick="pendingP('${p.id}')"${dis}>Pend</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button>`:''}
     </div></td></tr>`;
@@ -1955,7 +1955,7 @@ function renderQueue() {
         html += `<tr class="queueSectionBreak"><td colspan="9">Completed today</td></tr>`;
         done.forEach((p,i)=>{
             const payLabel=paymentStatusHtml(p);
-            html += `<tr class="receivedRow"><td>${i+1}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile||'')}</div></td><td class="amount">${money(feeTotal(p))}</td><td class="totalPayCell">${payLabel}</td><td><span class="queueStatusTag received">Completed</span></td><td><div class="actions embossedActions compactActions queueActions"><button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button><button class="btn embossed actNeutral" onclick="docP('${p.id}')">Doctor</button><button class="btn embossed actReceived" onclick="receiveP('${p.id}')">Receive</button><button class="btn embossed actNeutral" onclick="pendingP('${p.id}')">Pend</button><button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button></div></td></tr>`;
+            html += `<tr class="receivedRow"><td>${i+1}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile||'')}</div></td><td class="amount">${money(feeTotal(p))}</td><td class="totalPayCell">${payLabel}</td><td><span class="queueStatusTag received">Completed</span></td><td><div class="actions embossedActions compactActions queueActions"><button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button><button class="btn embossed actNeutral" onclick="docP('${p.id}')">Doctor</button><button class="btn embossed actReceived" onclick="receiveP('${p.id}')">Rec</button><button class="btn embossed actNeutral" onclick="pendingP('${p.id}')">Pend</button><button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button></div></td></tr>`;
         });
     }
     if (!html) html = '<tr><td colspan="9">No new or old case entries today</td></tr>';
