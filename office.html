@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=logo-noblack"></head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=fullpage-case"></head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
   <button type="button" class="navBtn navParent" id="patientsNavToggle">Patients ▾</button>
   <div class="navSub" id="patientsNavSub">
     <button type="button" class="navBtn navSubBtn" data-page="patients" data-patient-view="new">New Cases</button>
@@ -37,12 +37,21 @@
   <div class="kpiCard kpi-slate glassCard kpiClickable" id="kpiEmptyStockClick" role="button" tabindex="0"><div class="kpiIcon">💊</div><div class="kpiBody"><span>Empty stock</span><b id="topLowStock">0</b></div></div>
 </div>
 
-<div class="card hidden patientFormCard newCasePanel" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label>Consultation Fees<input id="consultation" type="number" min="0" value="0"></label><label>Medicine Fees<input id="medicine" type="number" min="0" value="0"></label><label class="hidden" id="renewWrap">Renewal Fees (Annual)<input id="renewal" type="number" min="0" value="0"><span class="mini" id="renewDue"></span></label>
+
+
+
+<div class="card queueCard"><div class="cardHead"><h2>Patient Queue — Today</h2><span class="mini" id="queueCountHint">0 patients</span></div><div class="cardBody"><div class="search"><input id="queueSearch" placeholder="Search case no, name, mobile, address"></div><div class="tablewrap queueTableWrap"><table class="table queueTable"><thead><tr><th>Sr</th><th>Case</th><th>Date</th><th>Type</th><th>Patient</th><th>Payment</th><th>Total Collection</th><th>Status</th><th>Action</th></tr></thead><tbody id="queueBody"></tbody></table></div><div class="queuePagination" id="queuePagination"></div></div></div></section>
+<section class="page" id="newCasePage">
+  <div class="hero"><div><h1 class="patientEntryTitle">New Case Registration</h1></div></div>
+  <div class="card patientFormCard newCasePanel" id="patientForm"><div class="cardHead"><h2 id="formTitle">Patient Entry</h2><button class="btn" id="patientClose">Close</button></div><div class="cardBody"><form class="formgrid"><input type="hidden" id="editId"><input type="hidden" id="caseType"><label>Entry Date<input id="patientDate" type="date" required></label><label>Case No.<input id="caseNo" type="text" required placeholder="e.g. 0A001304" pattern="[A-Za-z0-9]+" title="Letters and numbers allowed"></label><label>Title<select id="title"><option>Mr</option><option>Mrs</option><option>Master</option><option>Miss</option></select></label><label>Patient Name<input id="name" required></label><label class="full">Address<textarea id="address"></textarea></label><label>Mobile<input id="mobile"></label><label>Gender<select id="gender"><option>Male</option><option>Female</option><option>Other</option></select></label><label>Age<input id="age" type="number" min="0"></label><label>Ref by<input id="refBy"></label><label>Consultation Fees<input id="consultation" type="number" min="0" value="0"></label><label>Medicine Fees<input id="medicine" type="number" min="0" value="0"></label><label class="hidden" id="renewWrap">Renewal Fees (Annual)<input id="renewal" type="number" min="0" value="0"><span class="mini" id="renewDue"></span></label>
 <label id="partialPendingEditWrap">Partial pending amount<input id="partialPendingEdit" type="number" min="0" step="1" value="0" title="Pending amount for next visit. 0 = clear pending"><span class="mini" id="partialPendingHint">0 = clear / no pending</span></label><label class="full backdatePendingWrap" style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px 12px;border-radius:12px;background:linear-gradient(165deg,#fffbeb,#fef3c7);border:1px solid #f0d78c">
 <input type="checkbox" id="backdatePending"> <span><b>Mark payment as Pending</b> <span class="mini">(back-dated entry only — leave unticked = Received automatically)</span></span>
 </label>
 <div class="full actions"><button type="submit" class="primary embossed" id="patientSubmitBtn">Update</button></div></form></div></div>
-<div class="card hidden oldCasePanel" id="oldAppointmentPanel">
+</section>
+<section class="page" id="oldCasePage">
+  <div class="hero"><div><h1 class="patientEntryTitle">Old Case — Find patient &amp; add appointment</h1></div></div>
+  <div class="card oldCasePanel" id="oldAppointmentPanel">
   <div class="cardHead">
     <h2>Old Case — Find patient &amp; add appointment</h2>
     <button type="button" class="btn embossed" id="oldApptClose">Close</button>
@@ -57,8 +66,8 @@
     <div id="oldApptSelected" class="oldApptSelected hidden"></div>
   </div>
 </div>
+</section>
 
-<div class="card queueCard"><div class="cardHead"><h2>Patient Queue — Today</h2><span class="mini" id="queueCountHint">0 patients</span></div><div class="cardBody"><div class="search"><input id="queueSearch" placeholder="Search case no, name, mobile, address"></div><div class="tablewrap queueTableWrap"><table class="table queueTable"><thead><tr><th>Sr</th><th>Case</th><th>Date</th><th>Type</th><th>Patient</th><th>Payment</th><th>Total Collection</th><th>Status</th><th>Action</th></tr></thead><tbody id="queueBody"></tbody></table></div><div class="queuePagination" id="queuePagination"></div></div></div></section>
 <section class="page" id="patients"><div class="hero"><div><h1>Patients</h1><p>Select Year / Month / Day to view cases with counts and full details. Simple to use.</p></div></div>
 <div class="filterBar embossed">
   <span>Year</span><select id="patientYear"></select>
@@ -386,4 +395,4 @@
 <p class="mini">Reception data tab include hoga jab Reception isi browser / PC pe kabhi open ho chuka ho (localStorage me save ho).</p>
 </div></div>
 </section>
-</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=logo-noblack"></script></body></html>
+</main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=fullpage-case"></script></body></html>

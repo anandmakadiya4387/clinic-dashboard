@@ -5329,3 +5329,47 @@ img.billPremLogo,
   box-shadow: none !important;
   border: none !important;
 }
+
+
+/* PRO badge — white text, not bold */
+.appVersionBadge {
+  color: #ffffff !important;
+  font-weight: 400 !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Old Case button — dark green, white text */
+#oldCase,
+button#oldCase.green,
+.hero .actions #oldCase,
+button.green#oldCase {
+  background: #14532d !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-weight: 600 !important;
+}
+#oldCase:hover,
+button#oldCase.green:hover {
+  background: #166534 !important;
+  color: #ffffff !important;
+}
+
+/* Full-page new/old case — only form, no dashboard chrome behind */
+#newCasePage.page.active,
+#oldCasePage.page.active {
+  display: block !important;
+  min-height: calc(100vh - 80px);
+  background: #faf6f1 !important;
+}
+#newCasePage .patientFormCard,
+#newCasePage #patientForm,
+#oldCasePage .oldCasePanel,
+#oldCasePage #oldAppointmentPanel {
+  display: block !important;
+  max-width: 960px;
+  margin: 0 auto;
+}
+/* Hide duplicate hero title if form card already has head */
+#newCasePage .hero { margin-bottom: 8px; }
+#oldCasePage .hero { margin-bottom: 8px; }

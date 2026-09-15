@@ -1092,6 +1092,15 @@ function openPatientProfile(id) {
 
 
 function openPage(id) {
+    // Leaving case pages → hide embedded panels
+    if (id !== 'newCasePage') {
+        // keep form visible only on newCasePage
+    }
+    if (id === 'dashboard') {
+        try { $('#patientForm')?.classList.add('hidden'); } catch (e) {}
+        try { $('#oldAppointmentPanel')?.classList.add('hidden'); } catch (e) {}
+    }
+
     // Parent menu (Patients / Payment) has no data-page — never navigate on empty id
     if (!id || id === 'undefined' || id === 'null') return;
     if (role === 'reception') {
@@ -1159,6 +1168,7 @@ function openOldAppointmentPanel() {
         return;
     }
     panel.classList.remove('hidden');
+    try { openPage('oldCasePage'); } catch (e) {}
     const inp = $('#oldApptSearch');
     if (inp) {
         inp.value = '';
@@ -1168,11 +1178,12 @@ function openOldAppointmentPanel() {
     if (res) res.innerHTML = '<div class="mini">Type name, mobile or case number and press Find</div>';
     $('#oldApptSelected')?.classList.add('hidden');
     if ($('#oldApptSelected')) $('#oldApptSelected').innerHTML = '';
-    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try { window.scrollTo(0, 0); } catch (e) {}
 }
 
 function closeOldAppointmentPanel() {
     $('#oldAppointmentPanel')?.classList.add('hidden');
+    try { openPage('dashboard'); } catch (e) {}
 }
 
 function runOldApptSearch() {
@@ -1458,8 +1469,16 @@ function setupOldAppointmentPanel() {
 
 function buildPatientForm(type, patient = null) {
     const f = $('#patientForm');
+    if (!f) return;
     f.classList.remove('hidden');
     $('#formTitle').textContent = patient ? 'Edit Case' : (type === 'new' ? 'New Case Registration' : 'Old Case Registration');
+    // Full separate page — hide dashboard chrome
+    if (!patient) {
+        try { openPage(type === 'old' ? 'oldCasePage' : 'newCasePage'); } catch (e) {}
+    } else {
+        // Edit: open new case page as host for the form
+        try { openPage('newCasePage'); } catch (e) {}
+    }
     const fb = $('#patientForm button.primary');
     if (fb) fb.textContent = patient ? 'Update' : 'Register';
     $('#caseType').value = type;
@@ -1805,6 +1824,7 @@ function closeForm() {
     $('#patientForm')?.classList.add('hidden');
     const ei = $('#editId');
     if (ei) ei.value = '';
+    try { openPage('dashboard'); } catch (e) {}
 }
 
 /** After any patient / payment change — refresh every related screen */
