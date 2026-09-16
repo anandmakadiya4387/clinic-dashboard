@@ -6142,3 +6142,77 @@ table.histTable {
   overflow: visible !important;
   white-space: nowrap !important;
 }
+
+
+/* ===== Modal data tables — compact, no overlap ===== */
+.modal .modalTableWrap,
+.modalBox .modalTableWrap,
+#modal .tablewrap.modalTableWrap {
+  overflow-x: auto !important;
+  max-width: 100% !important;
+}
+.modalDataTable,
+table.modalDataTable {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  min-width: 0 !important;
+}
+.modalDataTable th,
+.modalDataTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 6px 5px !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+  color: #1c1410 !important;
+  background: #fffdfb !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  white-space: normal !important;
+  text-overflow: clip !important;
+  overflow: hidden !important;
+}
+.modalDataTable th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  font-size: 11px !important;
+}
+
+/* Empty stock: Sr|No|Name|Drawer|Qty|Available|Action */
+.emptyStockTable th:nth-child(1), .emptyStockTable td:nth-child(1) { width: 6% !important; text-align: center !important; }
+.emptyStockTable th:nth-child(2), .emptyStockTable td:nth-child(2) { width: 8% !important; text-align: center !important; }
+.emptyStockTable th:nth-child(3), .emptyStockTable td:nth-child(3) { width: 36% !important; text-align: left !important; }
+.emptyStockTable th:nth-child(4), .emptyStockTable td:nth-child(4) { width: 14% !important; text-align: center !important; }
+.emptyStockTable th:nth-child(5), .emptyStockTable td:nth-child(5) { width: 8% !important; text-align: center !important; }
+.emptyStockTable th:nth-child(6), .emptyStockTable td:nth-child(6) { width: 10% !important; text-align: center !important; }
+.emptyStockTable th:nth-child(7), .emptyStockTable td:nth-child(7) { width: 18% !important; text-align: center !important; }
+
+/* Renewal due: Sr|Case|Patient|Mobile|Reg|Due|Fee|Action */
+.renewalDueTable th:nth-child(1), .renewalDueTable td:nth-child(1) { width: 5% !important; text-align: center !important; }
+.renewalDueTable th:nth-child(2), .renewalDueTable td:nth-child(2) { width: 11% !important; text-align: center !important; }
+.renewalDueTable th:nth-child(3), .renewalDueTable td:nth-child(3) { width: 22% !important; text-align: left !important; }
+.renewalDueTable th:nth-child(4), .renewalDueTable td:nth-child(4) { width: 12% !important; text-align: center !important; }
+.renewalDueTable th:nth-child(5), .renewalDueTable td:nth-child(5) { width: 12% !important; text-align: center !important; }
+.renewalDueTable th:nth-child(6), .renewalDueTable td:nth-child(6) { width: 12% !important; text-align: center !important; }
+.renewalDueTable th:nth-child(7), .renewalDueTable td:nth-child(7) { width: 10% !important; text-align: center !important; }
+.renewalDueTable th:nth-child(8), .renewalDueTable td:nth-child(8) { width: 16% !important; text-align: center !important; }
+
+/* Today pending: Sr|Case|Type|Patient|Mobile|Fees|Pending|Paid|Action */
+.todayPendingTable th:nth-child(1), .todayPendingTable td:nth-child(1) { width: 5% !important; text-align: center !important; }
+.todayPendingTable th:nth-child(2), .todayPendingTable td:nth-child(2) { width: 11% !important; text-align: center !important; }
+.todayPendingTable th:nth-child(3), .todayPendingTable td:nth-child(3) { width: 7% !important; text-align: center !important; }
+.todayPendingTable th:nth-child(4), .todayPendingTable td:nth-child(4) { width: 20% !important; text-align: left !important; }
+.todayPendingTable th:nth-child(5), .todayPendingTable td:nth-child(5) { width: 12% !important; text-align: center !important; }
+.todayPendingTable th:nth-child(6), .todayPendingTable td:nth-child(6) { width: 10% !important; text-align: center !important; }
+.todayPendingTable th:nth-child(7), .todayPendingTable td:nth-child(7) { width: 10% !important; text-align: center !important; }
+.todayPendingTable th:nth-child(8), .todayPendingTable td:nth-child(8) { width: 10% !important; text-align: center !important; }
+.todayPendingTable th:nth-child(9), .todayPendingTable td:nth-child(9) { width: 15% !important; text-align: center !important; }
+
+/* Wider modal for data tables */
+.modal .modalCard,
+#modal .card,
+.modal-content {
+  max-width: min(960px, 96vw) !important;
+}

@@ -359,7 +359,14 @@ function paidFor(id) {
 }
 
 function pendingFor(p) {
-    return Math.max(0, feeTotal(p) - paidFor(p.id))
+    if (!p) return 0;
+    const feePend = Math.max(0, feeTotal(p) - paidFor(p.id));
+    const ownPartial = Math.max(0, Number(p.partialPending || 0));
+    let carry = 0;
+    try { carry = Math.max(0, Number(getCarryPartialPending(permanentCaseNo(p)) || 0)); } catch (e) {}
+    // Show unpaid fees + explicit partial pending (carry preferred if set on family)
+    const partial = Math.max(ownPartial, carry);
+    return feePend + partial;
 }
 
 /** Unified payment status: foc | pending | partial | received */
@@ -3204,7 +3211,7 @@ function openEmptyStockDetails() {
     }).join('') || '<tr><td colspan="7">No empty-stock medicines</td></tr>';
     modal(`Empty stock Medicine — ${list.length}`, `
       <p class="mini">Medicines with quantity 0 or marked Not Available. Data from Medicine interface.</p>
-      <div class="tablewrap"><table class="table">
+      <div class="tablewrap modalTableWrap"><table class="table modalDataTable emptyStockTable">
         <thead><tr><th>Sr</th><th>No.</th><th>Name</th><th>Drawer</th><th>Qty</th><th>Available</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
@@ -3316,7 +3323,7 @@ function openRenewalDueList() {
     }).join('') || '<tr><td colspan="8">No patients with renewal due</td></tr>';
     modal(`Renewal Due — ${list.length} patient(s)`, `
       <p class="mini">Patients whose renewal date has passed and renewal payment is still unpaid. Case number never changes.</p>
-      <div class="tablewrap"><table class="table">
+      <div class="tablewrap modalTableWrap"><table class="table modalDataTable renewalDueTable">
         <thead><tr><th>Sr</th><th>Case No.</th><th>Patient</th><th>Mobile</th><th>Reg. date</th><th>Due date</th><th>Renewal fee</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
@@ -3342,7 +3349,7 @@ function openTodayPendingList() {
     const totalPend = list.reduce((a, p) => a + pendingFor(p), 0);
     modal(`Today's Pending Payment — ${money(totalPend)}`, `
       <p class="mini">Today's queue cases with unpaid balance. Only collected amounts count in income.</p>
-      <div class="tablewrap"><table class="table">
+      <div class="tablewrap modalTableWrap"><table class="table modalDataTable todayPendingTable">
         <thead><tr><th>Sr</th><th>Case No.</th><th>Type</th><th>Patient</th><th>Mobile</th><th>Fees</th><th>Pending</th><th>Paid</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
@@ -4282,22 +4289,46 @@ function importBackup(e) {
     const r = new FileReader();
     r.onload = () => {
         try {
-            DB = Object.assign(structuredClone(DEFAULT), JSON.parse(r.result));
-            // Preserve pending patients from JSON — do not auto-receive
-            try {
-                (DB.patients || []).forEach(p => {
-                    if (!p) return;
-                    if (p.received === false || p.forcePending === true) {
-                        p.forcePending = true;
-                        p.received = false;
-                        p.completedAt = null;
-                    }
-                });
-            } catch (e) {}
+            const raw = JSON.parse(r.result);
+            const incoming = normalizeData(Object.assign(structuredClone(DEFAULT), raw));
+            // Full restore from JSON — patients/medicines/payments as in file
+            DB = incoming;
+            // Deleted list ONLY from backup file (not local deletions)
+            if (raw.meta && Array.isArray(raw.meta.deleted)) {
+                DB.meta = DB.meta || {};
+                DB.meta.deleted = [...raw.meta.deleted];
+            } else {
+                DB.meta = DB.meta || {};
+                DB.meta.deleted = [];
+            }
+            // Un-delete every record present in the backup
+            (DB.patients || []).forEach(p => {
+                if (!p) return;
+                p._deleted = false;
+                // Keep explicit pending from JSON; do not auto-receive
+                if (p.forcePending === true || (p.received === false && Number(p.partialPending || 0) > 0)) {
+                    p.forcePending = true;
+                    p.received = false;
+                    p.completedAt = null;
+                }
+            });
+            (DB.medicines || []).forEach(m => { if (m) m._deleted = false; });
+            (DB.payments || []).forEach(x => { if (x) x._deleted = false; });
+            // Remove restored ids from deleted tombstones
+            const liveIds = new Set([
+                ...(DB.patients || []).map(p => p && p.id),
+                ...(DB.medicines || []).map(m => m && m.id),
+                ...(DB.payments || []).map(x => x && x.id)
+            ].filter(Boolean));
+            DB.meta.deleted = (DB.meta.deleted || []).filter(id => !liveIds.has(id));
+            DB = normalizeData(DB);
             saveLocal();
-            toast('Full backup imported (pending kept as pending)');
-            syncNow(true)
-        } catch {
+            try { refreshAllPatientViews(); } catch (e) {}
+            try { renderMedicines(); } catch (e) {}
+            toast('Full backup restored — deleted cases/medicines from JSON brought back');
+            try { syncNow(true); } catch (e) {}
+        } catch (err) {
+            console.warn(err);
             toast('Invalid backup file', true)
         }
     };
@@ -4524,13 +4555,34 @@ function importPreviousData(e) {
                 });
                 return [...m.values()]
             };
-            DB.patients = merge(DB.patients, incoming.patients);
-            DB.payments = merge(DB.payments, incoming.payments);
-            DB.medicines = merge(DB.medicines, incoming.medicines);
-            DB.meta.deleted = [...new Set([...(DB.meta.deleted || []), ...(incoming.meta?.deleted || [])])];
-            DB.patients = DB.patients.filter(x => !DB.meta.deleted.includes(x.id));
-            DB.payments = DB.payments.filter(x => !DB.meta.deleted.includes(x.id));
-            DB.medicines = DB.medicines.filter(x => !DB.meta.deleted.includes(x.id));
+            // Ids present in incoming file are RESTORED (remove from local deleted tombstones)
+            const restoreIds = new Set();
+            (incoming.patients || []).forEach(p => { if (p?.id && !p._deleted) restoreIds.add(p.id); });
+            (incoming.payments || []).forEach(p => { if (p?.id && !p._deleted) restoreIds.add(p.id); });
+            (incoming.medicines || []).forEach(p => { if (p?.id && !p._deleted) restoreIds.add(p.id); });
+            DB.meta.deleted = (DB.meta.deleted || []).filter(id => !restoreIds.has(id));
+            // Merge: prefer newer _updated; clear _deleted on restored
+            const mergeRestore = (a, b) => {
+                const m = new Map();
+                [...(a || []), ...(b || [])].forEach(x => {
+                    if (!x?.id) return;
+                    const old = m.get(x.id);
+                    if (!old || String(x._updated || '') >= String(old._updated || '')) m.set(x.id, { ...x });
+                });
+                return [...m.values()].map(x => {
+                    if (restoreIds.has(x.id)) x._deleted = false;
+                    return x;
+                });
+            };
+            DB.patients = mergeRestore(DB.patients, incoming.patients);
+            DB.payments = mergeRestore(DB.payments, incoming.payments);
+            DB.medicines = mergeRestore(DB.medicines, incoming.medicines);
+            // Only keep tombstones that are still not restored
+            const stillDeleted = new Set([...(DB.meta.deleted || []), ...((incoming.meta && incoming.meta.deleted) || [])].filter(id => !restoreIds.has(id)));
+            DB.meta.deleted = [...stillDeleted];
+            DB.patients = DB.patients.filter(x => !x._deleted && !DB.meta.deleted.includes(x.id));
+            DB.payments = DB.payments.filter(x => !x._deleted && !DB.meta.deleted.includes(x.id));
+            DB.medicines = DB.medicines.filter(x => !x._deleted && !DB.meta.deleted.includes(x.id));
             if (String(incoming.clinic?._updated || '') > String(DB.clinic?._updated || '')) DB.clinic = incoming.clinic;
             if (String(incoming.settings?._updated || '') > String(DB.settings?._updated || '')) DB.settings = incoming.settings;
             DB = normalizeData(DB);
