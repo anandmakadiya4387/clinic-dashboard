@@ -392,39 +392,78 @@ function getCarryPartialPending(caseNo) {
 
 function paymentStatusInfo(p) {
     if (!p) return { kind: 'pending', label: 'Pending', pending: 0, paid: 0, fees: 0, locked: false };
-    if (p.forcePending === true && p.received !== true) {
-        const fees = feeTotal(p);
-        const paid = paidFor(p.id);
-        const pend = Math.max(0, fees - paid) + Math.max(0, Number(p.partialPending || 0));
-        return { kind: 'pending', label: 'Pending', pending: pend, paid, fees, locked: false };
-    }
-    if (!p) return { kind: 'foc', label: 'FOC', pending: 0, paid: 0, fees: 0, locked: false };
     const fees = feeTotal(p);
     const paid = paidFor(p.id);
-    const pending = Math.max(0, fees - paid);
-    // FOC only when explicitly marked — zero fees ≠ FOC (Reception register stays Pending/Waiting)
+    const partialExtra = Math.max(0, Number(p.partialPending || 0));
+    const pending = Math.max(0, fees - paid) + partialExtra;
+    // FOC only when explicitly marked
     if (p.foc === true) {
         return { kind: 'foc', label: 'FOC', pending: 0, paid: 0, fees: 0, locked: false };
     }
-    if (p.received === true && pending <= 0) {
+    // Explicit pending / not received always wins over auto-payment matching
+    if (p.forcePending === true && p.received !== true) {
+        return { kind: 'pending', label: 'Pending', pending: pending || fees || partialExtra, paid, fees, locked: false };
+    }
+    if (p.received === false && fees > 0) {
+        if (paid > 0 && paid < fees) return { kind: 'partial', label: 'Partial', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
+        if (paid <= 0 || pending > 0) return { kind: 'pending', label: 'Pending', pending: pending || fees, paid, fees, locked: false };
+    }
+    // Fully received only when explicitly marked received AND nothing due
+    if (p.received === true && Math.max(0, fees - paid) <= 0 && partialExtra <= 0) {
         return { kind: 'received', label: 'Received', pending: 0, paid, fees, locked: true };
     }
-    if (pending <= 0 && paid > 0) {
+    if (paid > 0 && (Math.max(0, fees - paid) > 0 || partialExtra > 0)) {
+        return { kind: 'partial', label: 'Partial', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
+    }
+    // Payments fully cover fees and not marked pending → received
+    if (fees > 0 && paid >= fees && partialExtra <= 0 && p.received !== false && !p.forcePending) {
         return { kind: 'received', label: 'Received', pending: 0, paid, fees, locked: true };
     }
-    if (paid > 0 && pending > 0) {
-        return { kind: 'partial', label: 'Partial', pending, paid, fees, locked: false };
+    if (fees <= 0 && paid <= 0 && !p.forcePending) {
+        // zero fee visit without FOC flag → still pending/waiting style, not auto FOC
+        return { kind: 'pending', label: 'Pending', pending: 0, paid: 0, fees: 0, locked: false };
     }
     return { kind: 'pending', label: 'Pending', pending: pending || 0, paid: paid || 0, fees, locked: false };
 }
 
+
+/** Aggregate payment status across all visits of permanent case (for patient list column). */
+function caseFamilyPaymentStatus(p) {
+    const family = (typeof caseFamily === 'function') ? caseFamily(p) : [p];
+    let hasPending = false, hasPartial = false, hasReceived = false, onlyFoc = true, anyFees = false;
+    family.forEach(v => {
+        if (!v) return;
+        const st = paymentStatusInfo(v);
+        if (st.kind === 'foc') return;
+        onlyFoc = false;
+        if (feeTotal(v) > 0 || Number(v.partialPending || 0) > 0) anyFees = true;
+        if (st.kind === 'pending') hasPending = true;
+        else if (st.kind === 'partial') hasPartial = true;
+        else if (st.kind === 'received') hasReceived = true;
+    });
+    if (onlyFoc || (!anyFees && !hasPending && !hasPartial && !hasReceived)) {
+        // all FOC or no fees
+        const anyFoc = family.some(v => v && v.foc === true);
+        if (anyFoc && !hasPending && !hasPartial && !hasReceived) return { kind: 'foc', label: 'FOC' };
+    }
+    if (hasPending || hasPartial) {
+        if (hasReceived || hasPartial) return { kind: 'part_rec', label: 'Part Rec' };
+        return { kind: 'pending', label: 'Pending' };
+    }
+    if (hasReceived) return { kind: 'received', label: 'Received' };
+    return paymentStatusInfo(p);
+}
+
 function paymentStatusHtml(p) {
-    const st = paymentStatusInfo(p);
+    // Patient list / report: family-level so any pending visit shows Part Rec
+    const st = caseFamilyPaymentStatus(p);
     if (st.kind === 'foc') return '<span class="payFocTag">FOC</span>';
     if (st.kind === 'received') return '<span class="payReceivedTag">Received</span>';
-    if (st.kind === 'partial') return `<span class="payPartialTag">Partial</span> <span class="mini">Paid ${money(st.paid)} · Due ${money(st.pending)}</span>`;
-    return `<span class="payPendingTag">Pending ${money(st.pending)}</span>`;
+    if (st.kind === 'part_rec') return '<span class="payPartRecTag">Part Rec</span>';
+    if (st.kind === 'partial') return '<span class="payPartRecTag">Part Rec</span>';
+    return '<span class="payPendingTag">Pending</span>';
 }
+
 
 function isPaymentLocked(p) {
     return paymentStatusInfo(p).locked === true;
@@ -3542,15 +3581,20 @@ function viewPatientHistory(id) {
     const rows = dates.map((d, i) => {
         const g = byDate[d];
         const lineTotal = g.consultation + g.medicine + g.renewal + g.other;
-        totalAll += lineTotal;
-        sumCons += Number(g.consultation || 0);
-        sumMed += Number(g.medicine || 0);
-        sumRen += Number(g.renewal || 0);
         const isRenew = g.renewal > 0;
         const visitRow = family.find(v => String(v.date || '') === d) || null;
         const stV = visitRow ? paymentStatusInfo(visitRow) : null;
         const isPendingVisit = stV ? (stV.kind === 'pending' || stV.kind === 'partial') : !!g._pendingVisit;
         const isFocVisit = stV ? stV.kind === 'foc' : (!!g._focVisit && !g._pendingVisit);
+        // Only received (collected) amounts count in category + grand totals — pending excluded
+        if (!isPendingVisit && !isFocVisit) {
+            totalAll += lineTotal;
+            sumCons += Number(g.consultation || 0);
+            sumMed += Number(g.medicine || 0);
+            sumRen += Number(g.renewal || 0);
+        } else if (!isPendingVisit && isFocVisit) {
+            // FOC contributes 0
+        }
         const typeTag = g.type ? `<span class="tag ${g.type}" style="margin-left:6px;font-size:10px">${String(g.type).toUpperCase()}</span>` : '';
         const vid = (visitRow && visitRow.id) || g._visitId || '';
         const recvBtn = isPendingVisit && vid
@@ -4753,7 +4797,7 @@ function searchPatientsQuery(q) {
     if (!q) return [];
     const digits = q.replace(/\D/g, '');
     const tokens = q.split(/\s+/).filter(Boolean);
-    return caseRows().filter(p => {
+    const hits = caseRows().filter(p => {
         const name = `${p.title || ''} ${p.name || ''}`.toLowerCase();
         const mobile = String(p.mobile || '');
         const mobileDigits = mobile.replace(/\D/g, '');
@@ -4763,14 +4807,27 @@ function searchPatientsQuery(q) {
         const last = String(p.date || '');
         const due = (typeof dueDate === 'function' ? dueDate(p) : '') || '';
         const blob = [name, mobile, mobileDigits, caseNo, address, last, due, pend > 0 ? 'pending' : '', (typeof renewalDue === 'function' && renewalDue(p)) ? 'renewal due' : ''].join(' ').toLowerCase();
-        if (name.includes(q) || address.includes(q) || caseNo.includes(q)) return true;
-        if (digits && mobileDigits.includes(digits)) return true;
-        if (mobile.toLowerCase().includes(q)) return true;
-        if (q.length >= 4 && last.includes(q)) return true;
+        if (digits && (mobileDigits.includes(digits) || caseNo.replace(/\D/g, '').includes(digits))) return true;
         if (tokens.length && tokens.every(t => blob.includes(t))) return true;
         return false;
-    }).slice(0, 30);
+    });
+    // ONE row per permanent case number — prefer NEW registration, else earliest visit
+    const byCase = new Map();
+    hits.forEach(p => {
+        const key = String(permanentCaseNo(p) || p.caseNo || p.id);
+        const prev = byCase.get(key);
+        if (!prev) {
+            byCase.set(key, p);
+            return;
+        }
+        const pNew = (p.caseType || '') === 'new';
+        const prevNew = (prev.caseType || '') === 'new';
+        if (pNew && !prevNew) byCase.set(key, p);
+        else if (pNew === prevNew && String(p.date || '') < String(prev.date || '')) byCase.set(key, p);
+    });
+    return [...byCase.values()].slice(0, 30);
 }
+
 
 function runGlobalPatientSearch() {
     const input = $('#globalPatientSearch');
@@ -4790,11 +4847,12 @@ function runGlobalPatientSearch() {
     }
     box.classList.remove('hidden');
     box.innerHTML = hits.map(p => {
-        const pend = pendingFor(p);
-        const payLabel = paymentStatusInfo(p).kind === 'foc' ? 'FOC' : (pend > 0 ? (paidFor(p.id) > 0 ? `Partial ${money(pend)}` : `Pending ${money(pend)}`) : 'Received');
+        const st = caseFamilyPaymentStatus(p);
+        const payLabel = st.label || st.kind;
+        const cn = permanentCaseNo(p) || p.caseNo;
         return `<button type="button" class="gsItem" role="option" data-id="${p.id}">
-          <span class="gsCase">#${p.caseNo}</span>${esc(p.title)} ${esc(p.name)}
-          <span class="gsMeta">${esc(p.mobile || '—')} · ${fmtDate(p.date)} · ${p.caseType || ''} · ${payLabel}</span>
+          <span class="gsCase">#${cn}</span>${esc(p.title)} ${esc(p.name)}
+          <span class="gsMeta">${esc(p.mobile || '—')} · ${payLabel}</span>
         </button>`;
     }).join('');
     box.querySelectorAll('.gsItem').forEach(btn => {

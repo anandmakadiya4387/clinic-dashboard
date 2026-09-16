@@ -6247,3 +6247,24 @@ table.modalDataTable {
 .payHistoryTable th:nth-child(5), .payHistoryTable td:nth-child(5) { width: 14% !important; text-align: center !important; }
 .payHistoryTable th:nth-child(6), .payHistoryTable td:nth-child(6) { width: 20% !important; text-align: center !important; white-space: nowrap !important; }
 .payHistoryTable th:nth-child(7), .payHistoryTable td:nth-child(7) { width: 12% !important; text-align: center !important; }
+
+/* Part Rec badge — compact, no layout overlap */
+.payPartRecTag {
+  display: inline-block !important;
+  background: #fef3c7 !important;
+  color: #92400e !important;
+  border: 1px solid #f59e0b !important;
+  border-radius: 999px !important;
+  padding: 2px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  line-height: 1.3 !important;
+}
+.patientListTable td:nth-child(7),
+.patientListTable th:nth-child(7) {
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  width: 12% !important;
+}
