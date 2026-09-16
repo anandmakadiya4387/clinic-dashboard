@@ -4772,20 +4772,27 @@ function renderAppointmentHistory() {
         const total = feeTotal(p);
         const pend = pendingFor(p);
         const fully = p.received === true && pend <= 0;
-        const status = fully ? '<span class="payReceivedTag">Received</span>' : (pend > 0 && paid > 0 ? '<span class="payPartialTag">Partial</span>' : (pend > 0 ? '<span class="payPendingTag">Pending</span>' : '<span class="payReceivedTag">Received</span>'));
+        let statusHtml;
+        if (p.foc === true && total <= 0) statusHtml = '<span class="payFocTag">FOC</span>';
+        else if (fully) statusHtml = '<span class="payReceivedTag">Received</span>';
+        else if (pend > 0 && paid > 0) statusHtml = '<span class="payPartRecTag">Part Rec</span>';
+        else if (pend > 0) statusHtml = '<span class="payPendingTag">Pending</span>';
+        else statusHtml = '<span class="payReceivedTag">Received</span>';
+        const actBtns = role === 'reception'
+          ? `<button class="btn embossed histMiniBtn" onclick="viewPatientHistory('${p.id}')">View</button>`
+          : `<button class="btn embossed histMiniBtn" onclick="viewPatientHistory('${p.id}')">View</button>
+             ${pend > 0 ? `<button type="button" class="btn embossed receiveBtn histMiniBtn" onclick="receiveP('${p.id}')" title="Receive">Rec</button>` : ''}
+             <button class="btn embossed histMiniBtn" onclick="editP('${p.id}')">Edit</button>
+             <button class="btn embossed deleteBox histMiniBtn" onclick="delP('${p.id}')">Del</button>`;
         return `<tr>
           <td><b>${permanentCaseNo(p)}</b></td>
           <td>${fmtDate(p.date)}</td>
-          <td><span class="tag ${p.caseType}">${(p.caseType || '').toUpperCase()}</span></td>
-          <td>${esc(p.title)} ${esc(p.name)}<div class="mini">${esc(p.mobile || '')}</div></td>
+          <td><span class="tag ${p.caseType}">${(p.caseType || 'old').toUpperCase()}</span></td>
+          <td class="histPatientCell"><div class="patientNameOneLine">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile || '')}</div></td>
           <td class="amount">${money(total)}</td>
           <td class="amount">${money(paid)}</td>
-          <td>${status}${role === 'reception' ? '' : (pend > 0 ? ` <button type="button" class="btn embossed receiveBtn histMiniBtn" onclick="receiveP('${p.id}')" title="Receive pending">Recv</button>` : '')}</td>
-          <td><div class="compactActions histActions">
-            <button class="btn embossed histMiniBtn" onclick="viewPatientHistory('${p.id}')">View</button>
-            ${role === 'reception' ? '' : `<button class="btn embossed histMiniBtn" onclick="editP('${p.id}')">Edit</button>
-            <button class="btn embossed deleteBox histMiniBtn" onclick="delP('${p.id}')">Del</button>`}
-          </div></td>
+          <td>${statusHtml}</td>
+          <td><div class="compactActions histActions">${actBtns}</div></td>
         </tr>`;
     }).join('') || '<tr><td colspan="8">No appointments found</td></tr>';
     if (pag) {
