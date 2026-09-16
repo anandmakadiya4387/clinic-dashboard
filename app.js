@@ -3597,14 +3597,30 @@ function viewPatientHistory(id) {
         }
         const typeTag = g.type ? `<span class="tag ${g.type}" style="margin-left:6px;font-size:10px">${String(g.type).toUpperCase()}</span>` : '';
         const vid = (visitRow && visitRow.id) || g._visitId || '';
-        const recvBtn = isPendingVisit && vid
-            ? ` <button type="button" class="btn embossed receiveBtn miniAction" onclick="receiveP('${vid}');closeModal()">Receive</button>`
-            : (isFocVisit && vid ? ` <button type="button" class="btn embossed miniAction" onclick="editP('${vid}');closeModal()">Add Payment</button>` : '');
+        const isOffice = (role !== 'reception');
+        // Office: Pend | Rec | FOC on unpaid visits. Reception: status text only (no power).
         let actionCell;
-        if (isFocVisit) actionCell = `<span class="histAction histFoc">FOC</span>${recvBtn}`;
-        else if (stV && stV.kind === 'partial') actionCell = `<span class="histAction histPartial">Partial</span> <span class="mini">Due ${money(stV.pending)}</span>${recvBtn}`;
-        else if (isPendingVisit) actionCell = `<span class="histAction histPending">Pending</span>${recvBtn}`;
-        else actionCell = `<span class="histAction histReceived">Received</span>`;
+        if (isFocVisit) {
+            actionCell = `<span class="histAction histFoc">FOC</span>`;
+            if (isOffice && vid) {
+                actionCell += ` <button type="button" class="btn embossed miniAction histMiniBtn" onclick="editP('${vid}');closeModal()">Add Pay</button>`;
+            }
+        } else if (isPendingVisit || (stV && stV.kind === 'partial')) {
+            if (isOffice && vid) {
+                const dueAmt = stV ? money(stV.pending || g._visitFees || lineTotal) : money(g._visitFees || lineTotal);
+                actionCell = `<span class="histActionBtns">` +
+                    `<button type="button" class="btn histBtn histPendBtn" title="Keep pending" onclick="pendingP('${vid}');setTimeout(()=>viewPatientHistory('${vid}'),300)">Pend</button>` +
+                    `<button type="button" class="btn histBtn histRecBtn" title="Mark received" onclick="receiveVisitFromHistory('${vid}')">Rec</button>` +
+                    `<button type="button" class="btn histBtn histFocBtn" title="Mark FOC (amount 0)" onclick="focVisitFromHistory('${vid}')">FOC</button>` +
+                    `</span><span class="mini histDueHint">${dueAmt} due</span>`;
+            } else {
+                // Reception: read-only status
+                if (stV && stV.kind === 'partial') actionCell = `<span class="histAction histPartial">Partial</span> <span class="mini">${money(stV.pending)} due</span>`;
+                else actionCell = `<span class="histAction histPending">Pending</span>`;
+            }
+        } else {
+            actionCell = `<span class="histAction histReceived">Received</span>`;
+        }
         return `<tr class="${isRenew ? 'renewRow' : ''}${isPendingVisit ? ' pendingRow' : ''}">
           <td>${i + 1}</td>
           <td>${fmtDate(d)}${typeTag}</td>
@@ -3862,6 +3878,69 @@ function receiveP(id) {
     });
 }
 
+
+
+/** Office-only: mark a visit FOC from history (fees → 0, status FOC). */
+function focVisitFromHistory(id) {
+    if (role === 'reception') {
+        toast('Reception cannot mark FOC — Office only', true);
+        return;
+    }
+    if (!enforceReceptionEdit('paymentEntry')) return;
+    const p = active(DB.patients).find(x => x.id === id);
+    if (!p) return;
+    if (!confirm('Mark this visit as FOC? Amount will become 0 and not count in totals.')) return;
+    p.foc = true;
+    p.received = false;
+    p.forcePending = false;
+    p.consultation = 0;
+    p.medicine = 0;
+    p.renewal = 0;
+    p.partialPending = 0;
+    p.completedAt = p.completedAt || new Date().toISOString();
+    p.withDoctor = false;
+    markUpdated(p);
+    // Remove linked payments for this visit so totals stay clean
+    try {
+        const keep = [];
+        (DB.payments || []).forEach(x => {
+            if (x && x.patientId === id) {
+                x._deleted = true;
+                if (DB.meta && Array.isArray(DB.meta.deleted)) DB.meta.deleted.push(x.id);
+            } else keep.push(x);
+        });
+        DB.payments = (DB.payments || []).filter(x => x && x.patientId !== id && !x._deleted);
+    } catch (e) {}
+    saveLocal();
+    try { refreshAllPatientViews(); } catch (e) {}
+    toast('Visit marked FOC');
+    try { syncNow(true); } catch (e) {}
+    try { viewPatientHistory(id); } catch (e) {
+        // reopen by permanent case primary if visit id was FOC
+        try {
+            const prim = primaryRegistration(permanentCaseNo(p));
+            if (prim) viewPatientHistory(prim.id);
+        } catch (e2) {}
+    }
+}
+
+/** Office-only: receive visit from history then refresh history. */
+function receiveVisitFromHistory(id) {
+    if (role === 'reception') {
+        toast('Reception cannot receive payment — Office only', true);
+        return;
+    }
+    receiveP(id);
+    setTimeout(() => {
+        try {
+            const p = active(DB.patients).find(x => x.id === id);
+            if (p) {
+                const prim = primaryRegistration(permanentCaseNo(p)) || p;
+                viewPatientHistory(prim.id);
+            }
+        } catch (e) {}
+    }, 400);
+}
 
 function pendingP(id) {
     if (!enforceReceptionEdit('paymentEntry')) return;
