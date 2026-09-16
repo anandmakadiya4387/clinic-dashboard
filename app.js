@@ -113,6 +113,28 @@ function familyPayments(pOrCaseNo) {
 }
 
 /** Total amount paid across the whole case family */
+
+/** Collected money for whole case family — same rules as Full History Grand Total.
+ *  Received visit → feeTotal; Partial → paidFor; Pending/FOC → 0. */
+function familyCollectedTotal(pOrCaseNo) {
+    const family = caseFamily(pOrCaseNo);
+    let total = 0;
+    family.forEach(v => {
+        if (!v) return;
+        const st = paymentStatusInfo(v);
+        if (st.kind === 'received') total += feeTotal(v);
+        else if (st.kind === 'partial') total += Math.min(paidFor(v.id), feeTotal(v));
+        // pending / foc → 0
+    });
+    return total;
+}
+
+/** Total still due across family visits */
+function familyPendingTotal(pOrCaseNo) {
+    const family = caseFamily(pOrCaseNo);
+    return family.reduce((a, v) => a + pendingFor(v), 0);
+}
+
 function familyPaidTotal(pOrCaseNo) {
     return familyPayments(pOrCaseNo).reduce((s, x) => s + Number(x.amount || 0), 0);
 }
@@ -1102,8 +1124,9 @@ function openPatientProfile(id) {
     const famPays = (typeof familyPayments === 'function' ? familyPayments(p) : active(DB.payments).filter(x => family.some(v => v.id === x.patientId)));
     const visits = family.length;
     const lastVisit = family.map(x => x.date).filter(Boolean).sort().reverse()[0] || p.date;
-    const pend = family.reduce((a, x) => a + pendingFor(x), 0);
-    const paid = famPays.reduce((a, x) => a + Number(x.amount || 0), 0);
+    // PAID / PENDING must match Full History Grand Total logic (not raw payment sum)
+    const pend = familyPendingTotal(p);
+    const paid = familyCollectedTotal(p);
     const due = typeof dueDate === 'function' ? dueDate(p) : null;
     const renew = typeof renewalDue === 'function' ? renewalDue(p) : false;
     const apptRows = family.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map((v, i) =>

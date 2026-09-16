@@ -6434,3 +6434,166 @@ table.histTable {
   padding: 1px 6px !important;
   white-space: nowrap !important;
 }
+
+
+/* ===== Monthly payment comparison — compact aligned ===== */
+.monthCompareTable,
+#monthCompareTable,
+table.monthlyCompare,
+.paymentCompareTable,
+#clinicPayment table,
+#payments table.table {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+.monthCompareTable th, .monthCompareTable td,
+.paymentCompareTable th, .paymentCompareTable td,
+#clinicPayment table th, #clinicPayment table td,
+#payments .table th, #payments .table td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 6px 5px !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  word-break: break-word !important;
+}
+.monthCompareTable th, .paymentCompareTable th,
+#clinicPayment table th, #payments .table th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+}
+.monthCompareTable td:first-child, .paymentCompareTable td:first-child,
+#clinicPayment table td:first-child {
+  text-align: left !important;
+  width: 18% !important;
+}
+
+/* Income & expenses / spend entries */
+#income table, #expenses table, #spend table,
+.incomeTable, .expenseTable, .spendTable {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+#income table th, #income table td,
+#expenses table th, #expenses table td,
+#spend table th, #spend table td,
+.incomeTable th, .incomeTable td,
+.expenseTable th, .expenseTable td,
+.spendTable th, .spendTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 6px 5px !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Medicine list — slightly wider DRAWER, still fit full row */
+.medTable, #medTable, #medicines table.table,
+table.medicineTable {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+.medTable th, .medTable td,
+#medicines table.table th, #medicines table.table td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 5px 4px !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+/* NO | NAME | DRAWER | QTY | AVAILABLE | ACTION — drawer gets more room */
+.medTable th:nth-child(1), .medTable td:nth-child(1),
+#medicines table.table th:nth-child(1), #medicines table.table td:nth-child(1) {
+  width: 7% !important; text-align: center !important;
+}
+.medTable th:nth-child(2), .medTable td:nth-child(2),
+#medicines table.table th:nth-child(2), #medicines table.table td:nth-child(2) {
+  width: 8% !important; text-align: center !important;
+}
+.medTable th:nth-child(3), .medTable td:nth-child(3),
+#medicines table.table th:nth-child(3), #medicines table.table td:nth-child(3) {
+  width: 34% !important; text-align: left !important;
+}
+.medTable th:nth-child(4), .medTable td:nth-child(4),
+#medicines table.table th:nth-child(4), #medicines table.table td:nth-child(4) {
+  width: 16% !important; text-align: center !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+.medTable th:nth-child(5), .medTable td:nth-child(5),
+#medicines table.table th:nth-child(5), #medicines table.table td:nth-child(5) {
+  width: 8% !important; text-align: center !important;
+}
+.medTable th:nth-child(6), .medTable td:nth-child(6),
+#medicines table.table th:nth-child(6), #medicines table.table td:nth-child(6) {
+  width: 10% !important; text-align: center !important;
+}
+.medTable th:nth-child(7), .medTable td:nth-child(7),
+#medicines table.table th:nth-child(7), #medicines table.table td:nth-child(7) {
+  width: 17% !important; text-align: center !important;
+  overflow: visible !important; white-space: nowrap !important;
+}
+
+
+/* Medicine 6-col: No | Name | Drawer | Qty | Available | Action */
+.medTable th:nth-child(1), .medTable td:nth-child(1) { width: 8% !important; text-align: center !important; }
+.medTable th:nth-child(2), .medTable td:nth-child(2) { width: 36% !important; text-align: left !important; }
+.medTable th:nth-child(3), .medTable td:nth-child(3) {
+  width: 18% !important;
+  text-align: center !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+.medTable th:nth-child(4), .medTable td:nth-child(4) { width: 9% !important; text-align: center !important; }
+.medTable th:nth-child(5), .medTable td:nth-child(5) { width: 11% !important; text-align: center !important; }
+.medTable th:nth-child(6), .medTable td:nth-child(6) {
+  width: 18% !important;
+  text-align: center !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
+
+/* Monthly compare body */
+#payMonthCompareBody td, #payMonthCompareTable td {
+  text-align: center !important;
+  padding: 6px 5px !important;
+  font-size: 12px !important;
+  border: 1px solid #d4c4b0 !important;
+}
+#payMonthCompareTable, table.monthCompareTable {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+#payMonthCompareTable th, .monthCompareTable th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  padding: 6px 5px !important;
+  border: 1px solid #d4c4b0 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+#payMonthCompareTable th:nth-child(1), #payMonthCompareTable td:nth-child(1) {
+  width: 18% !important; text-align: left !important;
+}
+#payMonthCompareTable th:nth-child(2), #payMonthCompareTable td:nth-child(2),
+#payMonthCompareTable th:nth-child(3), #payMonthCompareTable td:nth-child(3),
+#payMonthCompareTable th:nth-child(4), #payMonthCompareTable td:nth-child(4),
+#payMonthCompareTable th:nth-child(5), #payMonthCompareTable td:nth-child(5) {
+  width: 20.5% !important;
+}
