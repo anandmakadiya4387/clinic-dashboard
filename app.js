@@ -391,6 +391,13 @@ function getCarryPartialPending(caseNo) {
 }
 
 function paymentStatusInfo(p) {
+    if (!p) return { kind: 'pending', label: 'Pending', pending: 0, paid: 0, fees: 0, locked: false };
+    if (p.forcePending === true && p.received !== true) {
+        const fees = feeTotal(p);
+        const paid = paidFor(p.id);
+        const pend = Math.max(0, fees - paid) + Math.max(0, Number(p.partialPending || 0));
+        return { kind: 'pending', label: 'Pending', pending: pend, paid, fees, locked: false };
+    }
     if (!p) return { kind: 'foc', label: 'FOC', pending: 0, paid: 0, fees: 0, locked: false };
     const fees = feeTotal(p);
     const paid = paidFor(p.id);
@@ -453,23 +460,35 @@ async function api(path, method = 'GET', body) {
 function mergeLocalRemote(remote) {
     const merge = (a, b) => {
         const map = new Map();
-        [...active(a), ...active(b)].forEach(x => {
+        // Include soft-deleted too so _updated comparison works, then filter later
+        [...(a || []), ...(b || [])].forEach(x => {
+            if (!x || !x.id) return;
             const old = map.get(x.id);
-            if (!old || String(x._updated || '') > String(old._updated || '')) map.set(x.id, x)
+            if (!old || String(x._updated || '') > String(old._updated || '')) map.set(x.id, x);
         });
-        return [...map.values()]
+        return [...map.values()];
     };
     DB.patients = merge(DB.patients, remote.patients || []);
     DB.payments = merge(DB.payments, remote.payments || []).filter(x => x && x.patientId && !x.demoSeed && Number(x.amount || 0) !== 1800);
     DB.medicines = merge(DB.medicines, remote.medicines || []);
     DB.expenses = merge(DB.expenses || [], remote.expenses || []);
+    // Tombstones from both sides
     const dels = new Set([...(DB.meta.deleted || []), ...((remote.meta || {}).deleted || [])]);
+    // CRITICAL: live local/restored records MUST NOT be wiped by remote deleted list
+    // (fixes JSON re-import of a previously deleted patient like 0A000132)
+    const liveIds = new Set();
     ['patients', 'payments', 'medicines', 'expenses'].forEach(k => {
-        DB[k] = DB[k].filter(x => !dels.has(x.id))
+        (DB[k] || []).forEach(x => {
+            if (x && x.id && !x._deleted) liveIds.add(x.id);
+        });
+    });
+    liveIds.forEach(id => dels.delete(id));
+    DB.meta.deleted = [...dels];
+    ['patients', 'payments', 'medicines', 'expenses'].forEach(k => {
+        DB[k] = (DB[k] || []).filter(x => x && !x._deleted && !dels.has(x.id));
     });
     if (String(remote.settings?._updated || '') > String(DB.settings?._updated || '')) DB.settings = remote.settings;
     if (String(remote.clinic?._updated || '') > String(DB.clinic?._updated || '')) DB.clinic = remote.clinic;
-    DB.meta.deleted = [...dels];
     DB.settings = Object.assign(structuredClone(DEFAULT.settings), DB.settings || {});
     DB.settings.receptionPermissions = Object.assign(structuredClone(DEFAULT.settings.receptionPermissions), DB.settings.receptionPermissions || {});
 }
@@ -3491,26 +3510,30 @@ function viewPatientHistory(id) {
     const family = caseFamily(p);
     const famPays = familyPayments(p);
     const byDate = {};
-    famPays.forEach(x => {
-        const d = String(x.date || '');
-        if (!byDate[d]) byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: '' };
-        const cat = x.feeCategory || 'other';
-        if (cat === 'consultation' || cat === 'medicine' || cat === 'renewal') byDate[d][cat] += Number(x.amount || 0);
-        else byDate[d].other += Number(x.amount || 0);
-    });
+    // Source of truth for billed amounts = visit record fees (not summed payments which can be wrong after import)
     family.forEach(v => {
         const d = String(v.date || '');
         if (!byDate[d]) byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: v.caseType || '' };
+        byDate[d].consultation = Number(v.consultation || 0);
+        byDate[d].medicine = Number(v.medicine || 0);
+        byDate[d].renewal = Number(v.renewal || 0);
         if (v.caseType) byDate[d].type = v.caseType;
-        const vPaid = paidFor(v.id);
-        const vTotal = feeTotal(v);
         byDate[d]._visitId = v.id;
-        byDate[d]._visitFees = vTotal;
-        if (vTotal > 0 && vPaid < vTotal) {
-            byDate[d]._pendingVisit = true;
-        }
-        if (vTotal <= 0 && vPaid <= 0) {
-            byDate[d]._focVisit = true;
+        byDate[d]._visitFees = feeTotal(v);
+        byDate[d]._partial = Math.max(0, Number(v.partialPending || 0));
+        const st = paymentStatusInfo(v);
+        byDate[d]._pendingVisit = st.kind === 'pending' || st.kind === 'partial' || v.forcePending === true || (v.received === false && feeTotal(v) > 0);
+        byDate[d]._focVisit = st.kind === 'foc' || (feeTotal(v) <= 0 && !v.forcePending);
+        byDate[d]._receivedVisit = st.kind === 'received';
+    });
+    // If a date has payments but no visit row fees, fall back to payment sums
+    famPays.forEach(x => {
+        const d = String(x.date || '');
+        if (!byDate[d]) {
+            byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: '' };
+            const cat = x.feeCategory || 'other';
+            if (cat === 'consultation' || cat === 'medicine' || cat === 'renewal') byDate[d][cat] += Number(x.amount || 0);
+            else byDate[d].other += Number(x.amount || 0);
         }
     });
     // Newest visit first
@@ -3526,8 +3549,8 @@ function viewPatientHistory(id) {
         const isRenew = g.renewal > 0;
         const visitRow = family.find(v => String(v.date || '') === d) || null;
         const stV = visitRow ? paymentStatusInfo(visitRow) : null;
-        const isPendingVisit = stV ? (stV.kind === 'pending' || stV.kind === 'partial') : (!!g._pendingVisit && lineTotal === 0);
-        const isFocVisit = stV ? stV.kind === 'foc' : (lineTotal === 0 && !g._pendingVisit);
+        const isPendingVisit = stV ? (stV.kind === 'pending' || stV.kind === 'partial') : !!g._pendingVisit;
+        const isFocVisit = stV ? stV.kind === 'foc' : (!!g._focVisit && !g._pendingVisit);
         const typeTag = g.type ? `<span class="tag ${g.type}" style="margin-left:6px;font-size:10px">${String(g.type).toUpperCase()}</span>` : '';
         const vid = (visitRow && visitRow.id) || g._visitId || '';
         const recvBtn = isPendingVisit && vid
@@ -3563,7 +3586,7 @@ function viewPatientHistory(id) {
       </div>
       <h3 style="margin:12px 0 8px;font-size:15px">Visit / payment history</h3>
       <p class="mini">Saari visits (new + follow-up) ek saath. Renewal rows light green. Pending pe Receive button.</p>
-      <div class="tablewrap"><table class="table payHistoryTable">
+      <div class="tablewrap modalTableWrap"><table class="table payHistoryTable modalDataTable">
         <thead><tr><th>Sr No.</th><th>Date</th><th>Consultation</th><th>Medicine</th><th>Renewal</th><th>Action</th><th>Total</th></tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>
@@ -4892,7 +4915,7 @@ function showPatientDetail(id) {
       <div>
         <h3 style="margin:0 0 8px;font-size:15px">Visit / payment history (all visits of this case)</h3>
         <p class="mini">Saari visits (new + follow-up) ek saath. Latest pehle. Renewal rows light green. Pending pe Receive button.</p>
-        <div class="tablewrap"><table class="table payHistoryTable">
+        <div class="tablewrap modalTableWrap"><table class="table payHistoryTable modalDataTable">
           <thead><tr>
             <th>Sr No.</th><th>Date</th><th>Consultation</th><th>Medicine</th><th>Renewal</th><th>Action</th><th>Total Payment</th>
           </tr></thead>
