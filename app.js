@@ -1613,18 +1613,22 @@ function fixLegacyBackdatedUnpaid() {
     let n = 0;
     active(DB.patients).forEach(p => {
         if (!p || isTodayCase(p)) return;
-        if (p.forcePending) return;
-        const fees = feeTotal(p);
-        if (fees <= 0) {
-            if (!p.received) {
-                p.received = true;
-                p.completedAt = p.completedAt || (p.date + 'T12:00:00');
-                markUpdated(p);
-                n++;
-            }
+        // Respect explicit pending from JSON / user — NEVER auto-receive
+        if (p.forcePending === true) return;
+        if (p.received === false && p.forcePending !== false && Number(p.partialPending || 0) > 0) return;
+        // If JSON says not received and has no auto-backdated flag, keep pending
+        if (p.received === false && !p.completedAt && feeTotal(p) > 0) {
+            // Intentionally unpaid / pending in backup — leave as pending
+            p.forcePending = true;
             return;
         }
-        if (pendingFor(p) > 0) {
+        const fees = feeTotal(p);
+        if (fees <= 0) {
+            // zero-fee FOC-style only if already marked received/foc in data
+            return;
+        }
+        // Only auto-reconcile if data already claims received but payments missing
+        if (p.received === true && pendingFor(p) > 0) {
             reconcileBackdatedPayments(p);
             markUpdated(p);
             n++;
@@ -1638,6 +1642,8 @@ function fixLegacyBackdatedUnpaid() {
 
 function reconcileBackdatedPayments(p) {
     if (isTodayCase(p)) return;
+    if (p.forcePending === true) return; // never auto-receive forced pending
+    if (p.received === false && p.forcePending) return;
     createBackdatedPayments(p);
     // FOC (zero fees): mark completed but not payment-locked
     if (feeTotal(p) <= 0) {
@@ -1932,7 +1938,7 @@ function renderQueue() {
    <td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
    <td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
    <td class="payBreakCell">${feeBreak}</td><td class="amount totalCollectCell"><b>${money(consF + medF + renF)}</b></td>
-   <td class="statusCell"><span class="queueStatusTag ${statusSection==='done'||status==='received'?'received':status}">${statusSection==='done'||status==='received'?'Completed':(status==='doctor'?'With Doctor':'Waiting')}</span></td>
+   <td class="statusCell"><span class="queueStatusTag ${statusSection==='done'||status==='received'?'received':(status==='doctor'?'doctor':(p.forcePending?'pending':'waiting'))}">${statusSection==='done'||status==='received'?'Completed':(status==='doctor'?'With Doctor':(p.forcePending?'Pending':'Waiting'))}</span></td>
    <td><div class="actions embossedActions compactActions queueActions">
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>Doctor</button>`:''}
@@ -3637,6 +3643,7 @@ function categoryPaid(patientId, feeCategory) {
 }
 
 function applyReceiveAmounts(p, amounts, payDate) {
+    try { p.forcePending = false; } catch (e) {}
     // amounts: { consultation, medicine, renewal } — amounts being collected NOW (can be partial)
     const date = payDate || (isTodayCase(p) ? isoToday() : (p.date || isoToday()));
     let collected = 0;
@@ -3790,9 +3797,13 @@ function pendingP(id) {
         toast('Fully received — cannot mark pending. Use Edit if needed.', true);
         return;
     }
+    // Mark payment pending — NEVER send back to Waiting
+    // Keep withDoctor so patient stays in With Doctor section until Receive
     p.received = false;
-    p.withDoctor = false;
+    p.forcePending = true;
+    p.foc = false;
     p.completedAt = null;
+    // do NOT clear withDoctor
     markUpdated(p);
     saveLocal();
     renderDashboard();
@@ -3800,7 +3811,7 @@ function pendingP(id) {
     renderReceptionQueue();
     renderReportPage();
     if ($('#histBody')) renderAppointmentHistory();
-    toast('Case marked pending');
+    toast('Case marked pending (stays With Doctor until received)');
     syncNow(true);
 }
 
@@ -4272,8 +4283,19 @@ function importBackup(e) {
     r.onload = () => {
         try {
             DB = Object.assign(structuredClone(DEFAULT), JSON.parse(r.result));
+            // Preserve pending patients from JSON — do not auto-receive
+            try {
+                (DB.patients || []).forEach(p => {
+                    if (!p) return;
+                    if (p.received === false || p.forcePending === true) {
+                        p.forcePending = true;
+                        p.received = false;
+                        p.completedAt = null;
+                    }
+                });
+            } catch (e) {}
             saveLocal();
-            toast('Full backup imported');
+            toast('Full backup imported (pending kept as pending)');
             syncNow(true)
         } catch {
             toast('Invalid backup file', true)
