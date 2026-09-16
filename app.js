@@ -3598,7 +3598,8 @@ function viewPatientHistory(id) {
         const typeTag = g.type ? `<span class="tag ${g.type}" style="margin-left:6px;font-size:10px">${String(g.type).toUpperCase()}</span>` : '';
         const vid = (visitRow && visitRow.id) || g._visitId || '';
         const isOffice = (role !== 'reception');
-        // Office: Pend | Rec | FOC on unpaid visits. Reception: status text only (no power).
+        // Office pending: small "pending" text + Rec + FOC only (no Pend button — already pending).
+        // Reception: status text only — no Rec/FOC power.
         let actionCell;
         if (isFocVisit) {
             actionCell = `<span class="histAction histFoc">FOC</span>`;
@@ -3606,16 +3607,15 @@ function viewPatientHistory(id) {
                 actionCell += ` <button type="button" class="btn embossed miniAction histMiniBtn" onclick="editP('${vid}');closeModal()">Add Pay</button>`;
             }
         } else if (isPendingVisit || (stV && stV.kind === 'partial')) {
+            const dueAmt = stV ? money(stV.pending || g._visitFees || lineTotal) : money(g._visitFees || lineTotal);
             if (isOffice && vid) {
-                const dueAmt = stV ? money(stV.pending || g._visitFees || lineTotal) : money(g._visitFees || lineTotal);
-                actionCell = `<span class="histActionBtns">` +
-                    `<button type="button" class="btn histBtn histPendBtn" title="Keep pending" onclick="pendingP('${vid}');setTimeout(()=>viewPatientHistory('${vid}'),300)">Pend</button>` +
+                actionCell = `<span class="histPendingLabel">pending</span>` +
+                    `<span class="histActionBtns">` +
                     `<button type="button" class="btn histBtn histRecBtn" title="Mark received" onclick="receiveVisitFromHistory('${vid}')">Rec</button>` +
                     `<button type="button" class="btn histBtn histFocBtn" title="Mark FOC (amount 0)" onclick="focVisitFromHistory('${vid}')">FOC</button>` +
                     `</span><span class="mini histDueHint">${dueAmt} due</span>`;
             } else {
-                // Reception: read-only status
-                if (stV && stV.kind === 'partial') actionCell = `<span class="histAction histPartial">Partial</span> <span class="mini">${money(stV.pending)} due</span>`;
+                if (stV && stV.kind === 'partial') actionCell = `<span class="histAction histPartial">Partial</span> <span class="mini">${dueAmt} due</span>`;
                 else actionCell = `<span class="histAction histPending">Pending</span>`;
             }
         } else {
@@ -4862,12 +4862,16 @@ function renderAll() {
     if ($('#receptionPayToggle')) $('#receptionPayToggle').checked = !!DB.settings.receptionPaymentEnabled
 }
 async function forceRefresh() {
-    renderAll();
-    if (server) {
-        await syncNow(true)
-    } else {
-        toast('Refreshed from local data')
-    }
+    // Hard refresh like Ctrl+Shift+R: save + sync then full page reload (bypass cache)
+    try { saveLocal(); } catch (e) {}
+    try {
+        if (server) await syncNow(true);
+    } catch (e) {}
+    toast('Hard refreshing…');
+    const u = new URL(window.location.href);
+    u.searchParams.set('_hard', String(Date.now()));
+    // Full navigation reload — same effect as Ctrl+Shift+R for this app shell
+    window.location.replace(u.href);
 }
 
 

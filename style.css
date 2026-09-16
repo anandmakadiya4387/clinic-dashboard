@@ -6321,3 +6321,25 @@ table.modalDataTable {
   font-size: 10px !important;
   margin-left: 4px !important;
 }
+
+/* pending label (not a button) next to Rec / FOC */
+.histPendingLabel {
+  display: inline-block !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  color: #b45309 !important;
+  text-transform: lowercase !important;
+  margin-right: 6px !important;
+  vertical-align: middle !important;
+  letter-spacing: 0.02em !important;
+}
+.histActionBtns {
+  display: inline-flex !important;
+  gap: 4px !important;
+  vertical-align: middle !important;
+  flex-wrap: nowrap !important;
+}
+.payHistoryTable td:nth-child(6) {
+  white-space: normal !important;
+  line-height: 1.35 !important;
+}
