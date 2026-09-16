@@ -6597,3 +6597,290 @@ table.medicineTable {
 #payMonthCompareTable th:nth-child(5), #payMonthCompareTable td:nth-child(5) {
   width: 20.5% !important;
 }
+
+
+/* ========== Medicine list — balanced columns (no cut, no excess space) ========== */
+#medicines .tablewrap,
+.medTableWrap {
+  overflow-x: auto !important;
+  width: 100% !important;
+}
+table.medTable,
+#medicines table.table.medTable,
+#medicines table.table {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+table.medTable th,
+table.medTable td,
+#medicines table.table th,
+#medicines table.table td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 5px 6px !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+  color: #1c1410 !important;
+}
+table.medTable th,
+#medicines table.table th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+/* NO ~7% | MEDICINE NAME ~42% | DRAWER ~16% | QTY ~8% | AVAILABLE ~10% | ACTION ~17% */
+table.medTable th:nth-child(1), table.medTable td:nth-child(1),
+#medicines table.table th:nth-child(1), #medicines table.table td:nth-child(1) {
+  width: 7% !important;
+  max-width: 56px !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+table.medTable th:nth-child(2), table.medTable td:nth-child(2),
+#medicines table.table th:nth-child(2), #medicines table.table td:nth-child(2) {
+  width: 42% !important;
+  text-align: left !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+table.medTable th:nth-child(3), table.medTable td:nth-child(3),
+#medicines table.table th:nth-child(3), #medicines table.table td:nth-child(3) {
+  width: 16% !important;
+  max-width: 140px !important;
+  text-align: center !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-size: 11.5px !important;
+}
+table.medTable th:nth-child(4), table.medTable td:nth-child(4),
+#medicines table.table th:nth-child(4), #medicines table.table td:nth-child(4) {
+  width: 8% !important;
+  max-width: 64px !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+table.medTable th:nth-child(5), table.medTable td:nth-child(5),
+#medicines table.table th:nth-child(5), #medicines table.table td:nth-child(5) {
+  width: 10% !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+table.medTable th:nth-child(6), table.medTable td:nth-child(6),
+#medicines table.table th:nth-child(6), #medicines table.table td:nth-child(6) {
+  width: 17% !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+}
+table.medTable .btn,
+#medicines table.table .btn {
+  padding: 2px 7px !important;
+  font-size: 11px !important;
+}
+
+/* ========== Year comparison — header-aligned, compact ========== */
+#payYearCompareTable,
+table.yearCompareTable {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+#payYearCompareTable th, #payYearCompareTable td,
+.yearCompareTable th, .yearCompareTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 7px 6px !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+#payYearCompareTable th, .yearCompareTable th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+#payYearCompareTable th:nth-child(1), #payYearCompareTable td:nth-child(1),
+.yearCompareTable th:nth-child(1), .yearCompareTable td:nth-child(1) {
+  width: 16% !important;
+  text-align: center !important;
+  font-weight: 600 !important;
+}
+#payYearCompareTable th:nth-child(2), #payYearCompareTable td:nth-child(2),
+#payYearCompareTable th:nth-child(3), #payYearCompareTable td:nth-child(3),
+#payYearCompareTable th:nth-child(4), #payYearCompareTable td:nth-child(4),
+#payYearCompareTable th:nth-child(5), #payYearCompareTable td:nth-child(5),
+.yearCompareTable th:nth-child(n+2), .yearCompareTable td:nth-child(n+2) {
+  width: 21% !important;
+  text-align: center !important;
+}
+
+/* ========== Monthly comparison — same treatment ========== */
+#payMonthCompareTable,
+table.monthCompareTable {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+#payMonthCompareTable th, #payMonthCompareTable td,
+.monthCompareTable th, .monthCompareTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 7px 6px !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+#payMonthCompareTable th, .monthCompareTable th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  overflow: visible !important;
+}
+#payMonthCompareTable th:nth-child(1), #payMonthCompareTable td:nth-child(1),
+.monthCompareTable th:nth-child(1), .monthCompareTable td:nth-child(1) {
+  width: 16% !important;
+  text-align: left !important;
+  padding-left: 10px !important;
+}
+#payMonthCompareTable th:nth-child(n+2), #payMonthCompareTable td:nth-child(n+2),
+.monthCompareTable th:nth-child(n+2), .monthCompareTable td:nth-child(n+2) {
+  width: 21% !important;
+  text-align: center !important;
+}
+
+/* ========== Income & Expenses / Spend Entries ========== */
+#incomeExpensePanel table,
+#spendEntriesPanel table,
+.incomeExpenseTable,
+.spendEntriesTable,
+#expenseBody table,
+table.financeTable {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+#incomeExpensePanel table th, #incomeExpensePanel table td,
+#spendEntriesPanel table th, #spendEntriesPanel table td,
+.incomeExpenseTable th, .incomeExpenseTable td,
+.spendEntriesTable th, .spendEntriesTable td,
+table.financeTable th, table.financeTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 6px 5px !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  word-break: break-word !important;
+}
+#incomeExpensePanel table th,
+#spendEntriesPanel table th,
+.incomeExpenseTable th,
+.spendEntriesTable th,
+table.financeTable th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+#payYearCompareTable.payMonthTable,
+table#payYearCompareTable {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+#payYearCompareTable th,
+#payYearCompareTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 7px 6px !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  white-space: nowrap !important;
+}
+#payYearCompareTable th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+}
+#payYearCompareTable th:nth-child(1),
+#payYearCompareTable td:nth-child(1) { width: 16% !important; }
+#payYearCompareTable th:nth-child(2),
+#payYearCompareTable td:nth-child(2),
+#payYearCompareTable th:nth-child(3),
+#payYearCompareTable td:nth-child(3),
+#payYearCompareTable th:nth-child(4),
+#payYearCompareTable td:nth-child(4),
+#payYearCompareTable th:nth-child(5),
+#payYearCompareTable td:nth-child(5) { width: 21% !important; }
+
+/* All finance .payMonthTable variants (monthly, year, income vs exp) */
+table.payMonthTable {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+table.payMonthTable th,
+table.payMonthTable td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 7px 6px !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+table.payMonthTable th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+table.payMonthTable th:first-child,
+table.payMonthTable td:first-child {
+  text-align: left !important;
+  padding-left: 10px !important;
+  width: 18% !important;
+}
+/* Spend entries ledger */
+#expenseBody,
+table#expenseTable,
+#spendEntriesPanel table.table {
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+#spendEntriesPanel table th,
+#spendEntriesPanel table td,
+table.spendLedger th,
+table.spendLedger td {
+  border: 1px solid #d4c4b0 !important;
+  padding: 6px 5px !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+#spendEntriesPanel table th {
+  background: #f0e6da !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+}
