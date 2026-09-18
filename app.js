@@ -171,9 +171,9 @@ const DEFAULT = {
         receptionPaymentEnabled: false,
         receptionPermissions: {
             patient: 'edit',
-            payment: 'view',
+            payment: 'hidden',
             paymentEntry: 'hidden',
-            medicine: 'view',
+            medicine: 'hidden',
             medicineEntry: 'hidden',
             reports: 'hidden',
             dashboard: 'edit',
@@ -182,10 +182,10 @@ const DEFAULT = {
             dashTodayQueue: 'view',
             dashQueueStatus: 'view',
             dashMoreStats: 'view',
-            paymentClinic: 'view',
-            paymentYearly: 'view',
-            paymentIncome: 'view',
-            paymentSpend: 'view'
+            paymentClinic: 'hidden',
+            paymentYearly: 'hidden',
+            paymentIncome: 'hidden',
+            paymentSpend: 'hidden'
         },
         _updated: ''
     },
@@ -267,10 +267,10 @@ function normalizeData(d) {
     if (!('dashTodayQueue' in rp)) rp.dashTodayQueue = rp.dashboard || 'view';
     if (!('dashQueueStatus' in rp)) rp.dashQueueStatus = rp.dashboard || 'view';
     if (!('dashMoreStats' in rp)) rp.dashMoreStats = 'view';
-    if (!('paymentClinic' in rp)) rp.paymentClinic = rp.payment || 'view';
-    if (!('paymentYearly' in rp)) rp.paymentYearly = rp.payment || 'view';
-    if (!('paymentIncome' in rp)) rp.paymentIncome = rp.payment || 'view';
-    if (!('paymentSpend' in rp)) rp.paymentSpend = rp.payment || 'view';
+    if (!('paymentClinic' in rp)) rp.paymentClinic = rp.payment || 'hidden';
+    if (!('paymentYearly' in rp)) rp.paymentYearly = rp.payment || 'hidden';
+    if (!('paymentIncome' in rp)) rp.paymentIncome = rp.payment || 'hidden';
+    if (!('paymentSpend' in rp)) rp.paymentSpend = rp.payment || 'hidden';
     if (!('clinic' in rp)) rp.clinic = 'hidden';
     out.clinic = Object.assign(structuredClone(DEFAULT.clinic), out.clinic || {});
     out.meta = Object.assign(structuredClone(DEFAULT.meta), out.meta || {});
@@ -548,10 +548,28 @@ function mergeLocalRemote(remote) {
     ['patients', 'payments', 'medicines', 'expenses'].forEach(k => {
         DB[k] = (DB[k] || []).filter(x => x && !x._deleted && !dels.has(x.id));
     });
-    if (String(remote.settings?._updated || '') > String(DB.settings?._updated || '')) DB.settings = remote.settings;
+    if (remote.settings && String(remote.settings._updated || '') > String(DB.settings?._updated || '')) {
+        DB.settings = remote.settings;
+    }
     if (String(remote.clinic?._updated || '') > String(DB.clinic?._updated || '')) DB.clinic = remote.clinic;
     DB.settings = Object.assign(structuredClone(DEFAULT.settings), DB.settings || {});
-    DB.settings.receptionPermissions = Object.assign(structuredClone(DEFAULT.settings.receptionPermissions), DB.settings.receptionPermissions || {});
+    const localPerm = (DB.settings && DB.settings.receptionPermissions) || {};
+    const remotePerm = (remote.settings && remote.settings.receptionPermissions) || null;
+    const remoteSettingsNewer = !!(remote.settings && String(remote.settings._updated || '') >= String((DB.settings && DB.settings._updated) || ''));
+    // Reception must follow Office permissions from server — do not snap back to local/default view
+    if (remotePerm && (role === 'reception' || remoteSettingsNewer)) {
+        DB.settings.receptionPermissions = Object.assign(
+            structuredClone(DEFAULT.settings.receptionPermissions),
+            remotePerm
+        );
+        if (remote.settings && remote.settings._updated) DB.settings._updated = remote.settings._updated;
+    } else {
+        DB.settings.receptionPermissions = Object.assign(
+            structuredClone(DEFAULT.settings.receptionPermissions),
+            localPerm
+        );
+    }
+    try { if (role === 'reception' && typeof renderPermissions === 'function') renderPermissions(); } catch (e) {}
 }
 
 let clinicWs = null;
@@ -606,6 +624,7 @@ async function syncNow(silent = false) {
         const lag = Math.round(performance.now() - t0);
         setConn(true, 'Connected and synchronized.', lag);
         if (!clinicWs || clinicWs.readyState > 1) connectClinicWebSocket();
+        try { if (role === 'reception') renderPermissions(); } catch (e) {}
         if (!silent) toast('Synchronized successfully')
     } catch (e) {
         setConn(false, 'Offline mode. Local entries are safe and will sync when connection returns.', null);
@@ -4214,7 +4233,7 @@ function exportBackup() {
     const data = buildBackupPayload(includeRec);
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     downloadBackupFile(data, `anand-clinic-backup-${role}-${stamp}.json`);
-    toast('Backup downloaded (not added to Last 5 list)');
+    toast('Export full backup done');
 }
 
 function manualBackupNow() {
@@ -4348,7 +4367,7 @@ function restoreLocalBackup(id) {
         mergeLocalRemote(entry.data);
         saveLocal();
         refreshAllPatientViews();
-        toast('Local full backup restored');
+        toast('Import full backup done');
         try { syncNow(true); } catch (e) {}
     } catch (e) {
         toast('Restore failed', true);
@@ -4382,7 +4401,7 @@ async function refreshBackupList(){
 }
 async function restoreServerBackup(name){
     if(!confirm('Restore this backup? Newer records are kept and records are merged safely.')) return;
-    try{ const r=await fetch((server||location.origin).replace(/\/$/,'')+'/api/backup/'+name); if(!r.ok)throw 0; const data=await r.json(); const merged=await api('/api/restore','POST',data); mergeLocalRemote(merged); saveLocal(); toast('Backup restored successfully'); }
+    try{ const r=await fetch((server||location.origin).replace(/\/$/,'')+'/api/backup/'+name); if(!r.ok)throw 0; const data=await r.json(); const merged=await api('/api/restore','POST',data); mergeLocalRemote(merged); saveLocal(); toast('Import full backup done'); }
     catch(e){ toast('Restore failed',true); }
 }
 window.restoreServerBackup=restoreServerBackup;
@@ -4494,7 +4513,7 @@ function importBackup(e) {
             saveLocal();
             try { refreshAllPatientViews(); } catch (e) {}
             try { renderMedicines(); } catch (e) {}
-            toast('Full backup restored — deleted cases/medicines from JSON brought back');
+            toast('Import full backup done');
             try { syncNow(true); } catch (e) {}
         } catch (err) {
             console.warn(err);
@@ -4706,15 +4725,49 @@ function renderPermissions() {
         $('#receptionPatientArea')?.classList.toggle('hidden', !patientView);
         document.querySelector('[data-page="payments"]')?.classList.toggle('hidden', !paymentView);
         document.querySelector('[data-page="medicines"]')?.classList.toggle('hidden', !medicineView);
+        document.querySelector('[data-page="clinic"]')?.classList.toggle('hidden', !receptionCanView('clinic'));
+        document.querySelector('[data-page="reports"]')?.classList.toggle('hidden', !receptionCanView('reports'));
         $('#receptionMedicineEntryCard')?.classList.toggle('hidden', !receptionCanEdit('medicineEntry'));
         document.querySelector('[data-page="dashboard"]')?.classList.toggle('hidden', !dashOk && !patientView);
+        // Payment sub-views: only what Office allowed
+        const allowPayClinic = paymentView && receptionCanView('paymentClinic');
+        const allowPayYearly = paymentView && receptionCanView('paymentYearly');
+        const allowPayIncome = paymentView && receptionCanView('paymentIncome');
+        const allowPaySpend = paymentView && receptionCanView('paymentSpend');
+        const paySel = $('#paymentViewSelect');
+        if (paySel) {
+            [...paySel.options].forEach(opt => {
+                const v = opt.value;
+                let show = true;
+                if (v === 'clinicPayment') show = allowPayClinic;
+                else if (v === 'yearlyPayment') show = allowPayYearly;
+                else if (v === 'incomeExpense') show = allowPayIncome;
+                else if (v === 'spendEntries') show = allowPaySpend;
+                opt.hidden = !show;
+                opt.disabled = !show;
+            });
+            // If current selection is hidden, jump to first allowed
+            const cur = paySel.value;
+            const curOpt = [...paySel.options].find(o => o.value === cur);
+            if (curOpt && (curOpt.hidden || curOpt.disabled)) {
+                const first = [...paySel.options].find(o => !o.hidden && !o.disabled);
+                if (first) {
+                    paySel.value = first.value;
+                    try { applyPaymentView(first.value); } catch (e) {}
+                }
+            }
+        }
+        $('#clinicPaymentPanel')?.classList.toggle('hidden', !allowPayClinic || ($('#paymentViewSelect')?.value !== 'clinicPayment'));
+        $('#yearlyPaymentPanel')?.classList.toggle('hidden', !allowPayYearly || ($('#paymentViewSelect')?.value !== 'yearlyPayment'));
+        $('#incomeExpensePanel')?.classList.toggle('hidden', !allowPayIncome || ($('#paymentViewSelect')?.value !== 'incomeExpense'));
+        $('#spendEntriesPanel')?.classList.toggle('hidden', !allowPaySpend || ($('#paymentViewSelect')?.value !== 'spendEntries'));
         document.querySelectorAll('[data-reception-edit]').forEach(el => {
             el.disabled = !receptionCanEdit(el.dataset.receptionEdit);
             el.classList.toggle('viewOnly', el.disabled);
         });
         if (!patientView) closeForm();
-        renderReceptionPayment();
-        renderReceptionMedicines();
+        try { renderReceptionPayment(); } catch (e) {}
+        try { renderReceptionMedicines(); } catch (e) {}
     }
     const ids = ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic','permDashNewOld','permDashTodayQueue','permDashQueueStatus','permDashMoreStats','permPayClinic','permPayYearly','permPayIncome','permPaySpend'];
     const modules = ['patient','payment','paymentEntry','medicine','medicineEntry','reports','dashboard','clinic','dashNewOldEntry','dashTodayQueue','dashQueueStatus','dashMoreStats','paymentClinic','paymentYearly','paymentIncome','paymentSpend'];
