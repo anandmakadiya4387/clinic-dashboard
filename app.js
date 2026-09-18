@@ -224,7 +224,7 @@ let reportKind = 'patients',
     spendLedgerY = '',
     spendLedgerM = '',
     histPage = 1,
-    histPageSize = 10,
+    histPageSize = 25,
     histQuery = '',
     queuePage = 1,
     queuePageSize = 10,
@@ -4551,17 +4551,42 @@ function setupNav() {
         b.onclick = (e) => {
             e.preventDefault();
             openPage(b.dataset.page);
+            // Mobile: close side drawer after opening any interface
+            if (window.innerWidth < 900) {
+                const side = document.getElementById('side');
+                if (side) {
+                    side.classList.remove('open');
+                    document.body.classList.remove('side-open');
+                }
+            }
         };
     });
-    $('#toggleSide')?.addEventListener('click', () => {
+    $('#toggleSide')?.addEventListener('click', (ev) => {
         const side = $('#side');
         const main = document.querySelector('.main');
-        side?.classList.toggle('collapsed');
-        main?.classList.toggle('sidebar-collapsed');
-        // mobile overlay open
-        if (window.innerWidth < 900) side?.classList.toggle('open');
+        if (!side) return;
+        if (window.innerWidth < 900) {
+            // Mobile: drawer open/close only (do not use collapsed)
+            side.classList.remove('collapsed');
+            main?.classList.remove('sidebar-collapsed');
+            side.classList.toggle('open');
+            document.body.classList.toggle('side-open', side.classList.contains('open'));
+        } else {
+            // Desktop: collapse/expand
+            side.classList.remove('open');
+            document.body.classList.remove('side-open');
+            side.classList.toggle('collapsed');
+            main?.classList.toggle('sidebar-collapsed');
+        }
+        try { ev.stopPropagation(); } catch (e) {}
     });
-    $('#mobileSide')?.addEventListener('click', () => $('#side').classList.toggle('open'));
+    $('#mobileSide')?.addEventListener('click', () => {
+        const side = $('#side');
+        if (!side) return;
+        side.classList.remove('collapsed');
+        side.classList.toggle('open');
+        document.body.classList.toggle('side-open', side.classList.contains('open'));
+    });
     initPatientFilterSelects();
     $('#searchPatientRange')?.addEventListener('click', searchPatientRange);
     $('#clearPatientRange')?.addEventListener('click', () => resetReportRange('patients'));
@@ -5611,3 +5636,40 @@ window.openReport = openReport;
 window.closeModal = closeModal;
 window.forceRefresh = forceRefresh;
 window.addEventListener('DOMContentLoaded', setup);
+
+/** Mobile: sidebar open state for dim overlay (UI only). */
+function syncSideOpenClass() {
+    try {
+        const side = document.getElementById('side');
+        if (!side) return;
+        document.body.classList.toggle('side-open', side.classList.contains('open'));
+    } catch (e) {}
+}
+(function enhanceMobileNav() {
+    const side = document.getElementById('side');
+    const btn = document.getElementById('toggleSide');
+    if (!side) return;
+    const obs = new MutationObserver(syncSideOpenClass);
+    try { obs.observe(side, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth >= 900) return;
+        if (!side.classList.contains('open')) return;
+        if (side.contains(e.target)) return;
+        if (btn && (btn === e.target || btn.contains(e.target))) return;
+        side.classList.remove('open');
+        document.body.classList.remove('side-open');
+        syncSideOpenClass();
+    });
+    // Resize: clean mobile/desktop classes
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 900) {
+            side.classList.remove('open');
+            document.body.classList.remove('side-open');
+        } else {
+            side.classList.remove('collapsed');
+            document.querySelector('.main')?.classList.remove('sidebar-collapsed');
+        }
+        syncSideOpenClass();
+    });
+    syncSideOpenClass();
+})();
