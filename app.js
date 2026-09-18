@@ -591,6 +591,34 @@ function connectClinicWebSocket() {
     } catch (e) {}
 }
 
+async 
+/** Push local DB to server without first overwriting from remote (used after full import). */
+async function forcePushLocalToServer() {
+    if (!server) return false;
+    try {
+        const out = await api('/api/sync', 'POST', DB);
+        if (out) mergeLocalRemote(out);
+        saveLocal();
+        setConn(true, 'Connected and synchronized.', 0);
+        return true;
+    } catch (e) {
+        console.warn('forcePushLocalToServer', e);
+        return false;
+    }
+}
+
+/** Stamp every record so local wins merge after restore/import. */
+function stampDbUpdatedNow(db) {
+    const now = new Date().toISOString();
+    ['patients', 'payments', 'medicines', 'expenses'].forEach(k => {
+        (db[k] || []).forEach(x => { if (x && x.id) x._updated = now; });
+    });
+    if (db.clinic) db.clinic._updated = now;
+    if (db.settings) db.settings._updated = now;
+    if (db.meta) db.meta._updated = now;
+    return db;
+}
+
 async function syncNow(silent = false) {
     if (!server) {
         setConn(false, 'Offline mode — entries are stored on this computer.', null);
@@ -4214,7 +4242,7 @@ function exportBackup() {
     const data = buildBackupPayload(includeRec);
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     downloadBackupFile(data, `anand-clinic-backup-${role}-${stamp}.json`);
-    toast('Backup downloaded (not added to Last 5 list)');
+    toast('Export full backup done');
 }
 
 function manualBackupNow() {
@@ -4348,7 +4376,7 @@ function restoreLocalBackup(id) {
         mergeLocalRemote(entry.data);
         saveLocal();
         refreshAllPatientViews();
-        toast('Local full backup restored');
+        toast('Import full backup done');
         try { syncNow(true); } catch (e) {}
     } catch (e) {
         toast('Restore failed', true);
@@ -4491,11 +4519,18 @@ function importBackup(e) {
             ].filter(Boolean));
             DB.meta.deleted = (DB.meta.deleted || []).filter(id => !liveIds.has(id));
             DB = normalizeData(DB);
+            stampDbUpdatedNow(DB);
             saveLocal();
             try { refreshAllPatientViews(); } catch (e) {}
             try { renderMedicines(); } catch (e) {}
-            toast('Full backup restored — deleted cases/medicines from JSON brought back');
-            try { syncNow(true); } catch (e) {}
+            toast('Import full backup done');
+            // Push to server so PC / other devices get the same data when online
+            (async () => {
+                try {
+                    const ok = await forcePushLocalToServer();
+                    if (!ok && server) await syncNow(true);
+                } catch (e) {}
+            })();
         } catch (err) {
             console.warn(err);
             toast('Invalid backup file', true)
@@ -5672,4 +5707,21 @@ function syncSideOpenClass() {
         syncSideOpenClass();
     });
     syncSideOpenClass();
+})();
+
+
+/* Online multi-device: when tab visible / network back, sync so mobile↔PC stay updated */
+(function anandClinicOnlineSyncHooks() {
+    const run = () => {
+        try {
+            if (typeof server !== 'undefined' && server && typeof syncNow === 'function') {
+                syncNow(true);
+            }
+        } catch (e) {}
+    };
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') run();
+    });
+    window.addEventListener('online', run);
+    window.addEventListener('focus', () => { setTimeout(run, 400); });
 })();
