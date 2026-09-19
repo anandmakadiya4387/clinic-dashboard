@@ -185,7 +185,8 @@ const DEFAULT = {
             paymentClinic: 'hidden',
             paymentYearly: 'hidden',
             paymentIncome: 'hidden',
-            paymentSpend: 'hidden'
+            paymentSpend: 'hidden',
+            bill: 'hidden'
         },
         _updated: ''
     },
@@ -272,6 +273,7 @@ function normalizeData(d) {
     if (!('paymentIncome' in rp)) rp.paymentIncome = rp.payment || 'hidden';
     if (!('paymentSpend' in rp)) rp.paymentSpend = rp.payment || 'hidden';
     if (!('clinic' in rp)) rp.clinic = 'hidden';
+    if (!('bill' in rp)) rp.bill = 'hidden';
     out.clinic = Object.assign(structuredClone(DEFAULT.clinic), out.clinic || {});
     out.meta = Object.assign(structuredClone(DEFAULT.meta), out.meta || {});
     out.patients = Array.isArray(out.patients) ? out.patients.filter(x => x && x.id) : [];
@@ -1201,7 +1203,7 @@ function openPatientProfile(id) {
 function openPage(id) {
     if (!id || id === 'undefined' || id === 'null') return;
     if (role === 'reception') {
-        const map = {dashboard:'dashboard', patients:'patient', payments:'payment', medicines:'medicine', clinic:'clinic', reports:'reports', appointmentHistory:'dashboard'};
+        const map = {dashboard:'dashboard', patients:'patient', payments:'payment', medicines:'medicine', clinic:'clinic', reports:'reports', appointmentHistory:'dashboard', bill:'bill'};
         const mod = map[id];
         if (mod && !receptionCanView(mod)) {
             toast('This interface is hidden by Office', true);
@@ -4727,6 +4729,7 @@ function renderPermissions() {
         document.querySelector('[data-page="medicines"]')?.classList.toggle('hidden', !medicineView);
         document.querySelector('[data-page="clinic"]')?.classList.toggle('hidden', !receptionCanView('clinic'));
         document.querySelector('[data-page="reports"]')?.classList.toggle('hidden', !receptionCanView('reports'));
+        document.querySelector('[data-page="bill"]')?.classList.toggle('hidden', !receptionCanView('bill'));
         $('#receptionMedicineEntryCard')?.classList.toggle('hidden', !receptionCanEdit('medicineEntry'));
         document.querySelector('[data-page="dashboard"]')?.classList.toggle('hidden', !dashOk && !patientView);
         // Payment sub-views: only what Office allowed
@@ -4769,13 +4772,13 @@ function renderPermissions() {
         try { renderReceptionPayment(); } catch (e) {}
         try { renderReceptionMedicines(); } catch (e) {}
     }
-    const ids = ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic','permDashNewOld','permDashTodayQueue','permDashQueueStatus','permDashMoreStats','permPayClinic','permPayYearly','permPayIncome','permPaySpend'];
-    const modules = ['patient','payment','paymentEntry','medicine','medicineEntry','reports','dashboard','clinic','dashNewOldEntry','dashTodayQueue','dashQueueStatus','dashMoreStats','paymentClinic','paymentYearly','paymentIncome','paymentSpend'];
+    const ids = ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic','permDashNewOld','permDashTodayQueue','permDashQueueStatus','permDashMoreStats','permPayClinic','permPayYearly','permPayIncome','permPaySpend','permBill'];
+    const modules = ['patient','payment','paymentEntry','medicine','medicineEntry','reports','dashboard','clinic','dashNewOldEntry','dashTodayQueue','dashQueueStatus','dashMoreStats','paymentClinic','paymentYearly','paymentIncome','paymentSpend','bill'];
     ids.forEach((id,i) => { if ($('#'+id)) $('#'+id).value = perms[modules[i]] || 'hidden'; });
 }
 function savePermissions() {
-    const modules = ['patient','payment','paymentEntry','medicine','medicineEntry','reports','dashboard','clinic','dashNewOldEntry','dashTodayQueue','dashQueueStatus','dashMoreStats','paymentClinic','paymentYearly','paymentIncome','paymentSpend'];
-    const ids = ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic','permDashNewOld','permDashTodayQueue','permDashQueueStatus','permDashMoreStats','permPayClinic','permPayYearly','permPayIncome','permPaySpend'];
+    const modules = ['patient','payment','paymentEntry','medicine','medicineEntry','reports','dashboard','clinic','dashNewOldEntry','dashTodayQueue','dashQueueStatus','dashMoreStats','paymentClinic','paymentYearly','paymentIncome','paymentSpend','bill'];
+    const ids = ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic','permDashNewOld','permDashTodayQueue','permDashQueueStatus','permDashMoreStats','permPayClinic','permPayYearly','permPayIncome','permPaySpend','permBill'];
     const prev = DB.settings.receptionPermissions || {};
     const receptionPermissions = { ...prev };
     modules.forEach((m,i) => receptionPermissions[m] = $('#'+ids[i])?.value || 'hidden');
