@@ -7446,3 +7446,101 @@ body {
     padding: 6px 10px !important;
   }
 }
+
+
+/* ========== Mobile: Medicine + Backup side-scroll (layout only) ========== */
+@media (max-width: 900px) {
+  /* Medicine list — same pattern as patient queue tables */
+  #medicines .tablewrap,
+  #medicines .cardBody.tablewrap,
+  #medicines .card .tablewrap {
+    display: block !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  #medicines table.table,
+  #medicines table.medTable,
+  #medicines .medTable {
+    min-width: 560px !important;
+    width: max-content !important;
+    max-width: none !important;
+    table-layout: auto !important;
+  }
+  #medicines table th,
+  #medicines table td {
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+  /* Empty stock modal table also scrollable */
+  #emptyStockCard .tablewrap,
+  #emptyStockCard table {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #emptyStockCard table {
+    min-width: 480px !important;
+    width: max-content !important;
+  }
+
+  /* Backup page — full content reachable by scroll */
+  #backup {
+    overflow-x: hidden !important;
+    padding-bottom: 48px !important;
+  }
+  #backup .card,
+  #backup .cardBody,
+  #officeBackupPanel,
+  #receptionBackupPanel {
+    overflow: visible !important;
+    max-width: 100% !important;
+  }
+  #backup .tablewrap,
+  #backup .serverBackupList,
+  #backup .backupList,
+  #localFullBackupList,
+  #serverBackupList {
+    display: block !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  #backup table {
+    min-width: 520px !important;
+    width: max-content !important;
+    max-width: none !important;
+  }
+  #backup .actions,
+  #backup .embossedActions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+  #backup .actions .btn,
+  #backup .embossedActions .btn,
+  #backup label.btn {
+    flex: 1 1 auto !important;
+    min-width: min(100%, 140px) !important;
+    white-space: normal !important;
+    height: auto !important;
+    min-height: 42px !important;
+    overflow: visible !important;
+  }
+}
+
+/* Desktop: medicine/backup stay normal full-width tables */
+@media (min-width: 901px) {
+  #medicines table.medTable,
+  #medicines table.table {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  #backup table {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
