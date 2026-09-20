@@ -4972,17 +4972,71 @@ function renderAll() {
     set('receptionPayState', DB.settings.receptionPaymentEnabled ? 'ON' : 'OFF');
     if ($('#receptionPayToggle')) $('#receptionPayToggle').checked = !!DB.settings.receptionPaymentEnabled
 }
-async function forceRefresh() {
-    // Hard refresh like Ctrl+Shift+R: save + sync then full page reload (bypass cache)
-    try { saveLocal(); } catch (e) {}
+let pollTimerId = null;
+let pollVisibilityBound = false;
+
+/** URL ?sync=30 or ?sync=60 → auto-poll seconds. No param / 0 / off → no auto-poll (only Refresh Data). */
+function getSyncPollMs() {
     try {
-        if (server) await syncNow(true);
-    } catch (e) {}
-    toast('Hard refreshing…');
-    const u = new URL(window.location.href);
-    u.searchParams.set('_hard', String(Date.now()));
-    // Full navigation reload — same effect as Ctrl+Shift+R for this app shell
-    window.location.replace(u.href);
+        const q = new URLSearchParams(window.location.search || '');
+        let v = q.get('sync');
+        if (v == null || v === '') return 0;
+        v = String(v).trim().toLowerCase();
+        if (v === '0' || v === 'off' || v === 'false' || v === 'no') return 0;
+        const n = parseInt(v, 10);
+        if (!Number.isFinite(n) || n <= 0) return 0;
+        // clamp 5s–600s for safety
+        return Math.min(600, Math.max(5, n)) * 1000;
+    } catch (e) {
+        return 0;
+    }
+}
+
+function runPollTick() {
+    try { renderAll(); } catch (e) {}
+    try { if (server) syncNow(true); } catch (e) {}
+}
+
+function stopPollTimer() {
+    try { if (pollTimerId) clearInterval(pollTimerId); } catch (e) {}
+    pollTimerId = null;
+}
+
+function startPollTimerIfNeeded() {
+    stopPollTimer();
+    const ms = getSyncPollMs();
+    if (!ms) return; // no auto-poll unless ?sync=N in URL
+    // Smart: only while tab is visible
+    if (typeof document !== 'undefined' && document.hidden) return;
+    pollTimerId = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        runPollTick();
+    }, ms);
+}
+
+function resetPollTimer() {
+    // After manual refresh: restart interval from 0 only if URL sync is on + tab visible
+    startPollTimerIfNeeded();
+}
+
+function bindPollVisibility() {
+    if (pollVisibilityBound) return;
+    pollVisibilityBound = true;
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopPollTimer(); // tab minimize / background → pause, no data waste
+        } else {
+            startPollTimerIfNeeded(); // tab active again → resume if ?sync= set
+        }
+    });
+}
+
+function forceRefresh() {
+    // Instant Refresh Data — always works (Office + Reception)
+    try { saveLocal(); } catch (e) {}
+    runPollTick();
+    resetPollTimer();
+    try { toast('Refresh Data done'); } catch (e) {}
 }
 
 
@@ -5302,10 +5356,8 @@ function setup() {
     renderAll();
     setConn(false, server ? 'Checking connection…' : 'Offline mode — no server selected.');
     if (server) syncNow(true);
-    setInterval(() => {
-        renderAll();
-        if (server) syncNow(true)
-    }, 2000)
+    bindPollVisibility();
+    startPollTimerIfNeeded(); // auto-poll only if ?sync=N and tab visible
 }
 
 function renderReceptionQueue() {
