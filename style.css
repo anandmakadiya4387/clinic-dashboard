@@ -7605,3 +7605,67 @@ body {
     white-space: nowrap !important;
   }
 }
+
+/* Top bar: Reconnect + Refresh Data always visible (mobile + desktop) */
+.topbarActions{
+  display:flex !important;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px;
+  margin-left:auto;
+  flex-shrink:0;
+}
+.topbarActions #reconnectBtn,
+.topbarActions #refreshBtn,
+.topbar #reconnectBtn,
+.topbar #refreshBtn{
+  display:inline-flex !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  align-items:center;
+  justify-content:center;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.topbar #reconnectBtn{
+  min-height:36px;
+  padding:8px 12px;
+  font-size:13px;
+}
+.topbar #refreshBtn,
+.topbar .refreshBtn{
+  min-height:36px;
+  padding:8px 12px;
+  font-size:13px;
+}
+@media (max-width:900px){
+  .topbar{
+    height:auto !important;
+    min-height:56px;
+    flex-wrap:wrap !important;
+    gap:8px !important;
+    padding:8px 10px !important;
+    align-items:center !important;
+  }
+  .topbar .globalSearchWrap{
+    order:5;
+    flex:1 1 100%;
+    max-width:100%;
+    min-width:0;
+  }
+  .topbarActions{
+    order:3;
+    margin-left:0;
+    flex:1 1 auto;
+    justify-content:flex-end;
+  }
+  .topbar #lastSyncText{display:none;}
+  .topbar #reconnectBtn,
+  .topbar #refreshBtn{
+    min-height:40px !important;
+    padding:8px 10px !important;
+    font-size:12px !important;
+  }
+  /* shorter label on very small screens still readable */
+  .topbar #refreshBtn{ max-width:48vw; }
+}

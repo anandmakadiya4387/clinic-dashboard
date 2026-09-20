@@ -4975,21 +4975,19 @@ function renderAll() {
 let pollTimerId = null;
 let pollVisibilityBound = false;
 
-/** URL ?sync=30 or ?sync=60 → auto-poll seconds. No param / 0 / off → no auto-poll (only Refresh Data). */
+/** Default 20s smart auto-poll. URL ?sync=30|60 overrides. ?sync=off disables auto-poll. */
 function getSyncPollMs() {
     try {
         const q = new URLSearchParams(window.location.search || '');
         let v = q.get('sync');
-        if (v == null || v === '') return 0;
-        v = String(v).trim().toLowerCase();
-        if (v === '0' || v === 'off' || v === 'false' || v === 'no') return 0;
-        const n = parseInt(v, 10);
-        if (!Number.isFinite(n) || n <= 0) return 0;
-        // clamp 5s–600s for safety
-        return Math.min(600, Math.max(5, n)) * 1000;
-    } catch (e) {
-        return 0;
-    }
+        if (v != null && String(v).trim() !== '') {
+            v = String(v).trim().toLowerCase();
+            if (v === '0' || v === 'off' || v === 'false' || v === 'no') return 0;
+            const n = parseInt(v, 10);
+            if (Number.isFinite(n) && n > 0) return Math.min(600, Math.max(5, n)) * 1000;
+        }
+    } catch (e) {}
+    return 20000; // default 20 seconds
 }
 
 function runPollTick() {
@@ -5005,7 +5003,7 @@ function stopPollTimer() {
 function startPollTimerIfNeeded() {
     stopPollTimer();
     const ms = getSyncPollMs();
-    if (!ms) return; // no auto-poll unless ?sync=N in URL
+    if (!ms) return; // auto-poll off (?sync=off)
     // Smart: only while tab is visible
     if (typeof document !== 'undefined' && document.hidden) return;
     pollTimerId = setInterval(() => {
@@ -5357,7 +5355,7 @@ function setup() {
     setConn(false, server ? 'Checking connection…' : 'Offline mode — no server selected.');
     if (server) syncNow(true);
     bindPollVisibility();
-    startPollTimerIfNeeded(); // auto-poll only if ?sync=N and tab visible
+    startPollTimerIfNeeded(); // default 20s smart poll when tab visible
 }
 
 function renderReceptionQueue() {
