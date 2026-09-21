@@ -1178,7 +1178,7 @@ function openPatientProfile(id) {
       <div class="profilePane" id="ptab-overview">
         <p class="mini">Complete quick view for reception / doctor.</p>
         <div class="actions" style="flex-wrap:wrap;gap:8px">
-          <button class="btn embossed primary" onclick="editP('${p.id}');closeModal()">Edit Patient</button>
+          <button class="btn embossed primary" onclick="editP('${p.id}');closeModal()">${role === 'reception' ? 'Edit' : 'Edit Patient'}</button>
           <button class="btn embossed" onclick="viewPatientHistory('${p.id}')">Full History</button>
           <button class="btn embossed green" onclick="closeModal();openPage('bill');setTimeout(()=>fillBillFromPatient('${p.id}'),200)">Create Bill</button>
         </div>
@@ -1636,6 +1636,38 @@ function buildPatientForm(type, patient = null) {
         const bpc = $('#backdatePending');
         if (bpc) bpc.checked = false;
       }
+      // Reception editing existing patient: only Address + Ref By editable
+      const recLimited = isRec && !!patient;
+      const lockIds = ['patientDate','caseNo','title','name','mobile','gender','age','caseType'];
+      lockIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (recLimited) {
+          el.setAttribute('readonly', 'readonly');
+          el.disabled = true;
+          el.style.opacity = '0.75';
+          el.style.pointerEvents = 'none';
+        } else {
+          el.removeAttribute('readonly');
+          el.disabled = false;
+          el.style.opacity = '';
+          el.style.pointerEvents = '';
+        }
+      });
+      ['address','refBy'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.removeAttribute('readonly');
+        el.disabled = false;
+        el.style.opacity = '';
+        el.style.pointerEvents = '';
+      });
+      if (recLimited) {
+        const ft = document.getElementById('formTitle');
+        if (ft) ft.textContent = 'Edit Address / Ref By only';
+        const fb = document.querySelector('#patientForm button.primary');
+        if (fb) fb.textContent = 'Update Address / Ref By';
+      }
     } catch (e) {}
     const locked = patient ? isPaymentLocked(patient) : false;
     ['consultation', 'medicine', 'renewal'].forEach(id => {
@@ -1830,6 +1862,18 @@ function registerCase(e) {
     e.preventDefault();
     const id = $('#editId').value;
     const oldP = active(DB.patients).find(x => String(x.id) === String(id));
+    // Reception: existing patient → only address + refBy (no other field changes)
+    if (role === 'reception' && oldP) {
+        oldP.address = ($('#address')?.value || '').trim();
+        oldP.refBy = ($('#refBy')?.value || '').trim();
+        markUpdated(oldP);
+        saveLocal();
+        try { syncNow(true); } catch (e) {}
+        try { closeForm(); } catch (e) {}
+        try { renderAll(); } catch (e) {}
+        toast('Address / Ref By updated');
+        return;
+    }
     const receivedLocked = !!oldP?.received;
     const p = {
         id: id || uid('p'),
