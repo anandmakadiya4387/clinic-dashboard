@@ -152,24 +152,45 @@
 </main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=smart20"></script>
 <script>
 (function() {
-    function lockOnlyEditCase() {
-        // Page heading check karein
-        const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, div, span, b, p'));
-        
-        // Check karein ki kya screen par 'New Case Registration' hai
-        const isNewCase = headings.some(el => el.textContent.trim().toLowerCase().includes('new case registration'));
-        
-        // Agar New Case Registration hai, toh bilkul lock nahi karna
-        if (isNewCase) {
+    function enforceReceptionSecurity() {
+        // 1. "Edit Patient" button ko block aur gray karein
+        const buttons = Array.from(document.querySelectorAll('button, a, .btn'));
+        const editPatientBtn = buttons.find(b => b.textContent.trim().toLowerCase() === 'edit patient');
+        if (editPatientBtn) {
+            editPatientBtn.disabled = true;
+            editPatientBtn.style.pointerEvents = 'none';
+            editPatientBtn.style.opacity = '0.4';
+            editPatientBtn.style.cursor = 'not-allowed';
+            editPatientBtn.title = 'Edit Patient reception mode mein band hai';
+        }
+
+        // 2. Check karein ki screen par "Edit Case" form khula hai ya nahi
+        const allTextElements = Array.from(document.querySelectorAll('h1, h2, h3, h4, div, span, p, b'));
+        const isEditScreen = allTextElements.some(el => el.textContent.trim().toLowerCase() === 'edit case');
+        const isNewCaseScreen = allTextElements.some(el => el.textContent.trim().toLowerCase().includes('new case registration'));
+
+        // Agar New Case Registration khula hai toh sab unlock rakhein
+        if (isNewCaseScreen) {
+            const inputs = document.querySelectorAll('input, select, textarea');
+            inputs.forEach(el => {
+                if (el.dataset.receptionLocked === 'true') {
+                    el.readOnly = false;
+                    el.disabled = false;
+                    el.style.backgroundColor = '';
+                    el.style.pointerEvents = '';
+                    el.style.cursor = '';
+                    delete el.dataset.receptionLocked;
+                }
+            });
             return;
         }
 
-        // Check karein ki kya screen par 'Edit Case' hai
-        const isEditCase = headings.some(el => el.textContent.trim().toLowerCase() === 'edit case');
+        // Agar Edit Case screen khula ho toh fields ko lock karein
+        if (isEditScreen) {
+            const editHeading = allTextElements.find(el => el.textContent.trim().toLowerCase() === 'edit case');
+            const container = editHeading?.closest('form') || editHeading?.parentElement?.parentElement || document;
 
-        if (isEditCase) {
-            // Sirf form ke andar ke fields ko lock karein (Top search bar ko chhod kar)
-            const inputs = document.querySelectorAll('input:not(#oldApptSearch), select, textarea');
+            const inputs = container.querySelectorAll('input:not(#oldApptSearch), select, textarea');
             inputs.forEach(field => {
                 if (!field.placeholder?.toLowerCase().includes('search')) {
                     field.readOnly = true;
@@ -177,12 +198,11 @@
                     field.style.backgroundColor = '#e9ecef';
                     field.style.pointerEvents = 'none';
                     field.style.cursor = 'not-allowed';
-                    field.style.userSelect = 'none';
+                    field.dataset.receptionLocked = 'true';
                 }
             });
 
-            // Update button ko disable karein
-            const updateBtn = Array.from(document.querySelectorAll('button, input[type="button"]'))
+            const updateBtn = Array.from(container.querySelectorAll('button, input[type="button"]'))
                                    .find(b => b.textContent.trim().toLowerCase() === 'update' || b.value?.toLowerCase() === 'update');
             if (updateBtn) {
                 updateBtn.disabled = true;
@@ -193,7 +213,7 @@
         }
     }
 
-    setInterval(lockOnlyEditCase, 200);
+    setInterval(enforceReceptionSecurity, 250);
 })();
 </script>
 </body>
