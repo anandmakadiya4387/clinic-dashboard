@@ -19,8 +19,7 @@ if getattr(sys, "frozen", False):
         ROLE = "reception"
     elif "office" in n:
         ROLE = "office"
-# Render sets $PORT; local uses 8787 office / 8789 reception
-PORT = int(os.environ.get("PORT") or (8787 if ROLE == "office" else 8789))
+PORT = 8787 if ROLE == "office" else 8789
 BASE_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
 os.chdir(BASE_DIR)
 START_PAGE = "office.html" if ROLE == "office" else "reception.html"
@@ -503,9 +502,8 @@ def main_fastapi():
         except Exception:
             pass
 
-    if not os.environ.get("PORT"):  # local only
-        threading.Thread(target=open_local, daemon=True).start()
-    uvicorn.run(app, host=HOST, port=PORT, log_level="info")
+    threading.Thread(target=open_local, daemon=True).start()
+    uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
 
 
 def main_legacy():
@@ -648,16 +646,6 @@ def main():
         print("  pip install fastapi uvicorn[standard] pywebview")
         main_legacy()
 
-
-
-# --- Render / uvicorn: `uvicorn server:app --host 0.0.0.0 --port $PORT` ---
-try:
-    import fastapi  # noqa: F401
-    db_init()
-    app = create_fastapi_app()
-except Exception as _app_exc:
-    app = None  # local main() / legacy will still work
-    print("module app init skip:", _app_exc)
 
 if __name__ == "__main__":
     main()

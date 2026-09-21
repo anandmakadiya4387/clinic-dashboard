@@ -1178,7 +1178,7 @@ function openPatientProfile(id) {
       <div class="profilePane" id="ptab-overview">
         <p class="mini">Complete quick view for reception / doctor.</p>
         <div class="actions" style="flex-wrap:wrap;gap:8px">
-          <button class="btn embossed primary" onclick="editP('${p.id}');closeModal()">${role === 'reception' ? 'Edit' : 'Edit Patient'}</button>
+          <button class="btn embossed primary" onclick="editP('${p.id}');closeModal()">Edit Patient</button>
           <button class="btn embossed" onclick="viewPatientHistory('${p.id}')">Full History</button>
           <button class="btn embossed green" onclick="closeModal();openPage('bill');setTimeout(()=>fillBillFromPatient('${p.id}'),200)">Create Bill</button>
         </div>
@@ -1577,65 +1577,6 @@ function setupOldAppointmentPanel() {
     });
 }
 
-
-function applyReceptionEditLocks(isExistingPatient) {
-    if (role !== 'reception') {
-        // ensure office never stuck locked
-        ['patientDate','caseNo','title','name','mobile','gender','age','caseType','address','refBy'].forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.removeAttribute('readonly');
-            el.disabled = false;
-            el.classList.remove('recvLockedField');
-            el.style.opacity = '';
-            el.style.pointerEvents = '';
-            el.style.background = '';
-        });
-        return;
-    }
-    if (!isExistingPatient) {
-        ['patientDate','caseNo','title','name','mobile','gender','age','caseType','address','refBy'].forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.removeAttribute('readonly');
-            el.disabled = false;
-            el.classList.remove('recvLockedField');
-            el.style.opacity = '';
-            el.style.pointerEvents = '';
-            el.style.background = '';
-        });
-        return;
-    }
-    const lockIds = ['patientDate','caseNo','title','name','mobile','gender','age','caseType'];
-    lockIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.setAttribute('readonly', 'readonly');
-        el.disabled = true;
-        el.classList.add('recvLockedField');
-        el.style.opacity = '0.65';
-        el.style.pointerEvents = 'none';
-        el.style.background = '#e8e4df';
-        el.tabIndex = -1;
-        // block typing even if browser ignores disabled briefly
-        el.onkeydown = function(e) { e.preventDefault(); return false; };
-        el.onpaste = function(e) { e.preventDefault(); return false; };
-    });
-    ['address','refBy'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.removeAttribute('readonly');
-        el.disabled = false;
-        el.classList.remove('recvLockedField');
-        el.style.opacity = '1';
-        el.style.pointerEvents = '';
-        el.style.background = '#fff';
-        el.tabIndex = 0;
-        el.onkeydown = null;
-        el.onpaste = null;
-    });
-}
-
 function buildPatientForm(type, patient = null) {
     const f = $('#patientForm');
     if (!f) return;
@@ -1694,15 +1635,6 @@ function buildPatientForm(type, patient = null) {
         $('#renewal').value = 0;
         const bpc = $('#backdatePending');
         if (bpc) bpc.checked = false;
-      }
-      // Reception editing existing patient: only Address + Ref By editable
-      const recLimited = isRec && !!patient;
-      try { applyReceptionEditLocks(recLimited); } catch (e) {}
-      setTimeout(function(){ try { applyReceptionEditLocks(recLimited); } catch (e) {} }, 0);
-      setTimeout(function(){ try { applyReceptionEditLocks(recLimited); } catch (e) {} }, 100);
-      if (recLimited) {
-        const fb = document.getElementById('patientSubmitBtn') || document.querySelector('#patientForm button.primary');
-        if (fb) fb.textContent = 'Update';
       }
     } catch (e) {}
     const locked = patient ? isPaymentLocked(patient) : false;
@@ -1898,18 +1830,6 @@ function registerCase(e) {
     e.preventDefault();
     const id = $('#editId').value;
     const oldP = active(DB.patients).find(x => String(x.id) === String(id));
-    // Reception: existing patient → only address + refBy (no other field changes)
-    if (role === 'reception' && oldP) {
-        oldP.address = ($('#address')?.value || '').trim();
-        oldP.refBy = ($('#refBy')?.value || '').trim();
-        markUpdated(oldP);
-        saveLocal();
-        try { syncNow(true); } catch (e) {}
-        try { closeForm(); } catch (e) {}
-        try { renderAll(); } catch (e) {}
-        toast('Address / Ref By updated');
-        return;
-    }
     const receivedLocked = !!oldP?.received;
     const p = {
         id: id || uid('p'),
@@ -3809,8 +3729,6 @@ function editP(id) {
     }
     setTimeout(() => {
         buildPatientForm(p.caseType || 'new', p);
-        try { applyReceptionEditLocks(role === 'reception'); } catch (e) {}
-        setTimeout(function(){ try { applyReceptionEditLocks(role === 'reception'); } catch (e) {} }, 120);
         const f = $('#patientForm');
         if (f) {
             f.classList.remove('hidden');

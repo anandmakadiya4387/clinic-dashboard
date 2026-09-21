@@ -7669,12 +7669,3 @@ body {
   /* shorter label on very small screens still readable */
   .topbar #refreshBtn{ max-width:48vw; }
 }
-
-/* Reception: locked patient fields (existing case) */
-.recvLockedField, input.recvLockedField, select.recvLockedField, textarea.recvLockedField {
-  background: #e8e4df !important;
-  color: #555 !important;
-  cursor: not-allowed !important;
-  pointer-events: none !important;
-  opacity: 0.7 !important;
-}
