@@ -150,57 +150,51 @@
   </div>
 </div>
 </main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=smart20"></script>
-<style>
-/* Reception: Lock Edit Case Form completely */
-body.reception-edit-locked input:not([type="search"]), 
-body.reception-edit-locked select, 
-body.reception-edit-locked textarea {
-    background-color: #e9ecef !important;
-    pointer-events: none !important;
-    cursor: not-allowed !important;
-    user-select: none !important;
-    opacity: 0.85 !important;
-}
-body.reception-edit-locked button#updateBtn,
-body.reception-edit-locked button.btn-update {
-    display: none !important;
-}
-</style>
-
 <script>
 (function() {
-    function lockReceptionEditForm() {
-        const isEditScreen = Array.from(document.querySelectorAll('h1, h2, h3, h4, div, span, b'))
-                                  .some(el => el.textContent.trim() === 'Edit Case');
+    function lockOnlyEditCase() {
+        // Page heading check karein
+        const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, div, span, b, p'));
+        
+        // Check karein ki kya screen par 'New Case Registration' hai
+        const isNewCase = headings.some(el => el.textContent.trim().toLowerCase().includes('new case registration'));
+        
+        // Agar New Case Registration hai, toh bilkul lock nahi karna
+        if (isNewCase) {
+            return;
+        }
 
-        if (isEditScreen) {
-            document.body.classList.add('reception-edit-locked');
+        // Check karein ki kya screen par 'Edit Case' hai
+        const isEditCase = headings.some(el => el.textContent.trim().toLowerCase() === 'edit case');
 
-            const fields = document.querySelectorAll('input, select, textarea');
-            fields.forEach(el => {
-                if (el.id !== 'oldApptSearch' && !el.placeholder?.toLowerCase().includes('search')) {
-                    el.setAttribute('readonly', 'true');
-                    el.setAttribute('disabled', 'true');
-                    el.style.pointerEvents = 'none';
-                    el.style.backgroundColor = '#e9ecef';
-                    el.style.cursor = 'not-allowed';
+        if (isEditCase) {
+            // Sirf form ke andar ke fields ko lock karein (Top search bar ko chhod kar)
+            const inputs = document.querySelectorAll('input:not(#oldApptSearch), select, textarea');
+            inputs.forEach(field => {
+                if (!field.placeholder?.toLowerCase().includes('search')) {
+                    field.readOnly = true;
+                    field.disabled = true;
+                    field.style.backgroundColor = '#e9ecef';
+                    field.style.pointerEvents = 'none';
+                    field.style.cursor = 'not-allowed';
+                    field.style.userSelect = 'none';
                 }
             });
 
-            const allButtons = document.querySelectorAll('button, input[type="button"]');
-            allButtons.forEach(btn => {
-                if (btn.textContent.trim().toLowerCase() === 'update' || btn.value?.toLowerCase() === 'update') {
-                    btn.disabled = true;
-                    btn.style.pointerEvents = 'none';
-                    btn.style.opacity = '0.35';
-                    btn.style.cursor = 'not-allowed';
-                }
-            });
-        } else {
-            document.body.classList.remove('reception-edit-locked');
+            // Update button ko disable karein
+            const updateBtn = Array.from(document.querySelectorAll('button, input[type="button"]'))
+                                   .find(b => b.textContent.trim().toLowerCase() === 'update' || b.value?.toLowerCase() === 'update');
+            if (updateBtn) {
+                updateBtn.disabled = true;
+                updateBtn.style.opacity = '0.35';
+                updateBtn.style.pointerEvents = 'none';
+                updateBtn.style.cursor = 'not-allowed';
+            }
         }
     }
 
-    setInterval(lockReceptionEditForm, 200);
+    setInterval(lockOnlyEditCase, 200);
 })();
-</script></body></html>
+</script>
+</body>
+</html>
