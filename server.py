@@ -364,18 +364,17 @@ def create_fastapi_app():
     async def sync(request: Request):
         try:
             body = await request.json()
-        except Exception:
-            body = {}
-        current = load_state()
-        merged = merge_state(current, body)
-        if json.dumps(merged, sort_keys=True, separators=(",", ":")) != json.dumps(
-            current, sort_keys=True, separators=(",", ":")
-        ):
-            save_state(merged, body.get("deviceId", "unknown"))
-        else:
-            # still notify mild heartbeat
-            broadcast_ws({"type": "sync_ok", "time": now()})
-        return merged
+       except Exception:
+           body = {}
+       current = load_state()
+       merged = merge_state(current, body)
+       if json.dumps(merged, sort_keys=True, separators=(",", ":")) != json.dumps(
+           current, sort_keys=True, separators=(",", ":")
+       ):
+           save_state(merged, body.get("deviceId", "unknown"))
+       else:
+           broadcast_ws({"type": "sync_ok", "time": now()})
+       return merged
 
     @app.post("/api/replicate")
     async def replicate(request: Request):
@@ -422,24 +421,14 @@ def create_fastapi_app():
     @app.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket):
         await ws.accept()
-        # attach loop for cross-thread send
-        try:
-            import asyncio
-
-            ws._loop = asyncio.get_running_loop()  # type: ignore
-        except Exception:
-            pass
         with WS_LOCK:
             WS_CLIENTS.add(ws)
         try:
             await ws.send_text(json.dumps({"type": "hello", "role": ROLE, "time": now()}))
             while True:
                 msg = await ws.receive_text()
-                # ping/pong or client notify
                 if msg == "ping":
-                    await ws.send_text(json.dumps({"type": "pong", "time": now()}))
-        except WebSocketDisconnect:
-            pass
+                    await ws.send_text("pong")
         except Exception:
             pass
         finally:
