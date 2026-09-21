@@ -364,7 +364,7 @@ def create_fastapi_app():
     async def sync(request: Request):
         try:
             body = await request.json()
-       except Exception:
+        except Exception:
            body = {}
        current = load_state()
        merged = merge_state(current, body)
