@@ -360,8 +360,8 @@ def create_fastapi_app():
     def get_data(x_token: str | None = Header(default=None)):
         return load_state()
 
-  @app.post("/api/sync")
-  async def sync(request: Request):
+    @app.post("/api/sync")
+    async def sync(request: Request):
       try:
           body = await request.json()
       except Exception:
