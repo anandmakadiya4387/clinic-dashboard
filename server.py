@@ -361,8 +361,11 @@ def create_fastapi_app():
         return load_state()
 
     @app.post("/api/sync")
-    async def sync(request: Request, x_token: str | None = Header(default=None)):
-        body = await request.json()
+    async def sync(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
         current = load_state()
         merged = merge_state(current, body)
         if json.dumps(merged, sort_keys=True, separators=(",", ":")) != json.dumps(
@@ -376,7 +379,10 @@ def create_fastapi_app():
 
     @app.post("/api/replicate")
     async def replicate(request: Request):
-        body = await request.json()
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
         current = load_state()
         merged = merge_state(current, body)
         if json.dumps(merged, sort_keys=True, separators=(",", ":")) != json.dumps(
