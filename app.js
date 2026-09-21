@@ -5779,3 +5779,11 @@ function syncSideOpenClass() {
     });
     syncSideOpenClass();
 })();
+// Instant sync trigger on page load
+window.addEventListener('DOMContentLoaded', () => {
+    if (typeof syncWithServer === 'function') {
+        syncWithServer();
+    } else if (typeof doSync === 'function') {
+        doSync();
+    }
+});
