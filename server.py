@@ -360,35 +360,26 @@ def create_fastapi_app():
     def get_data(x_token: str | None = Header(default=None)):
         return load_state()
 
-    @app.post("/api/sync")
-    async def sync(request: Request):
-        try:
-            body = await request.json()
-        except Exception:
-           body = {}
+   @app.post("/api/sync")
+   async def sync(request: Request):
+       try: body = await request.json()
+       except Exception: body = {}
        current = load_state()
        merged = merge_state(current, body)
-       if json.dumps(merged, sort_keys=True, separators=(",", ":")) != json.dumps(
-           current, sort_keys=True, separators=(",", ":")
-       ):
+       if json.dumps(merged, sort_keys=True, separators=(",", ":")) != json.dumps(current, sort_keys=True, separators=(",", ":")):
            save_state(merged, body.get("deviceId", "unknown"))
        else:
            broadcast_ws({"type": "sync_ok", "time": now()})
        return merged
-
-    @app.post("/api/replicate")
-    async def replicate(request: Request):
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-        current = load_state()
-        merged = merge_state(current, body)
-        if json.dumps(merged, sort_keys=True, separators=(",", ":")) != json.dumps(
-            current, sort_keys=True, separators=(",", ":")
-        ):
-            save_state(merged, body.get("deviceId", "peer"))
-        return merged
+   @app.post("/api/replicate")
+   async def replicate(request: Request):
+       try: body = await request.json()
+       except Exception: body = {}
+       current = load_state()
+       merged = merge_state(current, body)
+       if json.dumps(merged, sort_keys=True, separators=(",", ":")) != json.dumps(current, sort_keys=True, separators=(",", ":")):
+           save_state(merged, body.get("deviceId", "peer"))
+       return merged
 
     @app.get("/api/backups")
     def list_backups():
