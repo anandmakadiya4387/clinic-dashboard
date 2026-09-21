@@ -10,7 +10,7 @@ from __future__ import annotations
 import os, sys, time, json, socket, sqlite3, threading, webbrowser, hashlib, secrets
 from datetime import datetime
 from pathlib import Path
-
+from starlette.requests import Request
 HOST = "0.0.0.0"
 ROLE = sys.argv[1].lower() if len(sys.argv) > 1 and sys.argv[1].lower() in ("office", "reception") else "office"
 if getattr(sys, "frozen", False):
