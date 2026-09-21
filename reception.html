@@ -150,55 +150,57 @@
   </div>
 </div>
 </main><div class="modal hidden" id="modal"><div class="modalBox"><div class="modalHead"><span id="modalTitle"></span><button class="btn" id="modalClose">Close</button></div><div class="modalBody" id="modalBody"></div></div></div><script src="app.js?v=smart20"></script>
+<style>
+/* Reception: Lock Edit Case Form completely */
+body.reception-edit-locked input:not([type="search"]), 
+body.reception-edit-locked select, 
+body.reception-edit-locked textarea {
+    background-color: #e9ecef !important;
+    pointer-events: none !important;
+    cursor: not-allowed !important;
+    user-select: none !important;
+    opacity: 0.85 !important;
+}
+body.reception-edit-locked button#updateBtn,
+body.reception-edit-locked button.btn-update {
+    display: none !important;
+}
+</style>
+
 <script>
-// Reception Mode: Lock fields when editing existing patient
 (function() {
-    function lockFieldsIfEditing() {
-        const url = window.location.href.toLowerCase();
-        if (!url.includes('reception.html')) return;
+    function lockReceptionEditForm() {
+        const isEditScreen = Array.from(document.querySelectorAll('h1, h2, h3, h4, div, span, b'))
+                                  .some(el => el.textContent.trim() === 'Edit Case');
 
-        const caseNoInput = document.querySelector('input[name*="case" i], input[id*="case" i]');
-        const nameInput = document.querySelector('input[name*="name" i], input[id*="name" i]');
-        const mobileInput = document.querySelector('input[name*="mobile" i], input[id*="mobile" i]');
-        const dateInput = document.querySelector('input[type="date"]');
-        const ageInput = document.querySelector('input[name*="age" i], input[id*="age" i]');
-        const addrInput = document.querySelector('input[name*="address" i], textarea[name*="address" i], input[id*="address" i]');
-        const refInput = document.querySelector('input[name*="ref" i], input[id*="ref" i]');
-        const selects = document.querySelectorAll('select');
-        const updateBtn = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"]'))
-                               .find(b => b.textContent.trim().toLowerCase() === 'update' || b.value?.toLowerCase() === 'update');
+        if (isEditScreen) {
+            document.body.classList.add('reception-edit-locked');
 
-        const isEditMode = (caseNoInput && caseNoInput.value.trim() !== '') || 
-                           (nameInput && nameInput.value.trim() !== '');
-
-        const isEditScreen = document.body.innerText.includes("Edit Case");
-
-        if (isEditMode && isEditScreen) {
-            const fieldsToLock = [caseNoInput, nameInput, mobileInput, dateInput, ageInput, addrInput, refInput];
-            fieldsToLock.forEach(field => {
-                if (field) {
-                    field.readOnly = true;
-                    field.style.backgroundColor = "#f1f3f5";
-                    field.style.cursor = "not-allowed";
-                    field.style.pointerEvents = "none";
+            const fields = document.querySelectorAll('input, select, textarea');
+            fields.forEach(el => {
+                if (el.id !== 'oldApptSearch' && !el.placeholder?.toLowerCase().includes('search')) {
+                    el.setAttribute('readonly', 'true');
+                    el.setAttribute('disabled', 'true');
+                    el.style.pointerEvents = 'none';
+                    el.style.backgroundColor = '#e9ecef';
+                    el.style.cursor = 'not-allowed';
                 }
             });
 
-            selects.forEach(sel => {
-                sel.disabled = true;
-                sel.style.backgroundColor = "#f1f3f5";
-                sel.style.cursor = "not-allowed";
+            const allButtons = document.querySelectorAll('button, input[type="button"]');
+            allButtons.forEach(btn => {
+                if (btn.textContent.trim().toLowerCase() === 'update' || btn.value?.toLowerCase() === 'update') {
+                    btn.disabled = true;
+                    btn.style.pointerEvents = 'none';
+                    btn.style.opacity = '0.35';
+                    btn.style.cursor = 'not-allowed';
+                }
             });
-
-            if (updateBtn) {
-                updateBtn.disabled = true;
-                updateBtn.style.opacity = "0.5";
-                updateBtn.style.cursor = "not-allowed";
-                updateBtn.title = "Editing existing patients is disabled in Reception mode.";
-            }
+        } else {
+            document.body.classList.remove('reception-edit-locked');
         }
     }
 
-    setInterval(lockFieldsIfEditing, 300);
+    setInterval(lockReceptionEditForm, 200);
 })();
 </script></body></html>
