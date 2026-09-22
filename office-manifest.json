@@ -1,0 +1,22 @@
+{
+  "id": "office-app",
+  "start_url": "/office.html",
+  "scope": "/office.html",
+  "name": "Office - Dr Anand",
+  "short_name": "Office",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "clinic-logo.png?v=5",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "clinic-logo.png?v=5",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
