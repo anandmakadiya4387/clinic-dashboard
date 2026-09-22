@@ -393,91 +393,150 @@ function pendingFor(p) {
     return feePend + partial;
 }
 
-/** Patients with outstanding pending (deduped by permanent case). */
+
+/** Outstanding / Pending — total + clickable patient list (Clinic Payment) */
 function patientDisplayName(p) {
     if (!p) return '';
     const t = (p.title || '').trim();
     const n = (p.name || '').trim();
-    return (t ? t + ' ' : '') + n;
+    return ((t ? t + ' ' : '') + n).trim() || String(p.caseNo || p.id || '');
 }
 
 function outstandingPendingEntries() {
-    const byCase = new Map();
+    const byKey = new Map();
     try {
         active(DB.patients).forEach(p => {
             if (!p || p.foc === true) return;
-            let amt = 0;
-            try { amt = Number(pendingFor(p) || 0); } catch (e) { amt = 0; }
-            let st = { kind: 'pending', label: 'Pending' };
+            const amt = Number(pendingFor(p) || 0);
+            let st = { kind: 'pending', label: 'Pending', pending: 0 };
             try { st = paymentStatusInfo(p) || st; } catch (e) {}
-            // If status says pending/partial but amount 0, still use status pending value
-            if ((st.kind === 'pending' || st.kind === 'partial') && Number(st.pending || 0) > amt) {
-                amt = Number(st.pending || 0);
-            }
-            // Explicit not-received with fees
+            let useAmt = amt;
+            if (Number(st.pending || 0) > useAmt) useAmt = Number(st.pending || 0);
             if (p.received === false && p.foc !== true) {
                 const gap = Math.max(0, feeTotal(p) - paidFor(p.id));
-                if (gap > amt) amt = gap;
+                if (gap > useAmt) useAmt = gap;
             }
             const pp = Math.max(0, Number(p.partialPending || 0));
-            if (pp > 0 && amt < pp) {
-                // ensure partial at least visible (may already be in pendingFor)
-                amt = Math.max(amt, pp + Math.max(0, feeTotal(p) - paidFor(p.id)));
+            if (pp > useAmt) useAmt = Math.max(useAmt, pp + Math.max(0, feeTotal(p) - paidFor(p.id)));
+            // Status pending/partial with zero amount: still list with fees if any due flag
+            if (!(useAmt > 0)) {
+                if (st.kind === 'pending' || st.kind === 'partial' || st.kind === 'part_rec') {
+                    const gap2 = Math.max(0, feeTotal(p) - paidFor(p.id)) + pp;
+                    if (gap2 > 0) useAmt = gap2;
+                    else return; // pure zero-fee pending status — skip amount list
+                } else return;
             }
-            if (!(amt > 0)) return;
             let key = '';
             try { key = String(permanentCaseNo(p) || p.caseNo || p.id); } catch (e) { key = String(p.caseNo || p.id); }
             const row = {
                 id: p.id,
                 caseNo: p.caseNo || key,
                 name: patientDisplayName(p),
-                amount: amt,
+                amount: useAmt,
                 status: (st && st.label) ? st.label : 'Pending',
                 mobile: p.mobile || ''
             };
-            const prev = byCase.get(key);
-            if (!prev || row.amount > prev.amount) byCase.set(key, row);
+            const prev = byKey.get(key);
+            if (!prev) byKey.set(key, row);
+            else {
+                // same case: add visit gap amounts carefully — take max of totals to avoid partial double-count
+                prev.amount = Math.max(Number(prev.amount || 0), useAmt);
+                if (p.caseType === 'new') {
+                    prev.name = row.name;
+                    prev.id = row.id;
+                    prev.caseNo = row.caseNo;
+                    prev.mobile = row.mobile || prev.mobile;
+                }
+                if (row.status && row.status !== 'Received') prev.status = row.status;
+            }
         });
-    } catch (e) {}
-    return Array.from(byCase.values()).sort((a, b) => b.amount - a.amount || String(a.caseNo).localeCompare(String(b.caseNo)));
+    } catch (e) { console.error(e); }
+    return Array.from(byKey.values())
+        .filter(r => Number(r.amount || 0) > 0)
+        .sort((a, b) => b.amount - a.amount || String(a.caseNo).localeCompare(String(b.caseNo)));
 }
 
 function totalOutstandingPending() {
+    // Prefer simple ledger sum (same as Patients pending total) so box never stays 0 when pending exists
+    let simple = 0;
     try {
-        return outstandingPendingEntries().reduce((s, r) => s + Number(r.amount || 0), 0);
-    } catch (e) {
-        return active(DB.patients).reduce((a, p) => a + pendingFor(p), 0);
-    }
+        simple = active(DB.patients).reduce((a, p) => a + Number(pendingFor(p) || 0), 0);
+    } catch (e) { simple = 0; }
+    let listed = 0;
+    try {
+        listed = outstandingPendingEntries().reduce((s, r) => s + Number(r.amount || 0), 0);
+    } catch (e) { listed = 0; }
+    return Math.max(simple, listed);
 }
 
 function openOutstandingPendingList() {
-    const rows = outstandingPendingEntries();
+    let rows = [];
+    try { rows = outstandingPendingEntries(); } catch (e) { rows = []; }
+    // Fallback: build from pendingFor > 0 if list empty but simple total > 0
+    if (!rows.length) {
+        try {
+            const byKey = new Map();
+            active(DB.patients).forEach(p => {
+                if (!p || p.foc === true) return;
+                const amt = Number(pendingFor(p) || 0);
+                if (!(amt > 0)) return;
+                let key = '';
+                try { key = String(permanentCaseNo(p) || p.caseNo || p.id); } catch (e) { key = String(p.caseNo || p.id); }
+                const prev = byKey.get(key);
+                if (!prev || amt > prev.amount) {
+                    byKey.set(key, {
+                        id: p.id,
+                        caseNo: p.caseNo || key,
+                        name: patientDisplayName(p),
+                        amount: amt,
+                        status: 'Pending',
+                        mobile: p.mobile || ''
+                    });
+                }
+            });
+            rows = Array.from(byKey.values()).sort((a, b) => b.amount - a.amount);
+        } catch (e) {}
+    }
     const total = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
     if (!rows.length) {
-        modal('Outstanding / Pending', '<p class="mini">No pending amount found.</p><p class="mini">Total: <b>' + money(0) + '</b></p>');
+        modal('Outstanding / Pending',
+            '<p style="margin:8px 0">No pending amount found.</p>' +
+            '<p class="mini">Patients with only “Pending” status and ₹0 fees are not counted as outstanding money.</p>');
         return;
     }
-    let html = '<p class="mini" style="margin-bottom:10px">Patients with pending / partial pending. Total: <b>' + money(total) + '</b> · ' + rows.length + ' case(s)</p>';
+    let html = '<p class="mini" style="margin-bottom:10px"><b>' + rows.length + '</b> case(s) · Total: <b>' + money(total) + '</b></p>';
     html += '<div class="tablewrap" style="max-height:60vh;overflow:auto"><table class="compactTable" style="width:100%"><thead><tr>';
     html += '<th>Case No</th><th>Patient</th><th>Mobile</th><th>Status</th><th>Pending</th><th></th></tr></thead><tbody>';
     rows.forEach(r => {
+        const id = String(r.id || '');
         html += '<tr>';
-        html += '<td>' + String(r.caseNo || '').replace(/</g,'&lt;') + '</td>';
-        html += '<td>' + String(r.name || '').replace(/</g,'&lt;') + '</td>';
-        html += '<td>' + String(r.mobile || '').replace(/</g,'&lt;') + '</td>';
-        html += '<td>' + String(r.status || '').replace(/</g,'&lt;') + '</td>';
+        html += '<td>' + esc(r.caseNo) + '</td>';
+        html += '<td>' + esc(r.name) + '</td>';
+        html += '<td>' + esc(r.mobile || '-') + '</td>';
+        html += '<td>' + esc(r.status) + '</td>';
         html += '<td><b>' + money(r.amount) + '</b></td>';
-        html += '<td><button type="button" class="btn embossed mini" onclick="closeModal();try{openPatientProfile(\'' + String(r.id).replace(/'/g,"\\'") + '\')}catch(e){}">View</button></td>';
+        html += '<td><button type="button" class="btn embossed mini" data-pend-view="' + esc(id) + '">View</button></td>';
         html += '</tr>';
     });
     html += '</tbody></table></div>';
     modal('Outstanding / Pending', html);
+    try {
+        const body = document.getElementById('modalBody');
+        if (body && !body._pendViewBound) {
+            body._pendViewBound = true;
+            body.addEventListener('click', function(ev) {
+                const btn = ev.target && ev.target.closest ? ev.target.closest('[data-pend-view]') : null;
+                if (!btn) return;
+                const pid = btn.getAttribute('data-pend-view');
+                if (!pid) return;
+                closeModal();
+                try { openPatientProfile(pid); } catch (e) {}
+            });
+        }
+    } catch (e) {}
 }
 
 
-/** Unified payment status: foc | pending | partial | received */
-
-/** Latest explicit partialPending for this permanent case (next-visit carry). */
 function getCarryPartialPending(caseNo) {
     const key = String(caseNo || '').trim();
     if (!key) return 0;
