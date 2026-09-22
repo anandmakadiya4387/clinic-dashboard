@@ -1,7 +1,7 @@
 {
-  "id": "reception-app",
+  "id": "/reception-app",
   "start_url": "/reception.html",
-  "scope": "/",
+  "scope": "/reception.html",
   "name": "Reception - Dr Anand",
   "short_name": "Reception",
   "display": "standalone",
