@@ -3109,8 +3109,20 @@ function renderPaymentSummary() {
         totY = paymentAmountBy(y, month || null, day || null, 'total');
     }
 
-    // Outstanding = sum of pendingFor across all active patients (ledger gap)
-    const outstanding = active(DB.patients).reduce((a, p) => a + pendingFor(p), 0);
+   
+const patientOut = active(DB.patients).reduce((a, p) => a + pendingFor(p), 0);
+const apptOut = (DB.appointments || []).filter(a => !a.deleted).reduce((sum, a) => {
+    const st = String(a.status || a.paymentStatus || '').toLowerCase();
+    const fee = Number(a.fees || a.fee || a.amount || 0);
+    const paid = Number(a.paid || 0);
+    if (st === 'pending') {
+        return sum + Math.max(0, fee - paid || fee);
+    } else if (st === 'partial') {
+        return sum + Math.max(0, fee - paid);
+    }
+    return sum;
+}, 0);
+const outstanding = Math.max(patientOut, apptOut) > 0 ? (patientOut + apptOut) : 0;
 
     set('paySumNew', money(newY));
         set('paySumRenewal', money(renY));
