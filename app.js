@@ -384,11 +384,20 @@ function paidFor(id) {
 
 function pendingFor(p) {
     if (!p) return 0;
-    const feePend = Math.max(0, feeTotal(p) - paidFor(p.id));
+    const status = String(p.status || p.paymentStatus || '').toLowerCase();
+    if (status === 'foc') return 0;
+
+    // Purana logic bilkul safe rakhein, sirf p.fees/p.fee ka backup dein agar feeTotal 0 ho
+    const calcFee = Number(feeTotal(p)) || 0;
+    const directFee = Number(p.fees || p.fee || p.amount || 0);
+    const totalDue = calcFee > 0 ? calcFee : directFee;
+
+    const paid = Number(paidFor(p.id)) || Number(p.paid || 0);
+    const feePend = Math.max(0, totalDue - paid);
+
     const ownPartial = Math.max(0, Number(p.partialPending || 0));
     let carry = 0;
-    try { carry = Math.max(0, Number(getCarryPartialPending(permanentCaseNo(p)) || 0)); } catch (e) {}
-    // Show unpaid fees + explicit partial pending (carry preferred if set on family)
+    try { carry = Math.max(0, Number(getCarryPartialPending(permanentCaseNo(p)) || 0)); } catch(e) {}
     const partial = Math.max(ownPartial, carry);
     return feePend + partial;
 }
