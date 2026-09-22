@@ -385,172 +385,42 @@ function paidFor(id) {
 function pendingFor(p) {
     if (!p) return 0;
     if (p.foc === true) return 0;
-    const fees = feeTotal(p);
-    const paid = paidFor(p.id);
-    const feePend = Math.max(0, fees - paid);
+    const status = String(p.status || p.paymentStatus || '').toLowerCase();
+    if (status === 'foc') return 0;
+
+    const calcFee = Number(feeTotal(p)) || 0;
+    const directFee = Number(p.fees || p.fee || p.amount || 0);
+    const totalDue = calcFee > 0 ? calcFee : directFee;
+
+    const paid = Number(paidFor(p.id)) || Number(p.paid || 0);
+    const feePend = Math.max(0, totalDue - paid);
+
     const ownPartial = Math.max(0, Number(p.partialPending || 0));
     let carry = 0;
     try { carry = Math.max(0, Number(getCarryPartialPending(permanentCaseNo(p)) || 0)); } catch (e) {}
     const partial = Math.max(ownPartial, carry);
-    // Pending / partial visits: match history "₹ X due" (do not hide behind auto payment rows)
+
+    // History "₹800 due" pending visits: count due even if auto payment rows zero the gap
     if (p.received !== true) {
         try {
             const st = paymentStatusInfo(p);
             if (st && (st.kind === 'pending' || st.kind === 'partial')) {
                 const fromSt = Number(st.pending || 0);
                 if (fromSt > 0) return fromSt;
-                if (fees > 0) return fees + partial;
+                if (totalDue > 0) return totalDue + partial;
                 return partial;
             }
         } catch (e) {}
+        if (p.forcePending === true && totalDue > 0) {
+            return (feePend > 0 ? feePend : totalDue) + partial;
+        }
     }
     return feePend + partial;
 }
 
+/** Unified payment status: foc | pending | partial | received */
 
-/** Outstanding / Pending — total + clickable patient list (Clinic Payment) */
-function patientDisplayName(p) {
-    if (!p) return '';
-    const t = (p.title || '').trim();
-    const n = (p.name || '').trim();
-    return ((t ? t + ' ' : '') + n).trim() || String(p.caseNo || p.id || '');
-}
-
-function outstandingPendingEntries() {
-    const byKey = new Map();
-    try {
-        active(DB.patients).forEach(p => {
-            if (!p || p.foc === true) return;
-            const amt = Number(pendingFor(p) || 0);
-            let st = { kind: 'pending', label: 'Pending', pending: 0 };
-            try { st = paymentStatusInfo(p) || st; } catch (e) {}
-            let useAmt = amt;
-            if (Number(st.pending || 0) > useAmt) useAmt = Number(st.pending || 0);
-            if (p.received === false && p.foc !== true) {
-                const gap = Math.max(0, feeTotal(p) - paidFor(p.id));
-                if (gap > useAmt) useAmt = gap;
-            }
-            const pp = Math.max(0, Number(p.partialPending || 0));
-            if (pp > useAmt) useAmt = Math.max(useAmt, pp + Math.max(0, feeTotal(p) - paidFor(p.id)));
-            // Status pending/partial with zero amount: still list with fees if any due flag
-            if (!(useAmt > 0)) {
-                if (st.kind === 'pending' || st.kind === 'partial' || st.kind === 'part_rec') {
-                    const gap2 = Math.max(0, feeTotal(p) - paidFor(p.id)) + pp;
-                    if (gap2 > 0) useAmt = gap2;
-                    else return; // pure zero-fee pending status — skip amount list
-                } else return;
-            }
-            let key = '';
-            try { key = String(permanentCaseNo(p) || p.caseNo || p.id); } catch (e) { key = String(p.caseNo || p.id); }
-            const row = {
-                id: p.id,
-                caseNo: p.caseNo || key,
-                name: patientDisplayName(p),
-                amount: useAmt,
-                status: (st && st.label) ? st.label : 'Pending',
-                mobile: p.mobile || ''
-            };
-            const prev = byKey.get(key);
-            if (!prev) byKey.set(key, row);
-            else {
-                // same case: add visit gap amounts carefully — take max of totals to avoid partial double-count
-                prev.amount = Math.max(Number(prev.amount || 0), useAmt);
-                if (p.caseType === 'new') {
-                    prev.name = row.name;
-                    prev.id = row.id;
-                    prev.caseNo = row.caseNo;
-                    prev.mobile = row.mobile || prev.mobile;
-                }
-                if (row.status && row.status !== 'Received') prev.status = row.status;
-            }
-        });
-    } catch (e) { console.error(e); }
-    return Array.from(byKey.values())
-        .filter(r => Number(r.amount || 0) > 0)
-        .sort((a, b) => b.amount - a.amount || String(a.caseNo).localeCompare(String(b.caseNo)));
-}
-
-function totalOutstandingPending() {
-    // Prefer simple ledger sum (same as Patients pending total) so box never stays 0 when pending exists
-    let simple = 0;
-    try {
-        simple = active(DB.patients).reduce((a, p) => a + Number(pendingFor(p) || 0), 0);
-    } catch (e) { simple = 0; }
-    let listed = 0;
-    try {
-        listed = outstandingPendingEntries().reduce((s, r) => s + Number(r.amount || 0), 0);
-    } catch (e) { listed = 0; }
-    return Math.max(simple, listed);
-}
-
-function openOutstandingPendingList() {
-    let rows = [];
-    try { rows = outstandingPendingEntries(); } catch (e) { rows = []; }
-    // Fallback: build from pendingFor > 0 if list empty but simple total > 0
-    if (!rows.length) {
-        try {
-            const byKey = new Map();
-            active(DB.patients).forEach(p => {
-                if (!p || p.foc === true) return;
-                const amt = Number(pendingFor(p) || 0);
-                if (!(amt > 0)) return;
-                let key = '';
-                try { key = String(permanentCaseNo(p) || p.caseNo || p.id); } catch (e) { key = String(p.caseNo || p.id); }
-                const prev = byKey.get(key);
-                if (!prev || amt > prev.amount) {
-                    byKey.set(key, {
-                        id: p.id,
-                        caseNo: p.caseNo || key,
-                        name: patientDisplayName(p),
-                        amount: amt,
-                        status: 'Pending',
-                        mobile: p.mobile || ''
-                    });
-                }
-            });
-            rows = Array.from(byKey.values()).sort((a, b) => b.amount - a.amount);
-        } catch (e) {}
-    }
-    const total = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
-    if (!rows.length) {
-        modal('Outstanding / Pending',
-            '<p style="margin:8px 0">No pending amount found.</p>' +
-            '<p class="mini">Patients with only “Pending” status and ₹0 fees are not counted as outstanding money.</p>');
-        return;
-    }
-    let html = '<p class="mini" style="margin-bottom:10px"><b>' + rows.length + '</b> case(s) · Total: <b>' + money(total) + '</b></p>';
-    html += '<div class="tablewrap" style="max-height:60vh;overflow:auto"><table class="compactTable" style="width:100%"><thead><tr>';
-    html += '<th>Case No</th><th>Patient</th><th>Mobile</th><th>Status</th><th>Pending</th><th></th></tr></thead><tbody>';
-    rows.forEach(r => {
-        const id = String(r.id || '');
-        html += '<tr>';
-        html += '<td>' + esc(r.caseNo) + '</td>';
-        html += '<td>' + esc(r.name) + '</td>';
-        html += '<td>' + esc(r.mobile || '-') + '</td>';
-        html += '<td>' + esc(r.status) + '</td>';
-        html += '<td><b>' + money(r.amount) + '</b></td>';
-        html += '<td><button type="button" class="btn embossed mini" data-pend-view="' + esc(id) + '">View</button></td>';
-        html += '</tr>';
-    });
-    html += '</tbody></table></div>';
-    modal('Outstanding / Pending', html);
-    try {
-        const body = document.getElementById('modalBody');
-        if (body && !body._pendViewBound) {
-            body._pendViewBound = true;
-            body.addEventListener('click', function(ev) {
-                const btn = ev.target && ev.target.closest ? ev.target.closest('[data-pend-view]') : null;
-                if (!btn) return;
-                const pid = btn.getAttribute('data-pend-view');
-                if (!pid) return;
-                closeModal();
-                try { openPatientProfile(pid); } catch (e) {}
-            });
-        }
-    } catch (e) {}
-}
-
-
+/** Latest explicit partialPending for this permanent case (next-visit carry). */
 function getCarryPartialPending(caseNo) {
     const key = String(caseNo || '').trim();
     if (!key) return 0;
@@ -1333,7 +1203,7 @@ function openPatientProfile(id) {
       <div class="profilePane" id="ptab-overview">
         <p class="mini">Complete quick view for reception / doctor.</p>
         <div class="actions" style="flex-wrap:wrap;gap:8px">
-          <button class="btn embossed primary" onclick="editP('${p.id}');closeModal()">${role === 'reception' ? 'Edit' : 'Edit Patient'}</button>
+          <button class="btn embossed primary" onclick="editP('${p.id}');closeModal()">Edit Patient</button>
           <button class="btn embossed" onclick="viewPatientHistory('${p.id}')">Full History</button>
           <button class="btn embossed green" onclick="closeModal();openPage('bill');setTimeout(()=>fillBillFromPatient('${p.id}'),200)">Create Bill</button>
         </div>
@@ -1732,65 +1602,6 @@ function setupOldAppointmentPanel() {
     });
 }
 
-
-function applyReceptionEditLocks(isExistingPatient) {
-    if (role !== 'reception') {
-        // ensure office never stuck locked
-        ['patientDate','caseNo','title','name','mobile','gender','age','caseType','address','refBy'].forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.removeAttribute('readonly');
-            el.disabled = false;
-            el.classList.remove('recvLockedField');
-            el.style.opacity = '';
-            el.style.pointerEvents = '';
-            el.style.background = '';
-        });
-        return;
-    }
-    if (!isExistingPatient) {
-        ['patientDate','caseNo','title','name','mobile','gender','age','caseType','address','refBy'].forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.removeAttribute('readonly');
-            el.disabled = false;
-            el.classList.remove('recvLockedField');
-            el.style.opacity = '';
-            el.style.pointerEvents = '';
-            el.style.background = '';
-        });
-        return;
-    }
-    const lockIds = ['patientDate','caseNo','title','name','mobile','gender','age','caseType'];
-    lockIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.setAttribute('readonly', 'readonly');
-        el.disabled = true;
-        el.classList.add('recvLockedField');
-        el.style.opacity = '0.65';
-        el.style.pointerEvents = 'none';
-        el.style.background = '#e8e4df';
-        el.tabIndex = -1;
-        // block typing even if browser ignores disabled briefly
-        el.onkeydown = function(e) { e.preventDefault(); return false; };
-        el.onpaste = function(e) { e.preventDefault(); return false; };
-    });
-    ['address','refBy'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.removeAttribute('readonly');
-        el.disabled = false;
-        el.classList.remove('recvLockedField');
-        el.style.opacity = '1';
-        el.style.pointerEvents = '';
-        el.style.background = '#fff';
-        el.tabIndex = 0;
-        el.onkeydown = null;
-        el.onpaste = null;
-    });
-}
-
 function buildPatientForm(type, patient = null) {
     const f = $('#patientForm');
     if (!f) return;
@@ -1849,15 +1660,6 @@ function buildPatientForm(type, patient = null) {
         $('#renewal').value = 0;
         const bpc = $('#backdatePending');
         if (bpc) bpc.checked = false;
-      }
-      // Reception editing existing patient: only Address + Ref By editable
-      const recLimited = isRec && !!patient;
-      try { applyReceptionEditLocks(recLimited); } catch (e) {}
-      setTimeout(function(){ try { applyReceptionEditLocks(recLimited); } catch (e) {} }, 0);
-      setTimeout(function(){ try { applyReceptionEditLocks(recLimited); } catch (e) {} }, 100);
-      if (recLimited) {
-        const fb = document.getElementById('patientSubmitBtn') || document.querySelector('#patientForm button.primary');
-        if (fb) fb.textContent = 'Update';
       }
     } catch (e) {}
     const locked = patient ? isPaymentLocked(patient) : false;
@@ -2053,18 +1855,6 @@ function registerCase(e) {
     e.preventDefault();
     const id = $('#editId').value;
     const oldP = active(DB.patients).find(x => String(x.id) === String(id));
-    // Reception: existing patient → only address + refBy (no other field changes)
-    if (role === 'reception' && oldP) {
-        oldP.address = ($('#address')?.value || '').trim();
-        oldP.refBy = ($('#refBy')?.value || '').trim();
-        markUpdated(oldP);
-        saveLocal();
-        try { syncNow(true); } catch (e) {}
-        try { closeForm(); } catch (e) {}
-        try { renderAll(); } catch (e) {}
-        toast('Address / Ref By updated');
-        return;
-    }
     const receivedLocked = !!oldP?.received;
     const p = {
         id: id || uid('p'),
@@ -3335,10 +3125,20 @@ function renderPaymentSummary() {
         totY = paymentAmountBy(y, month || null, day || null, 'total');
     }
 
-    // Outstanding = all pending + partial pending (deduped by case)
-    const outstanding = (typeof totalOutstandingPending === 'function')
-        ? totalOutstandingPending()
-        : active(DB.patients).reduce((a, p) => a + pendingFor(p), 0);
+   
+const patientOut = active(DB.patients).reduce((a, p) => a + pendingFor(p), 0);
+const apptOut = (DB.appointments || []).filter(a => !a.deleted).reduce((sum, a) => {
+    const st = String(a.status || a.paymentStatus || '').toLowerCase();
+    const fee = Number(a.fees || a.fee || a.amount || 0);
+    const paid = Number(a.paid || 0);
+    if (st === 'pending') {
+        return sum + Math.max(0, fee - paid || fee);
+    } else if (st === 'partial') {
+        return sum + Math.max(0, fee - paid);
+    }
+    return sum;
+}, 0);
+const outstanding = Math.max(patientOut, apptOut) > 0 ? (patientOut + apptOut) : 0;
 
     set('paySumNew', money(newY));
         set('paySumRenewal', money(renY));
@@ -3346,22 +3146,6 @@ function renderPaymentSummary() {
     // Received box removed (was duplicate of Total Collected)
     set('paySumPending', money(outstanding));
     set('paySumTotal', money(totY));
-    // Clickable pending box
-    try {
-        const box = document.querySelector('.paySummaryBox.pend') || document.getElementById('paySumPending')?.closest('.paySummaryBox');
-        if (box) {
-            box.style.cursor = 'pointer';
-            box.title = 'Click to view patients with pending amount';
-            box.setAttribute('role', 'button');
-            if (!box.dataset.pendBound) {
-                box.dataset.pendBound = '1';
-                box.addEventListener('click', function(ev) {
-                    ev.preventDefault();
-                    try { openOutstandingPendingList(); } catch (e) { console.error(e); }
-                });
-            }
-        }
-    } catch (e) {}
 
     let label = year === 'ALL' ? 'All years (Till Date)' : `Year ${year}`;
     if (useCustom) {
@@ -3982,8 +3766,6 @@ function editP(id) {
     }
     setTimeout(() => {
         buildPatientForm(p.caseType || 'new', p);
-        try { applyReceptionEditLocks(role === 'reception'); } catch (e) {}
-        setTimeout(function(){ try { applyReceptionEditLocks(role === 'reception'); } catch (e) {} }, 120);
         const f = $('#patientForm');
         if (f) {
             f.classList.remove('hidden');
@@ -6034,3 +5816,11 @@ function syncSideOpenClass() {
     });
     syncSideOpenClass();
 })();
+// Instant sync trigger on page load
+window.addEventListener('DOMContentLoaded', () => {
+    if (typeof syncWithServer === 'function') {
+        syncWithServer();
+    } else if (typeof doSync === 'function') {
+        doSync();
+    }
+});
