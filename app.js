@@ -384,12 +384,26 @@ function paidFor(id) {
 
 function pendingFor(p) {
     if (!p) return 0;
-    const feePend = Math.max(0, feeTotal(p) - paidFor(p.id));
+    if (p.foc === true) return 0;
+    const fees = feeTotal(p);
+    const paid = paidFor(p.id);
+    const feePend = Math.max(0, fees - paid);
     const ownPartial = Math.max(0, Number(p.partialPending || 0));
     let carry = 0;
     try { carry = Math.max(0, Number(getCarryPartialPending(permanentCaseNo(p)) || 0)); } catch (e) {}
-    // Show unpaid fees + explicit partial pending (carry preferred if set on family)
     const partial = Math.max(ownPartial, carry);
+    // Pending / partial visits: match history "₹ X due" (do not hide behind auto payment rows)
+    if (p.received !== true) {
+        try {
+            const st = paymentStatusInfo(p);
+            if (st && (st.kind === 'pending' || st.kind === 'partial')) {
+                const fromSt = Number(st.pending || 0);
+                if (fromSt > 0) return fromSt;
+                if (fees > 0) return fees + partial;
+                return partial;
+            }
+        } catch (e) {}
+    }
     return feePend + partial;
 }
 
