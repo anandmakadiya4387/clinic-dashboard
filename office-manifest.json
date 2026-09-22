@@ -1,7 +1,7 @@
 {
-  "id": "office-app",
+  "id": "/office-app",
   "start_url": "/office.html",
-  "scope": "/",
+  "scope": "/office.html",
   "name": "Office - Dr Anand",
   "short_name": "Office",
   "display": "standalone",
