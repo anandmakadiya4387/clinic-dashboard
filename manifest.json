@@ -1,7 +1,7 @@
 {
   "id": "reception-app",
   "start_url": "/reception.html",
-  "scope": "/reception.html",
+  "scope": "/",
   "name": "Reception - Dr Anand",
   "short_name": "Reception",
   "display": "standalone",
@@ -9,12 +9,12 @@
   "theme_color": "#ffffff",
   "icons": [
     {
-      "src": "/clinic-logo.png?v=5",
+      "src": "/clinic-logo.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/clinic-logo.png?v=5",
+      "src": "/clinic-logo.png",
       "sizes": "512x512",
       "type": "image/png"
     }
