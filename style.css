@@ -7682,53 +7682,59 @@ body {
 .paySummaryBox.pend{cursor:pointer !important;transition:transform .12s ease,box-shadow .12s ease}
 .paySummaryBox.pend:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
 .paySummaryBox.pend small::after{content:" · tap list";font-weight:400;opacity:.75;font-size:10px}
-/* --- MOBILE VIEW OPTIMIZATION & MODAL SCROLL FIX --- */
-@media (max-width: 768px) {
-  /* 1. Reconnect & Refresh Data buttons ko mobile view me hide karna */
-  button:has-text("Reconnect"),
-  button:has-text("Refresh Data"),
-  .btn-reconnect,
-  .btn-refresh,
-  button[onclick*="reconnect"],
-  button[onclick*="refresh"],
-  button[onclick*="sync"] {
+/* --- MOBILE VIEW (MAX-WIDTH 768px) COMPLETE FIX --- */
+@media screen and (max-width: 768px) {
+  /* 1. Reconnect & Refresh Data Buttons ko 100% hide karna */
+  #reconnectBtn, 
+  #refreshBtn, 
+  .reconnect-btn, 
+  .refresh-btn,
+  .sync-actions,
+  [data-action="reconnect"],
+  [data-action="refresh"] {
     display: none !important;
   }
 
-  /* Agar un buttons par alag se id ya class ho toh fallback */
-  #btnReconnect, #btnRefreshData {
+  /* Text aur onclick attribute ke basis par buttons hide karna */
+  button[onclick*="reconnect" i],
+  button[onclick*="refresh" i],
+  button[onclick*="sync" i] {
     display: none !important;
   }
 
-  /* 2. Top Header ko clean rakhna (Sirf 3-line, Office, PRO, Online aur Search bar) */
-  .top-bar, .header-container {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 8px !important;
-    padding: 6px 10px !important;
+  /* 2. Top bar se buttons hatane ke baad search bar aur header ko set karna */
+  .header-actions, .top-actions {
+    display: none !important;
   }
 
-  /* 3. Outstanding / Patient Modal Full Scrolling Fix */
-  .modal, .modal-backdrop, .dialog-overlay {
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    padding: 10px !important;
-  }
-
-  .modal-content, .modal-dialog, .dialog-box, .popup-content {
-    max-height: 85vh !important;
+  /* 3. Outstanding Table & Popup Card ko Full Scrollable banana (Up-Down & Left-Right) */
+  /* Main popup/card container */
+  .modal, 
+  .modal-dialog, 
+  .modal-content, 
+  .popup-card, 
+  .overlay-card, 
+  div[style*="position: fixed"], 
+  div[style*="position: absolute"] > div {
+    max-height: 80vh !important;
     overflow-y: auto !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
-    margin: auto !important;
-    width: 96% !important;
   }
 
-  /* Table ko horizontally scrollable banana taaki sabhi columns dikhein */
-  .modal-content table, .table-responsive {
-    display: block !important;
+  /* Table container scroll fix */
+  table {
+    display: table !important;
     width: 100% !important;
+  }
+
+  .table-container, 
+  .table-wrapper, 
+  .data-table-wrap,
+  div:has(> table) {
+    max-height: 70vh !important;
+    overflow-y: auto !important;
     overflow-x: auto !important;
-    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 }
