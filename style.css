@@ -7682,3 +7682,53 @@ body {
 .paySummaryBox.pend{cursor:pointer !important;transition:transform .12s ease,box-shadow .12s ease}
 .paySummaryBox.pend:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
 .paySummaryBox.pend small::after{content:" · tap list";font-weight:400;opacity:.75;font-size:10px}
+/* --- MOBILE VIEW OPTIMIZATION & MODAL SCROLL FIX --- */
+@media (max-width: 768px) {
+  /* 1. Reconnect & Refresh Data buttons ko mobile view me hide karna */
+  button:has-text("Reconnect"),
+  button:has-text("Refresh Data"),
+  .btn-reconnect,
+  .btn-refresh,
+  button[onclick*="reconnect"],
+  button[onclick*="refresh"],
+  button[onclick*="sync"] {
+    display: none !important;
+  }
+
+  /* Agar un buttons par alag se id ya class ho toh fallback */
+  #btnReconnect, #btnRefreshData {
+    display: none !important;
+  }
+
+  /* 2. Top Header ko clean rakhna (Sirf 3-line, Office, PRO, Online aur Search bar) */
+  .top-bar, .header-container {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding: 6px 10px !important;
+  }
+
+  /* 3. Outstanding / Patient Modal Full Scrolling Fix */
+  .modal, .modal-backdrop, .dialog-overlay {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 10px !important;
+  }
+
+  .modal-content, .modal-dialog, .dialog-box, .popup-content {
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin: auto !important;
+    width: 96% !important;
+  }
+
+  /* Table ko horizontally scrollable banana taaki sabhi columns dikhein */
+  .modal-content table, .table-responsive {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+  }
+}
