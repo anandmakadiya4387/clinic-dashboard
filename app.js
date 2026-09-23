@@ -5987,3 +5987,25 @@ try {
 } catch (e) {
   console.error(e);
 }
+// Mobile par Modal khulte hi buttons chupana aur band hote hi wapas lana
+(function handleMobilePopupButtons() {
+  const observer = new MutationObserver(function() {
+    if (window.innerWidth <= 768) {
+      // Check karein ki koi modal/popup visible hai ya nahi
+      const hasPopup = document.querySelector('.modal:not([style*="display: none"]), .modal-backdrop, div[style*="position: fixed"]');
+      const actionBtns = document.querySelectorAll('button');
+      actionBtns.forEach(function(btn) {
+        const txt = (btn.innerText || btn.textContent || '').toLowerCase();
+        if (txt.includes('reconnect') || txt.includes('refresh data')) {
+          if (hasPopup) {
+            btn.style.setProperty('display', 'none', 'important');
+          } else {
+            btn.style.removeProperty('display');
+          }
+        }
+      });
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+})();
