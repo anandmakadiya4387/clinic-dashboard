@@ -5987,42 +5987,37 @@ try {
 } catch (e) {
   console.error(e);
 }
-// Forcefully show Reconnect & Refresh as small icons in Mobile Header
-(function setupMobileActionIcons() {
-  function applyIcons() {
-    var recBtn = document.getElementById('reconnectBtn');
-    var refBtn = document.getElementById('refreshBtn');
+// Mobile Topbar Action Icons (Reconnect & Refresh) Permanent Fix
+(function initHeaderIcons() {
+  function renderButtons() {
+    var rec = document.getElementById('reconnectBtn');
+    var ref = document.getElementById('refreshBtn');
     var topActions = document.querySelector('.topbarActions');
 
+    if (!rec || !ref) return;
+
+    // 1. Agar parent .topbarActions hidden hai toh use visible karein
     if (topActions) {
-      topActions.style.setProperty('display', 'flex', 'important');
-      topActions.style.setProperty('position', 'relative', 'important');
-      topActions.style.setProperty('z-index', '999', 'important');
-      topActions.style.setProperty('justify-content', 'flex-end', 'important');
-      topActions.style.setProperty('margin', '6px 12px', 'important');
+      topActions.style.cssText = "display: flex !important; visibility: visible !important; justify-content: flex-end !important; align-items: center !important; gap: 8px !important; margin: 6px 14px 2px auto !important; width: auto !important; height: auto !important; opacity: 1 !important;";
     }
 
-    [recBtn, refBtn].forEach(function(btn) {
-      if (!btn) return;
-      btn.style.setProperty('display', 'inline-flex', 'important');
-      btn.style.setProperty('visibility', 'visible', 'important');
-      btn.style.setProperty('opacity', '1', 'important');
-      btn.style.setProperty('font-size', '11px', 'important');
-      btn.style.setProperty('padding', '3px 8px', 'important');
-      btn.style.setProperty('height', '24px', 'important');
-      btn.style.setProperty('border-radius', '12px', 'important');
-      btn.style.setProperty('background', '#2b1d16', 'important');
-      btn.style.setProperty('color', '#ffffff', 'important');
-    });
+    // 2. Reconnect Button styling
+    rec.style.cssText = "display: inline-flex !important; visibility: visible !important; opacity: 1 !important; height: 26px !important; padding: 0 10px !important; font-size: 11px !important; font-weight: bold !important; border-radius: 13px !important; background: #3b2219 !important; color: #ffffff !important; border: 1px solid rgba(255,255,255,0.2) !important; align-items: center !important; cursor: pointer !important;";
+    rec.innerText = "⚡ Reconnect";
 
-    // Check if modal/popup is open -> Hide them
-    var modalOpen = document.querySelector('.modal:not([style*="display: none"]), div[style*="position: fixed"] .tablewrap');
-    if (modalOpen && window.innerWidth <= 768) {
+    // 3. Refresh Button styling
+    ref.style.cssText = "display: inline-flex !important; visibility: visible !important; opacity: 1 !important; height: 26px !important; padding: 0 10px !important; font-size: 11px !important; font-weight: bold !important; border-radius: 13px !important; background: #3b2219 !important; color: #ffffff !important; border: 1px solid rgba(255,255,255,0.2) !important; align-items: center !important; cursor: pointer !important;";
+    ref.innerText = "⟳ Refresh";
+
+    // 4. Agar koi modal / popup khule toh chupana
+    var hasModal = document.querySelector('.modal:not([style*="display: none"]), div[style*="position: fixed"] .tablewrap');
+    if (hasModal && window.innerWidth <= 768) {
       if (topActions) topActions.style.setProperty('display', 'none', 'important');
     }
   }
 
-  window.addEventListener('DOMContentLoaded', applyIcons);
-  window.addEventListener('load', applyIcons);
-  setInterval(applyIcons, 1000);
+  // Page load aur DOM load par run karein
+  document.addEventListener('DOMContentLoaded', renderButtons);
+  window.addEventListener('load', renderButtons);
+  setInterval(renderButtons, 1200);
 })();
