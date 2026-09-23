@@ -7682,59 +7682,65 @@ body {
 .paySummaryBox.pend{cursor:pointer !important;transition:transform .12s ease,box-shadow .12s ease}
 .paySummaryBox.pend:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
 .paySummaryBox.pend small::after{content:" · tap list";font-weight:400;opacity:.75;font-size:10px}
-/* --- MOBILE VIEW (MAX-WIDTH 768px) COMPLETE FIX --- */
+/* --- MOBILE VIEW: COMPACT ICONS & AUTO-HIDE ON POPUP --- */
 @media screen and (max-width: 768px) {
-  /* 1. Reconnect & Refresh Data Buttons ko 100% hide karna */
-  #reconnectBtn, 
-  #refreshBtn, 
-  .reconnect-btn, 
-  .refresh-btn,
-  .sync-actions,
-  [data-action="reconnect"],
-  [data-action="refresh"] {
-    display: none !important;
-  }
-
-  /* Text aur onclick attribute ke basis par buttons hide karna */
-  button[onclick*="reconnect" i],
-  button[onclick*="refresh" i],
-  button[onclick*="sync" i] {
-    display: none !important;
-  }
-
-  /* 2. Top bar se buttons hatane ke baad search bar aur header ko set karna */
-  .header-actions, .top-actions {
-    display: none !important;
-  }
-
-  /* 3. Outstanding Table & Popup Card ko Full Scrollable banana (Up-Down & Left-Right) */
-  /* Main popup/card container */
+  /* 1. Modal / Popup ko full screen layer aur complete scrolling dena */
   .modal, 
+  .modal-backdrop,
   .modal-dialog, 
   .modal-content, 
   .popup-card, 
-  .overlay-card, 
-  div[style*="position: fixed"], 
-  div[style*="position: absolute"] > div {
-    max-height: 80vh !important;
+  .dialog-overlay,
+  div[style*="position: fixed"] {
+    z-index: 999999 !important;
+    max-height: 90vh !important;
     overflow-y: auto !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
   }
 
-  /* Table container scroll fix */
-  table {
-    display: table !important;
-    width: 100% !important;
-  }
-
+  /* Table ko upar-niche aur horizontal scrollable banana */
+  .modal table, 
   .table-container, 
-  .table-wrapper, 
-  .data-table-wrap,
+  .table-responsive,
   div:has(> table) {
-    max-height: 70vh !important;
+    max-height: 78vh !important;
     overflow-y: auto !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* 2. Reconnect aur Refresh buttons ko top bar mein chhote neat icons banana */
+  .header-actions,
+  div:has(> button[onclick*="reconnect" i]) {
+    position: static !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 6px !important;
+    margin: 4px 10px !important;
+    z-index: 10 !important;
+  }
+
+  button[onclick*="reconnect" i],
+  button[onclick*="refresh" i],
+  .reconnect-btn,
+  .refresh-btn {
+    font-size: 11px !important;
+    padding: 3px 8px !important;
+    border-radius: 6px !important;
+    height: 26px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    white-space: nowrap !important;
+  }
+
+  /* 3. Jab bhi koi Popup/Modal khula ho, tab in buttons ko bilkul hide kar dena */
+  body:has(.modal:not([style*="display: none"])) button[onclick*="reconnect" i],
+  body:has(.modal:not([style*="display: none"])) button[onclick*="refresh" i],
+  body.modal-open button[onclick*="reconnect" i],
+  body.modal-open button[onclick*="refresh" i] {
+    display: none !important;
+    visibility: hidden !important;
   }
 }
