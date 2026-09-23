@@ -7682,65 +7682,60 @@ body {
 .paySummaryBox.pend{cursor:pointer !important;transition:transform .12s ease,box-shadow .12s ease}
 .paySummaryBox.pend:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
 .paySummaryBox.pend small::after{content:" · tap list";font-weight:400;opacity:.75;font-size:10px}
-/* --- MOBILE VIEW: COMPACT ICONS & AUTO-HIDE ON POPUP --- */
+/* =========================================================
+   1. PC & UNIVERSAL SCROLL FIX (PC par har jagah scroll chalu)
+   ========================================================= */
+html, body {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  height: auto !important;
+  min-height: 100% !important;
+}
+
+/* Modal aur Table PC par bhi smoothly scroll hon */
+.modal, .modal-dialog, .modal-content, .popup-card, .table-container, .table-responsive {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+/* =========================================================
+   2. MOBILE VIEW (MAX-WIDTH 768px): COMPACT ICONS & CLEAN TOP BAR
+   ========================================================= */
 @media screen and (max-width: 768px) {
-  /* 1. Modal / Popup ko full screen layer aur complete scrolling dena */
-  .modal, 
-  .modal-backdrop,
-  .modal-dialog, 
-  .modal-content, 
-  .popup-card, 
-  .dialog-overlay,
-  div[style*="position: fixed"] {
-    z-index: 999999 !important;
-    max-height: 90vh !important;
-    overflow-y: auto !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
-
-  /* Table ko upar-niche aur horizontal scrollable banana */
-  .modal table, 
-  .table-container, 
-  .table-responsive,
-  div:has(> table) {
-    max-height: 78vh !important;
-    overflow-y: auto !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
-
-  /* 2. Reconnect aur Refresh buttons ko top bar mein chhote neat icons banana */
-  .header-actions,
-  div:has(> button[onclick*="reconnect" i]) {
-    position: static !important;
+  /* Top bar layout jahan Office, PRO, Online aur buttons line me rahein */
+  .top-bar, .header-container, header {
     display: flex !important;
-    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
     gap: 6px !important;
-    margin: 4px 10px !important;
-    z-index: 10 !important;
   }
 
+  /* Reconnect aur Refresh buttons ko chhota aur neat icon pill banana */
   button[onclick*="reconnect" i],
   button[onclick*="refresh" i],
-  .reconnect-btn,
-  .refresh-btn {
-    font-size: 11px !important;
-    padding: 3px 8px !important;
-    border-radius: 6px !important;
-    height: 26px !important;
+  .btn-reconnect,
+  .btn-refresh {
     display: inline-flex !important;
     align-items: center !important;
-    gap: 4px !important;
+    justify-content: center !important;
+    font-size: 11px !important;
+    padding: 3px 8px !important;
+    height: 26px !important;
+    border-radius: 14px !important;
+    background: #2b1d16 !important;
+    color: #fff !important;
+    border: none !important;
     white-space: nowrap !important;
+    cursor: pointer !important;
+    z-index: 5 !important;
   }
 
-  /* 3. Jab bhi koi Popup/Modal khula ho, tab in buttons ko bilkul hide kar dena */
-  body:has(.modal:not([style*="display: none"])) button[onclick*="reconnect" i],
-  body:has(.modal:not([style*="display: none"])) button[onclick*="refresh" i],
-  body.modal-open button[onclick*="reconnect" i],
-  body.modal-open button[onclick*="refresh" i] {
-    display: none !important;
-    visibility: hidden !important;
+  /* Modal / Popup ko sabse upar layer dena taaki buttons peeche rahein */
+  .modal, .modal-dialog, .modal-content, .popup-card, div[style*="position: fixed"] {
+    z-index: 999999 !important;
+    max-height: 88vh !important;
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 }
