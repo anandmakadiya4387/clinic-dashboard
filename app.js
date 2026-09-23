@@ -5939,41 +5939,34 @@ window.addEventListener('DOMContentLoaded', () => {
         doSync();
     }
 });
-// Restore Original Clinic Branding & Search Bar
-(function fixOriginalBranding() {
-    function apply() {
-        // 1. Sidebar Original Brand (No white container box)
-        const brandBox = document.querySelector('.sidebar-header') || document.querySelector('.sidebar-brand') || document.querySelector('aside > div:first-child');
-        if (brandBox) {
-            brandBox.style.padding = "14px 16px";
-            brandBox.innerHTML = `
-                <div style="display:flex; align-items:center; gap:12px; background:transparent;">
-                    <img src="clinic-logo.png" style="height:48px; width:auto; max-width:52px; object-fit:contain; background:transparent;" alt="Logo" onerror="this.src='icon-192.png'">
-                    <div style="line-height:1.2; text-align:left;">
-                        <div style="font-weight:800; font-size:16px; color:#22c55e; letter-spacing:0.5px;">ANAND <span style="color:#2563eb; font-size:11px; font-weight:700;">Homoeopathy</span></div>
-                        <div style="font-weight:700; font-size:12px; color:#f59e0b;">Multi Speciality Clinic</div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // 2. Search Bar Icon (SVG Icon)
-        const sInput = document.querySelector('input[placeholder*="Search patient"]');
-        if (sInput && sInput.parentElement) {
-            const p = sInput.parentElement;
-            p.style.position = 'relative';
-            sInput.style.paddingLeft = '36px';
-            if (!p.querySelector('.svg-search-ic')) {
-                const ic = document.createElement('div');
-                ic.className = 'svg-search-ic';
-                ic.style.cssText = 'position:absolute; left:12px; top:50%; transform:translateY(-50%); pointer-events:none; display:flex; align-items:center; color:#9ca3af;';
-                ic.innerHTML = <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
-                p.insertBefore(ic, sInput);
-            }
-        }
+// Safe Branding & Icon Patch without breaking core scripts
+try {
+  window.addEventListener('load', function() {
+    // 1. Sidebar Brand
+    var bBox = document.querySelector('.sidebar-header') || document.querySelector('.sidebar-brand') || document.querySelector('aside > div:first-child');
+    if (bBox) {
+      bBox.style.padding = "14px 16px";
+      bBox.innerHTML = '<div style="display:flex;align-items:center;gap:12px;background:transparent;">' +
+        '<img src="clinic-logo.png" style="height:48px;width:auto;max-width:52px;object-fit:contain;background:transparent;" alt="Logo" onerror="this.src=\'icon-192.png\'">' +
+        '<div style="line-height:1.2;text-align:left;">' +
+          '<div style="font-weight:800;font-size:16px;color:#22c55e;letter-spacing:0.5px;">ANAND <span style="color:#2563eb;font-size:11px;font-weight:700;">Homoeopathy</span></div>' +
+          '<div style="font-weight:700;font-size:12px;color:#f59e0b;">Multi Speciality Clinic</div>' +
+        '</div>' +
+      '</div>';
     }
 
-    apply();
-    setTimeout(apply, 400);
-    setTimeout(apply, 1200);
-})();
+    // 2. Search Icon
+    var sInput = document.querySelector('input[placeholder*="Search patient"]');
+    if (sInput && sInput.parentElement && !sInput.parentElement.querySelector('.svg-search-ic')) {
+      sInput.parentElement.style.position = 'relative';
+      sInput.style.paddingLeft = '36px';
+      var ic = document.createElement('div');
+      ic.className = 'svg-search-ic';
+      ic.style.cssText = 'position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none;display:flex;align-items:center;color:#9ca3af;';
+      ic.innerHTML = '<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>';
+      sInput.parentElement.insertBefore(ic, sInput);
+    }
+  });
+} catch (err) {
+  console.error("Branding patch error:", err);
+}
