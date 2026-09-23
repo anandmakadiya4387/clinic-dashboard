@@ -7683,59 +7683,63 @@ body {
 .paySummaryBox.pend:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
 .paySummaryBox.pend small::after{content:" · tap list";font-weight:400;opacity:.75;font-size:10px}
 /* =========================================================
-   1. PC & UNIVERSAL SCROLL FIX (PC par har jagah scroll chalu)
+   1. UNIVERSAL & PC SCROLL FIX (PC aur Mobile dono ke liye)
    ========================================================= */
-html, body {
+/* Sabhi Tables aur Cards ko vertical & horizontal scroll dena */
+.tablewrap,
+.table-responsive,
+.table-container,
+div[class*="tablewrap"],
+div[class*="TableWrap"] {
+  max-height: 70vh !important;
   overflow-y: auto !important;
   overflow-x: auto !important;
-  height: auto !important;
-  min-height: 100% !important;
+  -webkit-overflow-scrolling: touch !important;
 }
 
-/* Modal aur Table PC par bhi smoothly scroll hon */
-.modal, .modal-dialog, .modal-content, .popup-card, .table-container, .table-responsive {
+/* Modal / Popup Card scrolling fix */
+.modal,
+.modal-content,
+.dialog-box,
+.popup,
+div[style*="position: fixed"],
+div[style*="z-index"] > div {
+  max-height: 85vh !important;
   overflow-y: auto !important;
   overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
 }
 
 /* =========================================================
-   2. MOBILE VIEW (MAX-WIDTH 768px): COMPACT ICONS & CLEAN TOP BAR
+   2. MOBILE VIEW (MAX-WIDTH 768px): BUTTONS & POPUP OVERLAY FIX
    ========================================================= */
 @media screen and (max-width: 768px) {
-  /* Top bar layout jahan Office, PRO, Online aur buttons line me rahein */
-  .top-bar, .header-container, header {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    align-items: center !important;
-    gap: 6px !important;
-  }
-
-  /* Reconnect aur Refresh buttons ko chhota aur neat icon pill banana */
+  /* Reconnect aur Refresh buttons ko normal flow me header ke bagal me rakhna (Beech me nahi aayenge) */
   button[onclick*="reconnect" i],
   button[onclick*="refresh" i],
   .btn-reconnect,
   .btn-refresh {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
     font-size: 11px !important;
     padding: 3px 8px !important;
     height: 26px !important;
-    border-radius: 14px !important;
-    background: #2b1d16 !important;
-    color: #fff !important;
-    border: none !important;
-    white-space: nowrap !important;
-    cursor: pointer !important;
-    z-index: 5 !important;
+    border-radius: 12px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    margin: 2px !important;
   }
 
-  /* Modal / Popup ko sabse upar layer dena taaki buttons peeche rahein */
-  .modal, .modal-dialog, .modal-content, .popup-card, div[style*="position: fixed"] {
+  /* Jab bhi koi Table/Popup open ho, usko sabse top layer (z-index) par rakhna */
+  .modal,
+  .modal-content,
+  div[style*="position: fixed"] {
     z-index: 999999 !important;
-    max-height: 88vh !important;
-    overflow-y: auto !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
+    width: 95% !important;
+    margin: auto !important;
+  }
+
+  /* Table ko full screen vertical scrolling */
+  .tablewrap {
+    max-height: 78vh !important;
+    width: 100% !important;
   }
 }
