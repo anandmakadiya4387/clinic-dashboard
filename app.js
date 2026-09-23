@@ -5987,8 +5987,8 @@ try {
 } catch (e) {
   console.error(e);
 }
-// Mobile Topbar Action Icons (Reconnect & Refresh) Permanent Fix
-(function initHeaderIcons() {
+// Mobile Topbar Action Icons (Reconnect & Refresh) Direct Display
+(function showActionButtons() {
   function renderButtons() {
     var rec = document.getElementById('reconnectBtn');
     var ref = document.getElementById('refreshBtn');
@@ -5996,28 +5996,49 @@ try {
 
     if (!rec || !ref) return;
 
-    // 1. Agar parent .topbarActions hidden hai toh use visible karein
+    // Parent container ko screen par lana
     if (topActions) {
-      topActions.style.cssText = "display: flex !important; visibility: visible !important; justify-content: flex-end !important; align-items: center !important; gap: 8px !important; margin: 6px 14px 2px auto !important; width: auto !important; height: auto !important; opacity: 1 !important;";
+      topActions.style.setProperty('display', 'flex', 'important');
+      topActions.style.setProperty('visibility', 'visible', 'important');
+      topActions.style.setProperty('justify-content', 'flex-end', 'important');
+      topActions.style.setProperty('align-items', 'center', 'important');
+      topActions.style.setProperty('gap', '8px', 'important');
+      topActions.style.setProperty('margin', '6px 14px 6px auto', 'important');
+      topActions.style.setProperty('width', 'auto', 'important');
+      topActions.style.setProperty('height', 'auto', 'important');
+      topActions.style.setProperty('opacity', '1', 'important');
     }
 
-    // 2. Reconnect Button styling
-    rec.style.cssText = "display: inline-flex !important; visibility: visible !important; opacity: 1 !important; height: 26px !important; padding: 0 10px !important; font-size: 11px !important; font-weight: bold !important; border-radius: 13px !important; background: #3b2219 !important; color: #ffffff !important; border: 1px solid rgba(255,255,255,0.2) !important; align-items: center !important; cursor: pointer !important;";
+    // Reconnect Button styling
+    rec.style.setProperty('display', 'inline-flex', 'important');
+    rec.style.setProperty('visibility', 'visible', 'important');
+    rec.style.setProperty('opacity', '1', 'important');
+    rec.style.setProperty('height', '26px', 'important');
+    rec.style.setProperty('padding', '0 10px', 'important');
+    rec.style.setProperty('font-size', '11px', 'important');
+    rec.style.setProperty('font-weight', 'bold', 'important');
+    rec.style.setProperty('border-radius', '13px', 'important');
+    rec.style.setProperty('background', '#3b2219', 'important');
+    rec.style.setProperty('color', '#ffffff', 'important');
+    rec.style.setProperty('border', '1px solid rgba(255,255,255,0.2)', 'important');
     rec.innerText = "⚡ Reconnect";
 
-    // 3. Refresh Button styling
-    ref.style.cssText = "display: inline-flex !important; visibility: visible !important; opacity: 1 !important; height: 26px !important; padding: 0 10px !important; font-size: 11px !important; font-weight: bold !important; border-radius: 13px !important; background: #3b2219 !important; color: #ffffff !important; border: 1px solid rgba(255,255,255,0.2) !important; align-items: center !important; cursor: pointer !important;";
+    // Refresh Button styling
+    ref.style.setProperty('display', 'inline-flex', 'important');
+    ref.style.setProperty('visibility', 'visible', 'important');
+    ref.style.setProperty('opacity', '1', 'important');
+    ref.style.setProperty('height', '26px', 'important');
+    ref.style.setProperty('padding', '0 10px', 'important');
+    ref.style.setProperty('font-size', '11px', 'important');
+    ref.style.setProperty('font-weight', 'bold', 'important');
+    ref.style.setProperty('border-radius', '13px', 'important');
+    ref.style.setProperty('background', '#3b2219', 'important');
+    ref.style.setProperty('color', '#ffffff', 'important');
+    ref.style.setProperty('border', '1px solid rgba(255,255,255,0.2)', 'important');
     ref.innerText = "⟳ Refresh";
-
-    // 4. Agar koi modal / popup khule toh chupana
-    var hasModal = document.querySelector('.modal:not([style*="display: none"]), div[style*="position: fixed"] .tablewrap');
-    if (hasModal && window.innerWidth <= 768) {
-      if (topActions) topActions.style.setProperty('display', 'none', 'important');
-    }
   }
 
-  // Page load aur DOM load par run karein
   document.addEventListener('DOMContentLoaded', renderButtons);
   window.addEventListener('load', renderButtons);
-  setInterval(renderButtons, 1200);
+  setInterval(renderButtons, 1000);
 })();
