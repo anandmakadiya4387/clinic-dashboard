@@ -5987,25 +5987,42 @@ try {
 } catch (e) {
   console.error(e);
 }
-// Mobile Popup aane par Reconnect aur Refresh buttons ko hide karna
-(function() {
-  const checkPopupState = function() {
-    if (window.innerWidth <= 768) {
-      const activeModal = document.querySelector('.modal:not([style*="display: none"]), .modal-backdrop, .modal-content, div[style*="position: fixed"]');
-      const actionBtns = document.querySelectorAll('button');
-      actionBtns.forEach(function(btn) {
-        const text = (btn.innerText || btn.textContent || '').toLowerCase();
-        if (text.includes('reconnect') || text.includes('refresh data')) {
-          if (activeModal) {
-            btn.style.setProperty('display', 'none', 'important');
-          } else {
-            btn.style.removeProperty('display');
-          }
-        }
-      });
-    }
-  };
+// Forcefully show Reconnect & Refresh as small icons in Mobile Header
+(function setupMobileActionIcons() {
+  function applyIcons() {
+    var recBtn = document.getElementById('reconnectBtn');
+    var refBtn = document.getElementById('refreshBtn');
+    var topActions = document.querySelector('.topbarActions');
 
-  const obs = new MutationObserver(checkPopupState);
-  obs.observe(document.body, { childList: true, subtree: true, attributes: true });
+    if (topActions) {
+      topActions.style.setProperty('display', 'flex', 'important');
+      topActions.style.setProperty('position', 'relative', 'important');
+      topActions.style.setProperty('z-index', '999', 'important');
+      topActions.style.setProperty('justify-content', 'flex-end', 'important');
+      topActions.style.setProperty('margin', '6px 12px', 'important');
+    }
+
+    [recBtn, refBtn].forEach(function(btn) {
+      if (!btn) return;
+      btn.style.setProperty('display', 'inline-flex', 'important');
+      btn.style.setProperty('visibility', 'visible', 'important');
+      btn.style.setProperty('opacity', '1', 'important');
+      btn.style.setProperty('font-size', '11px', 'important');
+      btn.style.setProperty('padding', '3px 8px', 'important');
+      btn.style.setProperty('height', '24px', 'important');
+      btn.style.setProperty('border-radius', '12px', 'important');
+      btn.style.setProperty('background', '#2b1d16', 'important');
+      btn.style.setProperty('color', '#ffffff', 'important');
+    });
+
+    // Check if modal/popup is open -> Hide them
+    var modalOpen = document.querySelector('.modal:not([style*="display: none"]), div[style*="position: fixed"] .tablewrap');
+    if (modalOpen && window.innerWidth <= 768) {
+      if (topActions) topActions.style.setProperty('display', 'none', 'important');
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', applyIcons);
+  window.addEventListener('load', applyIcons);
+  setInterval(applyIcons, 1000);
 })();
