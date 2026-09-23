@@ -400,7 +400,7 @@ function pendingFor(p) {
     try { carry = Math.max(0, Number(getCarryPartialPending(permanentCaseNo(p)) || 0)); } catch (e) {}
     const partial = Math.max(ownPartial, carry);
 
-    // History "₹800 due" pending visits: count due even if auto payment rows zero the gap
+    // Pending / partial visits must match history "₹ X due" (auto payment rows can zero feePend)
     if (p.received !== true) {
         try {
             const st = paymentStatusInfo(p);
@@ -421,6 +421,104 @@ function pendingFor(p) {
 /** Unified payment status: foc | pending | partial | received */
 
 /** Latest explicit partialPending for this permanent case (next-visit carry). */
+
+function patientDisplayName(p) {
+    if (!p) return '';
+    const t = (p.title || '').trim();
+    const n = (p.name || '').trim();
+    return ((t ? t + ' ' : '') + n).trim() || String(p.caseNo || p.id || '');
+}
+
+function outstandingPendingEntries() {
+    const byKey = new Map();
+    try {
+        active(DB.patients).forEach(p => {
+            if (!p || p.foc === true) return;
+            const amt = Number(pendingFor(p) || 0);
+            if (!(amt > 0)) return;
+            let key = '';
+            try { key = String(permanentCaseNo(p) || p.caseNo || p.id); } catch (e) { key = String(p.caseNo || p.id); }
+            let stLabel = 'Pending';
+            let kind = 'pending';
+            try {
+                const st = paymentStatusInfo(p);
+                if (st) {
+                    kind = st.kind || kind;
+                    if (st.kind === 'partial') stLabel = 'Partial pending';
+                    else if (st.kind === 'pending') stLabel = 'Pending';
+                    else if (st.label) stLabel = st.label;
+                }
+            } catch (e) {}
+            const row = {
+                id: p.id,
+                caseNo: p.caseNo || key,
+                name: patientDisplayName(p),
+                amount: amt,
+                status: stLabel,
+                kind: kind,
+                mobile: p.mobile || ''
+            };
+            const prev = byKey.get(key);
+            if (!prev) byKey.set(key, row);
+            else {
+                prev.amount = Number(prev.amount || 0) + amt;
+                // if any visit partial, show Partial pending on row
+                if (kind === 'partial') { prev.status = 'Partial pending'; prev.kind = 'partial'; }
+                if (p.caseType === 'new') {
+                    prev.name = row.name;
+                    prev.id = row.id;
+                    prev.caseNo = row.caseNo;
+                    prev.mobile = row.mobile || prev.mobile;
+                }
+            }
+        });
+    } catch (e) { console.error(e); }
+    return Array.from(byKey.values()).sort((a, b) => b.amount - a.amount);
+}
+
+function openOutstandingPendingList() {
+    let rows = [];
+    try { rows = outstandingPendingEntries(); } catch (e) { rows = []; }
+    const total = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+    const nPend = rows.filter(r => r.kind !== 'partial').length;
+    const nPart = rows.filter(r => r.kind === 'partial').length;
+    if (!rows.length) {
+        modal('Outstanding / Pending', '<p>No pending or partial pending amount found.</p>');
+        return;
+    }
+    let html = '<p class="mini" style="margin-bottom:10px"><b>' + rows.length + '</b> case(s) · Total: <b>' + money(total) + '</b>';
+    html += ' · Pending: ' + nPend + ' · Partial pending: ' + nPart + '</p>';
+    html += '<div class="tablewrap" style="max-height:60vh;overflow:auto"><table class="table compactTable" style="width:100%"><thead><tr>';
+    html += '<th>Case No</th><th>Patient</th><th>Mobile</th><th>Status</th><th>Amount</th><th></th></tr></thead><tbody>';
+    rows.forEach(r => {
+        html += '<tr>';
+        html += '<td>' + esc(r.caseNo) + '</td>';
+        html += '<td>' + esc(r.name) + '</td>';
+        html += '<td>' + esc(r.mobile || '-') + '</td>';
+        html += '<td>' + esc(r.status) + '</td>';
+        html += '<td><b>' + money(r.amount) + '</b></td>';
+        html += '<td><button type="button" class="btn embossed mini" data-pend-view="' + esc(String(r.id || '')) + '">View</button></td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    modal('Outstanding / Pending', html);
+    try {
+        const body = document.getElementById('modalBody');
+        if (body && !body._pendViewBound) {
+            body._pendViewBound = true;
+            body.addEventListener('click', function(ev) {
+                const btn = ev.target && ev.target.closest ? ev.target.closest('[data-pend-view]') : null;
+                if (!btn) return;
+                const pid = btn.getAttribute('data-pend-view');
+                if (!pid) return;
+                closeModal();
+                try { openPatientProfile(pid); } catch (e) {}
+            });
+        }
+    } catch (e) {}
+}
+
+
 function getCarryPartialPending(caseNo) {
     const key = String(caseNo || '').trim();
     if (!key) return 0;
@@ -454,7 +552,7 @@ function paymentStatusInfo(p) {
         return { kind: 'pending', label: 'Pending', pending: pending || fees || partialExtra, paid, fees, locked: false };
     }
     if (p.received === false && fees > 0) {
-        if (paid > 0 && paid < fees) return { kind: 'partial', label: 'Partial', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
+        if (paid > 0 && paid < fees) return { kind: 'partial', label: 'Partial pending', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
         if (paid <= 0 || pending > 0) return { kind: 'pending', label: 'Pending', pending: pending || fees, paid, fees, locked: false };
     }
     // Fully received only when explicitly marked received AND nothing due
@@ -462,7 +560,7 @@ function paymentStatusInfo(p) {
         return { kind: 'received', label: 'Received', pending: 0, paid, fees, locked: true };
     }
     if (paid > 0 && (Math.max(0, fees - paid) > 0 || partialExtra > 0)) {
-        return { kind: 'partial', label: 'Partial', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
+        return { kind: 'partial', label: 'Partial pending', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
     }
     // Payments fully cover fees and not marked pending → received
     if (fees > 0 && paid >= fees && partialExtra <= 0 && p.received !== false && !p.forcePending) {
@@ -495,8 +593,12 @@ function caseFamilyPaymentStatus(p) {
         const anyFoc = family.some(v => v && v.foc === true);
         if (anyFoc && !hasPending && !hasPartial && !hasReceived) return { kind: 'foc', label: 'FOC' };
     }
-    if (hasPending || hasPartial) {
-        if (hasReceived || hasPartial) return { kind: 'part_rec', label: 'Part Rec' };
+    // Partial pending = same visit/bill pe kuch paid + kuch due (hasPartial)
+    // Full visit pending (even if other visits received) = Pending — NOT Part Rec
+    if (hasPartial) {
+        return { kind: 'partial', label: 'Partial pending' };
+    }
+    if (hasPending) {
         return { kind: 'pending', label: 'Pending' };
     }
     if (hasReceived) return { kind: 'received', label: 'Received' };
@@ -504,12 +606,11 @@ function caseFamilyPaymentStatus(p) {
 }
 
 function paymentStatusHtml(p) {
-    // Patient list / report: family-level so any pending visit shows Part Rec
+    // Family-level: Pending = full due visit(s); Partial pending = kuch paid + kuch due
     const st = caseFamilyPaymentStatus(p);
     if (st.kind === 'foc') return '<span class="payFocTag">FOC</span>';
     if (st.kind === 'received') return '<span class="payReceivedTag">Received</span>';
-    if (st.kind === 'part_rec') return '<span class="payPartRecTag">Part Rec</span>';
-    if (st.kind === 'partial') return '<span class="payPartRecTag">Part Rec</span>';
+    if (st.kind === 'partial' || st.kind === 'part_rec') return '<span class="payPartRecTag">Partial pending</span>';
     return '<span class="payPendingTag">Pending</span>';
 }
 
@@ -3146,6 +3247,20 @@ const outstanding = Math.max(patientOut, apptOut) > 0 ? (patientOut + apptOut) :
     // Received box removed (was duplicate of Total Collected)
     set('paySumPending', money(outstanding));
     set('paySumTotal', money(totY));
+    try {
+        const box = document.querySelector('.paySummaryBox.pend') || document.getElementById('paySumPending')?.closest('.paySummaryBox');
+        if (box) {
+            box.style.cursor = 'pointer';
+            box.title = 'Click to view pending / partial pending patients';
+            if (!box.dataset.pendBound) {
+                box.dataset.pendBound = '1';
+                box.addEventListener('click', function(ev) {
+                    ev.preventDefault();
+                    try { openOutstandingPendingList(); } catch (e) { console.error(e); }
+                });
+            }
+        }
+    } catch (e) {}
 
     let label = year === 'ALL' ? 'All years (Till Date)' : `Year ${year}`;
     if (useCustom) {
