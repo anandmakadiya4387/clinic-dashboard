@@ -5939,3 +5939,40 @@ window.addEventListener('DOMContentLoaded', () => {
         doSync();
     }
 });
+// Restore Clinic Branding & Search Icon dynamically
+(function restoreBranding() {
+    const applyBrand = () => {
+        // 1. Sidebar Brand & Name Restore
+        const brandContainer = document.querySelector('.sidebar-header') || document.querySelector('.sidebar-brand') || document.querySelector('aside > div:first-child');
+        if (brandContainer) {
+            brandContainer.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px; padding:12px 14px;">
+                    <img src="clinic-logo.png" style="height:44px; width:44px; object-fit:contain;" alt="Logo" onerror="this.src='clinic-logo-light.png'">
+                    <div style="line-height:1.2; text-align:left;">
+                        <div style="font-weight:800; font-size:14px; color:#22c55e;">ANAND <span style="color:#3b82f6; font-size:11px;">Homoeopathy</span></div>
+                        <div style="font-weight:700; font-size:11px; color:#f59e0b;">Multi Speciality Clinic</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 2. Search Bar Icon Restore
+        const searchInput = document.querySelector('input[placeholder*="Search patient"]');
+        if (searchInput && searchInput.parentElement && !searchInput.parentElement.querySelector('.search-icon-fixed')) {
+            searchInput.parentElement.style.position = 'relative';
+            searchInput.style.paddingLeft = '36px';
+            const icon = document.createElement('span');
+            icon.className = 'search-icon-fixed';
+            icon.innerHTML = '🔍';
+            icon.style.cssText = 'position:absolute; left:12px; top:50%; transform:translateY(-50%); pointer-events:none; font-size:13px; opacity:0.6;';
+            searchInput.parentElement.insertBefore(icon, searchInput);
+        }
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyBrand);
+    } else {
+        applyBrand();
+    }
+    setTimeout(applyBrand, 500);
+})();
