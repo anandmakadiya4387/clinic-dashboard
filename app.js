@@ -5987,17 +5987,16 @@ try {
 } catch (e) {
   console.error(e);
 }
-// Mobile par Modal khulte hi buttons chupana aur band hote hi wapas lana
-(function handleMobilePopupButtons() {
-  const observer = new MutationObserver(function() {
+// Mobile Popup aane par Reconnect aur Refresh buttons ko hide karna
+(function() {
+  const checkPopupState = function() {
     if (window.innerWidth <= 768) {
-      // Check karein ki koi modal/popup visible hai ya nahi
-      const hasPopup = document.querySelector('.modal:not([style*="display: none"]), .modal-backdrop, div[style*="position: fixed"]');
+      const activeModal = document.querySelector('.modal:not([style*="display: none"]), .modal-backdrop, .modal-content, div[style*="position: fixed"]');
       const actionBtns = document.querySelectorAll('button');
       actionBtns.forEach(function(btn) {
-        const txt = (btn.innerText || btn.textContent || '').toLowerCase();
-        if (txt.includes('reconnect') || txt.includes('refresh data')) {
-          if (hasPopup) {
+        const text = (btn.innerText || btn.textContent || '').toLowerCase();
+        if (text.includes('reconnect') || text.includes('refresh data')) {
+          if (activeModal) {
             btn.style.setProperty('display', 'none', 'important');
           } else {
             btn.style.removeProperty('display');
@@ -6005,7 +6004,8 @@ try {
         }
       });
     }
-  });
+  };
 
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+  const obs = new MutationObserver(checkPopupState);
+  obs.observe(document.body, { childList: true, subtree: true, attributes: true });
 })();
