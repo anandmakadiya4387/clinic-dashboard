@@ -6380,6 +6380,7 @@ window.openMultiYearGrowthModal = function() {
       document.querySelectorAll('.navBtn').forEach(function(b) { b.classList.remove('active'); });
       document.querySelectorAll('[data-page="yearlyGrowth"]').forEach(function(b) { b.classList.add('active'); });
       try { renderYearlyGrowth(); } catch (e) { console.error(e); }
+      try { if (window.innerWidth < 900) { var side = document.getElementById('side'); if (side) { side.classList.remove('open'); document.body.classList.remove('side-open'); } } } catch (e2) {}
     } catch (e) { console.error(e); }
   }
   document.addEventListener('click', function(ev) {
@@ -6395,5 +6396,27 @@ window.openMultiYearGrowthModal = function() {
     if (t.id === 'btnOpenFyGrowthPage' || (t.closest && t.closest('#btnOpenFyGrowthPage'))) {
       try { openMultiYearGrowthModal(); } catch (e) {}
     }
+  }, true);
+})();
+
+
+(function closeSideOnNavMobile() {
+  function closeSide() {
+    try {
+      if (window.innerWidth >= 900) return;
+      var side = document.getElementById('side');
+      if (!side) return;
+      side.classList.remove('open');
+      document.body.classList.remove('side-open');
+    } catch (e) {}
+  }
+  document.addEventListener('click', function(ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    // any sidebar nav button including payment sub items
+    var nav = t.closest('#side .navBtn, #side .navSubBtn, #side [data-page], #side [data-pay-view], #side [data-patient-view]');
+    if (!nav) return;
+    // delay so page switch can run first
+    setTimeout(closeSide, 30);
   }, true);
 })();

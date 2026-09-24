@@ -1,11 +1,65 @@
-<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=pro-ygrowth-sep-v1"><style id="ygrowthCss">
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=pro-ygrowth-sep-v2"><style id="ygrowthCss">
 .ygPct{font-size:11px;font-weight:600;white-space:nowrap}
 .ygPct.ygUp{color:#059669}.ygPct.ygDown{color:#dc2626}
 .ygPct.ygFlat{color:#64748b}.ygPct.ygNew{color:#2563eb}
-#yearlyGrowth .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-@media (max-width:700px){
-  #yearlyGrowth table{font-size:11px}
+#yearlyGrowth .tablewrap{
+  overflow-x:auto;-webkit-overflow-scrolling:touch;
+  width:100%;max-width:100%;
+}
+#yearlyGrowth table.payMonthTable{
+  width:100%;
+  table-layout:fixed;
+  border-collapse:collapse;
+  font-size:12px;
+  min-width:0 !important;
+}
+#yearlyGrowth table.payMonthTable th,
+#yearlyGrowth table.payMonthTable td{
+  padding:6px 4px;
+  text-align:center;
+  vertical-align:middle;
+  word-break:break-word;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#yearlyGrowth table.payMonthTable th:first-child,
+#yearlyGrowth table.payMonthTable td:first-child{
+  width:52px;
+  text-align:left;
+  font-weight:700;
+  padding-left:6px;
+}
+#yearlyGrowth table.payMonthTable th:nth-child(2),
+#yearlyGrowth table.payMonthTable td:nth-child(2),
+#yearlyGrowth table.payMonthTable th:nth-child(4),
+#yearlyGrowth table.payMonthTable td:nth-child(4),
+#yearlyGrowth table.payMonthTable th:nth-child(6),
+#yearlyGrowth table.payMonthTable td:nth-child(6),
+#yearlyGrowth table.payMonthTable th:nth-child(8),
+#yearlyGrowth table.payMonthTable td:nth-child(8){
+  width:11%;
+}
+#yearlyGrowth table.payMonthTable th:nth-child(3),
+#yearlyGrowth table.payMonthTable td:nth-child(3),
+#yearlyGrowth table.payMonthTable th:nth-child(5),
+#yearlyGrowth table.payMonthTable td:nth-child(5),
+#yearlyGrowth table.payMonthTable th:nth-child(7),
+#yearlyGrowth table.payMonthTable td:nth-child(7),
+#yearlyGrowth table.payMonthTable th:nth-child(9),
+#yearlyGrowth table.payMonthTable td:nth-child(9){
+  width:9%;
+  font-size:11px;
+}
+#yearlyGrowth .hero{flex-wrap:wrap;gap:10px}
+#yearlyGrowth .hero p{display:none}
+@media (max-width:900px){
+  #yearlyGrowth table.payMonthTable{font-size:11px;min-width:560px !important;table-layout:auto}
+  #yearlyGrowth table.payMonthTable th:first-child,
+  #yearlyGrowth table.payMonthTable td:first-child{width:auto}
   #btnOpenFyGrowthPage{width:100%}
+}
+@media (min-width:901px){
+  #yearlyGrowth .tablewrap{overflow-x:visible}
 }
 </style></head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
   <button type="button" class="navBtn navParent" id="patientsNavToggle">Patients ▾</button>
@@ -281,7 +335,7 @@ id="incomeExpensePanel" class="hidden">
 
 
 <section class="page" id="yearlyGrowth">
-  <div class="hero"><div><h1>Yearly Growth</h1><p>Case counts and income with year-over-year % (calendar year Jan–Dec). Separate from Clinic Payment, Yearly Payment, Income &amp; Expenses, Spend Entries.</p></div>
+  <div class="hero"><div><h1>Yearly Growth</h1></div>
   <div class="actions"><button type="button" class="btn embossed primary" id="btnOpenFyGrowthPage">Financial Year Growth Report</button></div>
   </div>
   <div class="card" style="margin-top:14px">
@@ -296,7 +350,7 @@ id="incomeExpensePanel" class="hidden">
         </div>
       </div>
       <div class="tablewrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-        <table class="table payMonthTable" style="min-width:520px"><thead><tr>
+        <table class="table payMonthTable" style="width:100%"><thead><tr>
           <th>Year</th><th>New</th><th>YoY</th><th>Follow-up</th><th>YoY</th><th>Renewal</th><th>YoY</th><th>Total</th><th>YoY</th>
         </tr></thead><tbody id="ygCaseTableBody"></tbody></table>
       </div>
@@ -314,7 +368,7 @@ id="incomeExpensePanel" class="hidden">
         </div>
       </div>
       <div class="tablewrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-        <table class="table payMonthTable" style="min-width:520px"><thead><tr>
+        <table class="table payMonthTable" style="width:100%"><thead><tr>
           <th>Year</th><th>New ₹</th><th>YoY</th><th>Medicine ₹</th><th>YoY</th><th>Renewal ₹</th><th>YoY</th><th>Total ₹</th><th>YoY</th>
         </tr></thead><tbody id="ygIncomeTableBody"></tbody></table>
       </div>
@@ -503,6 +557,6 @@ id="incomeExpensePanel" class="hidden">
     </div>
     </div>
     </div>
-    <script src="app.js?v=pro-ygrowth-sep-v1"></script>
+    <script src="app.js?v=pro-ygrowth-sep-v2"></script>
     </body>
     </html>
