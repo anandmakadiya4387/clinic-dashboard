@@ -6055,3 +6055,237 @@ try {
   window.addEventListener('load', renderButtons);
   setInterval(renderButtons, 1000);
 })();
+/* ==========================================================
+   ANNUAL MULTI-YEAR GROWTH & REVENUE COMPARISON (SAFE & ISOLATED)
+   ========================================================== */
+
+function getMultiYearDataSafe() {
+  const getFYKey = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    return m >= 4 ? ${y}-${String(y + 1).slice(-2)} : ${y - 1}-${String(y).slice(-2)};
+  };
+
+  const fyMap = {};
+
+  const ensureFY = (fy) => {
+    if (!fy) return null;
+    if (!fyMap[fy]) {
+      fyMap[fy] = {
+        fy: fy,
+        label: 'FY ' + fy,
+        cases: { new: 0, followup: 0, renewal: 0, total: 0 },
+        income: { new: 0, renewal: 0, medicine: 0, total: 0 }
+      };
+    }
+    return fyMap[fy];
+  };
+
+  try {
+    // 1. Safe Aggregate Patients
+    const pats = (typeof active === 'function' ? active(window.DB?.patients) : window.DB?.patients) || [];
+    pats.forEach(p => {
+      const d = p.date || p.createdAt || p.createdDate || '';
+      const fy = getFYKey(d);
+      const target = ensureFY(fy);
+      if (!target) return;
+
+      const t = String(p.caseType || '').toLowerCase();
+      if (t === 'new') target.cases.new++;
+      else if (t === 'renewal') target.cases.renewal++;
+      else target.cases.followup++;
+      target.cases.total++;
+    });
+
+    // 2. Safe Aggregate Payments
+    const pays = (typeof active === 'function' ? active(window.DB?.payments) : window.DB?.payments) || [];
+    pays.forEach(pay => {
+      if (pay._deleted) return;
+      const d = pay.date || pay.createdAt || '';
+      const fy = getFYKey(d);
+      const target = ensureFY(fy);
+      if (!target) return;
+
+      const amt = Number(pay.amount || 0);
+      const cat = String(pay.feeCategory || pay.caseType || '').toLowerCase();
+
+      if (cat.includes('new')) target.income.new += amt;
+      else if (cat.includes('renew')) target.income.renewal += amt;
+      else if (cat.includes('med') || cat.includes('dispense')) target.income.medicine += amt;
+      else target.income.new += amt;
+
+      target.income.total += amt;
+    });
+  } catch (err) {
+    console.error("Error aggregating multi-year data:", err);
+  }
+
+  const sortedKeys = Object.keys(fyMap).sort();
+  return sortedKeys.map(k => fyMap[k]);
+}
+
+window.openMultiYearGrowthModal = function() {
+  let modal = document.getElementById('multiYearGrowthModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'multiYearGrowthModal';
+    modal.style.cssText = `
+      position: fixed; inset: 0; z-index: 99999;
+      background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px);
+      display: flex; justify-content: center; align-items: center;
+      padding: 10px; box-sizing: border-box;
+    `;
+    document.body.appendChild(modal);
+  }
+
+  const data = getMultiYearDataSafe();
+
+  if (!data.length) {
+    modal.innerHTML = `
+      <div style="background:#fff; padding:24px; border-radius:12px; max-width:320px; text-align:center;">
+        <p>No historical data available yet.</p>
+        <button onclick="document.getElementById('multiYearGrowthModal').remove()" style="padding:8px 16px; border-radius:6px; background:#0284c7; color:#fff; border:none; font-weight:bold; cursor:pointer;">Close</button>
+      </div>`;
+    return;
+  }
+
+  const maxCases = Math.max(...data.map(d => Math.max(d.cases.new, d.cases.followup, d.cases.renewal, 1)));
+  const maxIncome = Math.max(...data.map(d => Math.max(d.income.total, 1)));
+
+  modal.innerHTML = `
+    <div style="background:#f8fafc; border-radius:14px; width:100%; max-width:850px; max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 25px -5px rgba(0,0,0,0.3); font-family:system-ui, -apple-system, sans-serif;">
+      
+      <!-- HEADER -->
+      <div style="padding:14px 16px; background:#0f172a; color:#fff; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h3 style="margin:0; font-size:16px; font-weight:700;">📊 Annual Growth & Comparison</h3>
+          <span style="font-size:11px; opacity:0.8;">Patient Footfall & Revenue by FY</span>
+        </div>
+        <button onclick="document.getElementById('multiYearGrowthModal').remove()" style="background:#334155; border:none; color:#fff; font-size:18px; width:32px; height:32px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;">&times;</button>
+      </div>
+
+      <!-- BODY SCROLLABLE -->
+      <div style="padding:12px; overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; gap:14px;">
+
+        <!-- 1. PATIENT CASES GROUPED BARS -->
+        <div style="background:#fff; padding:14px; border-radius:10px; border:1px solid #e2e8f0; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+          <div style="font-weight:700; font-size:13px; color:#334155; margin-bottom:12px;">Patient Footfall Growth</div>
+          <div style="display:flex; justify-content:space-around; align-items:flex-end; min-height:130px; border-bottom:2px solid #e2e8f0; padding-bottom:6px; overflow-x:auto;">
+            ${data.map(d => `
+              <div style="flex:1; min-width:60px; text-align:center;">
+                <div style="display:flex; justify-content:center; align-items:flex-end; height:100px; gap:4px;">
+                  <div title="New: ${d.cases.new}" style="background:#10b981; width:12px; height:${Math.max((d.cases.new/maxCases)*100, 4)}%; border-radius:3px 3px 0 0;"></div>
+                  <div title="Follow-up: ${d.cases.followup}" style="background:#3b82f6; width:12px; height:${Math.max((d.cases.followup/maxCases)*100, 4)}%; border-radius:3px 3px 0 0;"></div>
+                  <div title="Renewal: ${d.cases.renewal}" style="background:#f59e0b; width:12px; height:${Math.max((d.cases.renewal/maxCases)*100, 4)}%; border-radius:3px 3px 0 0;"></div>
+                </div>
+                <div style="font-size:11px; font-weight:700; margin-top:6px; color:#1e293b;">${d.fy}</div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="display:flex; gap:12px; font-size:11px; margin-top:8px; justify-content:center;">
+            <span><b style="color:#10b981;">■</b> New</span>
+            <span><b style="color:#3b82f6;">■</b> Follow-up</span>
+            <span><b style="color:#f59e0b;">■</b> Renewal</span>
+          </div>
+        </div>
+
+        <!-- 2. REVENUE STACKED BARS -->
+        <div style="background:#fff; padding:14px; border-radius:10px; border:1px solid #e2e8f0; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+          <div style="font-weight:700; font-size:13px; color:#334155; margin-bottom:12px;">Income & Medicine Share (Stacked)</div>
+          <div style="display:flex; justify-content:space-around; align-items:flex-end; min-height:130px; border-bottom:2px solid #e2e8f0; padding-bottom:6px; overflow-x:auto;">
+            ${data.map(d => {
+              const h = (d.income.total / maxIncome) * 100;
+              const pNew = d.income.total ? (d.income.new / d.income.total) * 100 : 0;
+              const pRen = d.income.total ? (d.income.renewal / d.income.total) * 100 : 0;
+              const pMed = d.income.total ? (d.income.medicine / d.income.total) * 100 : 0;
+              return `
+                <div style="flex:1; min-width:60px; text-align:center;">
+                  <div style="display:flex; justify-content:center; align-items:flex-end; height:100px;">
+                    <div style="width:24px; height:${Math.max(h, 6)}px; display:flex; flex-direction:column-reverse; border-radius:4px 4px 0 0; overflow:hidden;">
+                      <div title="New Reg: ₹${d.income.new}" style="background:#059669; height:${pNew}%;"></div>
+                      <div title="Renewal: ₹${d.income.renewal}" style="background:#d97706; height:${pRen}%;"></div>
+                      <div title="Medicine: ₹${d.income.medicine}" style="background:#0284c7; height:${pMed}%;"></div>
+                    </div>
+                  </div>
+                  <div style="font-size:11px; font-weight:700; margin-top:6px; color:#1e293b;">${d.fy}</div>
+                  <div style="font-size:10px; color:#64748b;">₹${Math.round(d.income.total/1000)}k</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div style="display:flex; gap:12px; font-size:11px; margin-top:8px; justify-content:center;">
+            <span><b style="color:#059669;">■</b> New Reg</span>
+            <span><b style="color:#d97706;">■</b> Renewal</span>
+            <span><b style="color:#0284c7;">■</b> Medicine</span>
+          </div>
+        </div>
+
+        <!-- 3. RESPONSIVE COMPARISON TABLE -->
+        <div style="background:#fff; border-radius:10px; border:1px solid #e2e8f0; overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left; min-width:480px;">
+            <thead>
+              <tr style="background:#f1f5f9; color:#475569; border-bottom:1px solid #cbd5e1;">
+                <th style="padding:8px 10px;">FY</th>
+                <th style="padding:8px 6px;">New</th>
+                <th style="padding:8px 6px;">Follow</th>
+                <th style="padding:8px 6px;">Renew</th>
+                <th style="padding:8px 8px;">Medicine</th>
+                <th style="padding:8px 10px;">Total Income</th>
+                <th style="padding:8px 10px;">YoY Growth</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map((row, idx) => {
+                const prev = idx > 0 ? data[idx - 1] : null;
+                let growthBadge = '<span style="color:#94a3b8;">-</span>';
+                if (prev && prev.income.total > 0) {
+                  const diff = ((row.income.total - prev.income.total) / prev.income.total) * 100;
+                  const isPos = diff >= 0;
+                  growthBadge = <span style="display:inline-block; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px; background:${isPos ? '#dcfce7' : '#fee2e2'}; color:${isPos ? '#15803d' : '#b91c1c'};">${isPos ? '▲ +' : '▼ '}${diff.toFixed(1)}%</span>;
+                }
+                return `
+                  <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:8px 10px; font-weight:700; color:#0f172a;">${row.label}</td>
+                    <td style="padding:8px 6px;">${row.cases.new}</td>
+                    <td style="padding:8px 6px;">${row.cases.followup}</td>
+                    <td style="padding:8px 6px;">${row.cases.renewal}</td>
+                    <td style="padding:8px 8px; color:#0284c7;">₹${Number(row.income.medicine).toLocaleString('en-IN')}</td>
+                    <td style="padding:8px 10px; font-weight:700;">₹${Number(row.income.total).toLocaleString('en-IN')}</td>
+                    <td style="padding:8px 10px;">${growthBadge}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  `;
+};
+
+// AUTO-ATTACH TRIGGER BUTTON TO REPORTS TAB
+(function attachGrowthButton() {
+  const tryAttach = () => {
+    if (document.getElementById('btnMultiYearGrowth')) return;
+    const targetArea = document.querySelector('#repFilters') || document.querySelector('.reports-header') || document.querySelector('#page-reports');
+    if (targetArea) {
+      const btn = document.createElement('button');
+      btn.id = 'btnMultiYearGrowth';
+      btn.type = 'button';
+      btn.innerHTML = '📊 Annual Growth Report';
+      btn.style.cssText = 'margin:6px 0; padding:8px 14px; background:#0284c7; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.1);';
+      btn.onclick = window.openMultiYearGrowthModal;
+      targetArea.prepend(btn);
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tryAttach);
+  } else {
+    tryAttach();
+  }
+  setTimeout(tryAttach, 2000);
+})();
