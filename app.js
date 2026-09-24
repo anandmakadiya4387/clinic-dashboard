@@ -456,7 +456,8 @@ function outstandingPendingEntries() {
                 amount: amt,
                 status: stLabel,
                 kind: kind,
-                mobile: p.mobile || ''
+                mobile: p.mobile || '',
+                date: p.date || p.createdAt || p.createdDate || p.caseDate || ''
             };
             const prev = byKey.get(key);
             if (!prev) byKey.set(key, row);
@@ -469,6 +470,7 @@ function outstandingPendingEntries() {
                     prev.id = row.id;
                     prev.caseNo = row.caseNo;
                     prev.mobile = row.mobile || prev.mobile;
+                    prev.date = row.date || prev.date;
                 }
             }
         });
