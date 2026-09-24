@@ -2265,7 +2265,11 @@ function renderPatientReport() {
             if (!prev || String(p.date) < String(prev.date)) byCase.set(key, p);
         });
         rows = [...byCase.values()].filter(p => patientDateMatch(p.date))
-            .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || caseNoNumericPart(b.caseNo) - caseNoNumericPart(a.caseNo));
+            .sort((a, b) => {
+              const numA = parseInt(String(a.caseNo || permanentCaseNo(a) || '').replace(/\D/g, ''), 10) || 0;
+              const numB = parseInt(String(b.caseNo || permanentCaseNo(b) || '').replace(/\D/g, ''), 10) || 0;
+              return numB - numA;
+            })
     }
 
     set('pCountNew', rows.length);
