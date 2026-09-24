@@ -479,6 +479,11 @@ function outstandingPendingEntries() {
 function openOutstandingPendingList() {
     let rows = [];
     try { rows = outstandingPendingEntries(); } catch (e) { rows = []; }
+    rows.sort((a, b) => {
+    const numA = parseInt((a.caseNo || '').replace(/\D/g, ''), 10) || 0;
+    const numB = parseInt((b.caseNo || '').replace(/\D/g, ''), 10) || 0;
+    return numB - numA; // Bada number upar, chhota number (Case 1) sabse niche
+    });
     const total = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
     const nPend = rows.filter(r => r.kind !== 'partial').length;
     const nPart = rows.filter(r => r.kind === 'partial').length;
