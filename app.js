@@ -2608,7 +2608,6 @@ function applyPaymentView(v) {
     $('#yearlyPaymentPanel')?.classList.toggle('hidden', v !== 'yearlyPayment');
     $('#incomeExpensePanel')?.classList.toggle('hidden', v !== 'incomeExpense');
     $('#spendEntriesPanel')?.classList.toggle('hidden', v !== 'spendEntries');
-    if (v === 'yearlyPayment') { try { renderYearComparisonTable(); } catch (e) {} try { renderYearlyGrowth(); } catch (e) {} }
     $$('.navSubBtn[data-pay-view]').forEach(b => b.classList.toggle('active', b.getAttribute('data-pay-view') === v));
     const titles = {
         clinicPayment: 'Clinic Payment',
@@ -3421,7 +3420,6 @@ function renderYearComparisonTable() {
         rows.push(`<tr class="summaryTotalRow"><td>${yearCompareShowAll ? 'Grand Total (all years)' : 'Total (this view)'}</td><td>${money(totalN)}</td><td>${money(totalR)}</td><td>${money(totalMed)}</td><td><b>${money(totalT)}</b></td></tr>`);
     }
     yBody.innerHTML = rows.join('') || '<tr><td colspan="5">No year data</td></tr>';
-    try { renderYearlyGrowth(); } catch (e) { console.error(e); }
     const hint = $('#yearCompareHint');
     if (hint) {
         hint.textContent = yearCompareShowAll
@@ -6370,4 +6368,32 @@ window.openMultiYearGrowthModal = function() {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tryAttach);
   else tryAttach();
   setTimeout(tryAttach, 1500);
+})();
+
+
+(function wireYearlyGrowthPage() {
+  function showYearlyGrowth() {
+    try {
+      document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+      var pg = document.getElementById('yearlyGrowth');
+      if (pg) pg.classList.add('active');
+      document.querySelectorAll('.navBtn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('[data-page="yearlyGrowth"]').forEach(function(b) { b.classList.add('active'); });
+      try { renderYearlyGrowth(); } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); }
+  }
+  document.addEventListener('click', function(ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var btn = t.closest('[data-page="yearlyGrowth"]');
+    if (btn) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      showYearlyGrowth();
+      return;
+    }
+    if (t.id === 'btnOpenFyGrowthPage' || (t.closest && t.closest('#btnOpenFyGrowthPage'))) {
+      try { openMultiYearGrowthModal(); } catch (e) {}
+    }
+  }, true);
 })();

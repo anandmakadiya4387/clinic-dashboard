@@ -1,21 +1,11 @@
-<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=pro-ygrowth-v2"><style id="ygrowthCss">
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=pro-ygrowth-sep-v1"><style id="ygrowthCss">
 .ygPct{font-size:11px;font-weight:600;white-space:nowrap}
 .ygPct.ygUp{color:#059669}.ygPct.ygDown{color:#dc2626}
 .ygPct.ygFlat{color:#64748b}.ygPct.ygNew{color:#2563eb}
-#yearlyGrowthCard .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
-#yearlyGrowthCard table{min-width:520px}
-#ygCaseChart,#ygIncomeChart{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;flex-wrap:nowrap}
-#multiYearGrowthModal,#annualGrowthModal{-webkit-overflow-scrolling:touch}
+#yearlyGrowth .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 @media (max-width:700px){
-  #yearlyGrowthCard .cardHead h2{font-size:16px}
-  #yearlyGrowthCard table{font-size:11px;min-width:480px}
-  #yearlyGrowthCard th,#yearlyGrowthCard td{padding:6px 5px}
-  #ygCaseChart,#ygIncomeChart{min-height:120px;gap:6px}
-  #btnOpenFyGrowth,#btnMultiYearGrowth{width:100%;justify-content:center}
-  #multiYearGrowthModal > div{max-width:100%!important;max-height:95vh!important;border-radius:12px 12px 0 0}
-}
-@media (min-width:701px){
-  #yearlyGrowthCard table{min-width:100%}
+  #yearlyGrowth table{font-size:11px}
+  #btnOpenFyGrowthPage{width:100%}
 }
 </style></head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
   <button type="button" class="navBtn navParent" id="patientsNavToggle">Patients ▾</button>
@@ -31,6 +21,7 @@
     <button type="button" class="navBtn navSubBtn" data-page="payments" data-pay-view="yearlyPayment">Yearly Payment</button>
     <button type="button" class="navBtn navSubBtn" data-page="payments" data-pay-view="incomeExpense">Income &amp; Expenses</button>
     <button type="button" class="navBtn navSubBtn" data-page="payments" data-pay-view="spendEntries">Spend Entries</button>
+    <button type="button" class="navBtn navSubBtn" data-page="yearlyGrowth">Yearly Growth</button>
   </div>
 <button class="navBtn" data-page="appointmentHistory">Appointment History</button><button class="navBtn" data-page="medicines">Medicine</button><button class="navBtn" data-page="clinic">Clinic Profile</button><button class="navBtn" data-page="connection">Server Connection</button><button class="navBtn" data-page="permissions">Reception Permissions</button><button class="navBtn" data-page="bill">Bill / Receipt</button><button class="navBtn" data-page="reports">Reports</button><button class="navBtn" data-page="backup">Backup / Restore</button></div></aside><main class="main"><header class="topbar"><button class="toggle embossed hamburgerBtn" id="toggleSide" type="button" aria-label="Toggle sidebar"><span class="hamIcon" aria-hidden="true">☰</span></button><span>Office</span><span class="appVersionBadge" title="Application version">PRO</span><span class="syncLiveBadge" id="syncLiveBadge" data-sync="1" title="LAN sync status">Offline</span>
 <div class="globalSearchWrap">
@@ -135,44 +126,7 @@
 <div class="hidden"><h2 id="payMonthTitle"></h2><table id="payMonthTable"><thead id="payMonthHead"></thead><tbody id="payMonthBody"></tbody><tfoot id="payMonthFoot"></tfoot></table></div>
 </div>
 <div 
-<div class="card" style="margin-top:14px" id="yearlyGrowthCard">
-  <div class="cardHead"><h2>Yearly Growth</h2><span>Cases count + Income · YoY % · Chart (calendar year)</span></div>
-  <div class="cardBody">
-    <div style="margin-bottom:16px;border:1px solid #dbe4ee;border-radius:10px;padding:12px;background:#f8fafc">
-      <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#334155">Cases by year (New · Follow-up · Renewal)</div>
-      <div id="ygCaseChart" style="display:flex;align-items:flex-end;gap:10px;min-height:140px;overflow-x:auto;padding:8px 4px 0;border-bottom:2px solid #cbd5e1"></div>
-      <div style="display:flex;justify-content:center;gap:14px;font-size:11px;margin-top:8px;color:#64748b">
-        <span><span style="color:#10b981;font-weight:700">■</span> New</span>
-        <span><span style="color:#3b82f6;font-weight:700">■</span> Follow-up</span>
-        <span><span style="color:#f59e0b;font-weight:700">■</span> Renewal</span>
-      </div>
-    </div>
-    <div style="margin-bottom:16px;border:1px solid #dbe4ee;border-radius:10px;padding:12px;background:#f8fafc">
-      <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#334155">Income by year (New ₹ · Medicine ₹ · Renewal ₹)</div>
-      <div id="ygIncomeChart" style="display:flex;align-items:flex-end;gap:10px;min-height:140px;overflow-x:auto;padding:8px 4px 0;border-bottom:2px solid #cbd5e1"></div>
-      <div style="display:flex;justify-content:center;gap:14px;font-size:11px;margin-top:8px;color:#64748b">
-        <span><span style="color:#6366f1;font-weight:700">■</span> New ₹</span>
-        <span><span style="color:#0ea5e9;font-weight:700">■</span> Medicine ₹</span>
-        <span><span style="color:#f97316;font-weight:700">■</span> Renewal ₹</span>
-      </div>
-    </div>
-    <div style="font-size:13px;font-weight:600;margin:8px 0;color:#334155">Case count + YoY %</div>
-    <div class="tablewrap" style="margin-bottom:14px;overflow-x:auto">
-      <table class="table yearCompareTable payMonthTable"><thead><tr>
-        <th>Year</th><th>New</th><th>YoY</th><th>Follow-up</th><th>YoY</th><th>Renewal</th><th>YoY</th><th>Total</th><th>YoY</th>
-      </tr></thead><tbody id="ygCaseTableBody"></tbody></table>
-    </div>
-    <div style="font-size:13px;font-weight:600;margin:8px 0;color:#334155">Income + YoY %</div>
-    <div class="tablewrap" style="overflow-x:auto">
-      <table class="table yearCompareTable payMonthTable"><thead><tr>
-        <th>Year</th><th>New ₹</th><th>YoY</th><th>Medicine ₹</th><th>YoY</th><th>Renewal ₹</th><th>YoY</th><th>Total ₹</th><th>YoY</th>
-      </tr></thead><tbody id="ygIncomeTableBody"></tbody></table>
-    </div>
-    <div class="actions" style="margin-top:12px">
-      <button type="button" class="btn embossed primary" id="btnOpenFyGrowth" onclick="try{openMultiYearGrowthModal()}catch(e){}">Open Financial Year Growth Report</button>
-    </div>
-  </div>
-</div>
+
 
 id="incomeExpensePanel" class="hidden">
 <div class="paySummaryTop expenseSummary premiumSummary" style="margin-top:14px">
@@ -323,6 +277,49 @@ id="incomeExpensePanel" class="hidden">
 </div></div>
 <div class="card" style="margin-top:16px"><div class="cardHead"><h2>Bill Preview</h2></div>
 <div class="cardBody"><div id="billPreview" class="billSheet billModeFull"></div></div></div>
+</section>
+
+
+<section class="page" id="yearlyGrowth">
+  <div class="hero"><div><h1>Yearly Growth</h1><p>Case counts and income with year-over-year % (calendar year Jan–Dec). Separate from Clinic Payment, Yearly Payment, Income &amp; Expenses, Spend Entries.</p></div>
+  <div class="actions"><button type="button" class="btn embossed primary" id="btnOpenFyGrowthPage">Financial Year Growth Report</button></div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="cardHead"><h2>Cases by year</h2><span>New · Follow-up · Renewal + YoY %</span></div>
+    <div class="cardBody">
+      <div style="margin-bottom:16px;border:1px solid #dbe4ee;border-radius:10px;padding:12px;background:#f8fafc">
+        <div id="ygCaseChart" style="display:flex;align-items:flex-end;gap:10px;min-height:140px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:8px 4px 0;border-bottom:2px solid #cbd5e1"></div>
+        <div style="display:flex;justify-content:center;gap:14px;font-size:11px;margin-top:8px;color:#64748b;flex-wrap:wrap">
+          <span><span style="color:#10b981;font-weight:700">■</span> New</span>
+          <span><span style="color:#3b82f6;font-weight:700">■</span> Follow-up</span>
+          <span><span style="color:#f59e0b;font-weight:700">■</span> Renewal</span>
+        </div>
+      </div>
+      <div class="tablewrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <table class="table payMonthTable" style="min-width:520px"><thead><tr>
+          <th>Year</th><th>New</th><th>YoY</th><th>Follow-up</th><th>YoY</th><th>Renewal</th><th>YoY</th><th>Total</th><th>YoY</th>
+        </tr></thead><tbody id="ygCaseTableBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="cardHead"><h2>Income by year</h2><span>New ₹ · Medicine ₹ · Renewal ₹ + YoY %</span></div>
+    <div class="cardBody">
+      <div style="margin-bottom:16px;border:1px solid #dbe4ee;border-radius:10px;padding:12px;background:#f8fafc">
+        <div id="ygIncomeChart" style="display:flex;align-items:flex-end;gap:10px;min-height:140px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:8px 4px 0;border-bottom:2px solid #cbd5e1"></div>
+        <div style="display:flex;justify-content:center;gap:14px;font-size:11px;margin-top:8px;color:#64748b;flex-wrap:wrap">
+          <span><span style="color:#6366f1;font-weight:700">■</span> New ₹</span>
+          <span><span style="color:#0ea5e9;font-weight:700">■</span> Medicine ₹</span>
+          <span><span style="color:#f97316;font-weight:700">■</span> Renewal ₹</span>
+        </div>
+      </div>
+      <div class="tablewrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <table class="table payMonthTable" style="min-width:520px"><thead><tr>
+          <th>Year</th><th>New ₹</th><th>YoY</th><th>Medicine ₹</th><th>YoY</th><th>Renewal ₹</th><th>YoY</th><th>Total ₹</th><th>YoY</th>
+        </tr></thead><tbody id="ygIncomeTableBody"></tbody></table>
+      </div>
+    </div>
+  </div>
 </section>
 
 <section class="page" id="reports">
@@ -506,6 +503,6 @@ id="incomeExpensePanel" class="hidden">
     </div>
     </div>
     </div>
-    <script src="app.js?v=pro-ygrowth-v2"></script>
+    <script src="app.js?v=pro-ygrowth-sep-v1"></script>
     </body>
     </html>
