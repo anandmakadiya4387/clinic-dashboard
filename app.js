@@ -1208,7 +1208,9 @@ function renderReports() {
         growthPct = Math.round(((newFy - newPrev) / newPrev) * 1000) / 10;
         growthLabel = newFy + ' new vs ' + newPrev + ' previous FY (' + prevLab + ')';
     }
-    const pendingAll = active(DB.patients).reduce((a, p) => a + pendingFor(p), 0);
+   const pendingAll = outstandingPendingEntries()
+     .filter(x => inFy(x.date || x.createdAt || x.createdDate || ''))
+     .reduce((a, x) => a + Number(x.amount || 0), 0);
     const expFy = active(DB.expenses || []).filter(x => inFy(x.date) && (!x._deleted) && (typeof expenseCountsInTotals !== 'function' || expenseCountsInTotals(x))).reduce((a, x) => a + Number(x.amount || 0), 0);
 
     set('repFy', money(fyTotal));
