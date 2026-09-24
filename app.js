@@ -1373,7 +1373,7 @@ function openPage(id) {
         }
         b.classList.toggle('active', b.dataset.page === id);
     });
-    if (window.innerWidth < 700) $('#side')?.classList.remove('open');
+    if (window.innerWidth < 900) { $('#side')?.classList.remove('open'); document.body.classList.remove('side-open'); }
     try { renderPage(id); } catch (e) { console.warn('renderPage', e); }
 }
 
@@ -2658,6 +2658,11 @@ function setupPaymentView() {
             applyPaymentView(v);
             // close submenu after selection
             $('#paymentNavSub')?.classList.remove('open');
+            // Mobile: close sidebar after choosing a sub-interface
+            if (window.innerWidth < 900) {
+                $('#side')?.classList.remove('open');
+                document.body.classList.remove('side-open');
+            }
         });
     });
     // recurring spend buttons
@@ -6413,10 +6418,13 @@ window.openMultiYearGrowthModal = function() {
   document.addEventListener('click', function(ev) {
     var t = ev.target;
     if (!t || !t.closest) return;
-    // any sidebar nav button including payment sub items
-    var nav = t.closest('#side .navBtn, #side .navSubBtn, #side [data-page], #side [data-pay-view], #side [data-patient-view]');
+    // Parent with submenu: only expand/collapse, do NOT close sidebar
+    var parent = t.closest('#side .navParent, #side #patientsNavToggle, #side #paymentNavToggle');
+    if (parent) return;
+    // Sub-items or leaf nav: navigate and close sidebar on mobile
+    var nav = t.closest('#side .navSubBtn, #side [data-page], #side [data-pay-view], #side [data-patient-view]');
     if (!nav) return;
-    // delay so page switch can run first
-    setTimeout(closeSide, 30);
+    if (nav.classList && nav.classList.contains('navParent')) return;
+    setTimeout(closeSide, 40);
   }, true);
 })();
