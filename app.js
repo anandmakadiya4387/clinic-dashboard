@@ -375,7 +375,11 @@ function nextCase() {
 }
 
 function feeTotal(p) {
-    return Number(p.consultation || 0) + Number(p.medicine || 0) + (renewalDue(p) ? Number(p.renewal || 0) : 0)
+    /* Visit charges = consultation + medicine + renewal (if charged on this visit).
+       Always include p.renewal when stored — do not gate on renewalDue(), else
+       Appointment History FEES under-counts after renewal is paid (PAID looks higher). */
+    if (!p) return 0;
+    return Number(p.consultation || 0) + Number(p.medicine || 0) + Number(p.renewal || 0);
 }
 
 function paidFor(id) {
@@ -5042,9 +5046,12 @@ function renderAppointmentHistory() {
     if (histPage < 1) histPage = 1;
     const slice = rows.slice((histPage - 1) * histPageSize, histPage * histPageSize);
     body.innerHTML = slice.map((p, i) => {
-        const paid = paidFor(p.id);
-        const total = feeTotal(p);
+        /* FEES = consultation + medicine + renewal on this visit (feeTotal).
+           PAID = payments linked to this visit id. When fully received they should match. */
+        let total = feeTotal(p);
+        let paid = paidFor(p.id);
         const pend = pendingFor(p);
+        if (p.foc === true) { total = 0; paid = 0; }
         const fully = p.received === true && pend <= 0;
         let statusHtml;
         if (p.foc === true && total <= 0) statusHtml = '<span class="payFocTag">FOC</span>';
