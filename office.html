@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=pro-med-layout-v1"><style id="ygrowthCss">
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=pro-med-force-v2"><style id="ygrowthCss">
 .ygPct{font-size:11px;font-weight:600;white-space:nowrap}
 .ygPct.ygUp{color:#059669}.ygPct.ygDown{color:#dc2626}
 .ygPct.ygFlat{color:#64748b}.ygPct.ygNew{color:#2563eb}
@@ -153,7 +153,107 @@ table.medTable td:nth-child(6) {
   }
 }
 
-</style></head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
+</style>
+<style id="medForceLayout">
+/* FORCE medicine columns — beats style.css (specificity + !important) */
+html body #medicines .tablewrap,
+html body #medicines .medTableWrap,
+html body .page#medicines .tablewrap {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+html body #medicines table.table.medTable,
+html body #medicines table.medTable {
+  width: max-content !important;
+  min-width: 100% !important;
+  table-layout: auto !important;
+  border-collapse: collapse !important;
+}
+html body #medicines table.table.medTable th,
+html body #medicines table.table.medTable td,
+html body #medicines table.medTable th,
+html body #medicines table.medTable td {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  padding: 6px 8px !important;
+  box-sizing: border-box !important;
+}
+/* Col 1 No. — full number, no 13... */
+html body #medicines table.table.medTable th:nth-child(1),
+html body #medicines table.table.medTable td:nth-child(1),
+html body #medicines table.medTable th:nth-child(1),
+html body #medicines table.medTable td:nth-child(1) {
+  width: 84px !important;
+  min-width: 84px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  text-align: center !important;
+}
+/* Col 2 Name */
+html body #medicines table.table.medTable th:nth-child(2),
+html body #medicines table.table.medTable td:nth-child(2),
+html body #medicines table.medTable th:nth-child(2),
+html body #medicines table.medTable td:nth-child(2) {
+  width: 140px !important;
+  min-width: 120px !important;
+  max-width: 160px !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  text-align: left !important;
+}
+/* Col 3 Drawer */
+html body #medicines table.table.medTable th:nth-child(3),
+html body #medicines table.table.medTable td:nth-child(3),
+html body #medicines table.medTable th:nth-child(3),
+html body #medicines table.medTable td:nth-child(3) {
+  width: 64px !important;
+  min-width: 64px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+}
+/* Col 4 Quantity — separate from Available */
+html body #medicines table.table.medTable th:nth-child(4),
+html body #medicines table.table.medTable td:nth-child(4),
+html body #medicines table.medTable th:nth-child(4),
+html body #medicines table.medTable td:nth-child(4) {
+  width: 88px !important;
+  min-width: 88px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  overflow: visible !important;
+}
+/* Col 5 Available */
+html body #medicines table.table.medTable th:nth-child(5),
+html body #medicines table.table.medTable td:nth-child(5),
+html body #medicines table.medTable th:nth-child(5),
+html body #medicines table.medTable td:nth-child(5) {
+  width: 88px !important;
+  min-width: 88px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  overflow: visible !important;
+}
+/* Col 6 Action */
+html body #medicines table.table.medTable th:nth-child(6),
+html body #medicines table.table.medTable td:nth-child(6),
+html body #medicines table.medTable th:nth-child(6),
+html body #medicines table.medTable td:nth-child(6) {
+  width: 130px !important;
+  min-width: 130px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+}
+</style>
+</head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
   <button type="button" class="navBtn navParent" id="patientsNavToggle">Patients ▾</button>
   <div class="navSub" id="patientsNavSub">
     <button type="button" class="navBtn navSubBtn" data-page="patients" data-patient-view="new">New Cases</button>
@@ -649,6 +749,107 @@ id="incomeExpensePanel" class="hidden">
     </div>
     </div>
     </div>
-    <script src="app.js?v=pro-med-layout-v1"></script>
+    
+<style id="medForceLayoutBody">
+/* FORCE medicine columns — beats style.css (specificity + !important) */
+html body #medicines .tablewrap,
+html body #medicines .medTableWrap,
+html body .page#medicines .tablewrap {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+html body #medicines table.table.medTable,
+html body #medicines table.medTable {
+  width: max-content !important;
+  min-width: 100% !important;
+  table-layout: auto !important;
+  border-collapse: collapse !important;
+}
+html body #medicines table.table.medTable th,
+html body #medicines table.table.medTable td,
+html body #medicines table.medTable th,
+html body #medicines table.medTable td {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  padding: 6px 8px !important;
+  box-sizing: border-box !important;
+}
+/* Col 1 No. — full number, no 13... */
+html body #medicines table.table.medTable th:nth-child(1),
+html body #medicines table.table.medTable td:nth-child(1),
+html body #medicines table.medTable th:nth-child(1),
+html body #medicines table.medTable td:nth-child(1) {
+  width: 84px !important;
+  min-width: 84px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  text-align: center !important;
+}
+/* Col 2 Name */
+html body #medicines table.table.medTable th:nth-child(2),
+html body #medicines table.table.medTable td:nth-child(2),
+html body #medicines table.medTable th:nth-child(2),
+html body #medicines table.medTable td:nth-child(2) {
+  width: 140px !important;
+  min-width: 120px !important;
+  max-width: 160px !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  text-align: left !important;
+}
+/* Col 3 Drawer */
+html body #medicines table.table.medTable th:nth-child(3),
+html body #medicines table.table.medTable td:nth-child(3),
+html body #medicines table.medTable th:nth-child(3),
+html body #medicines table.medTable td:nth-child(3) {
+  width: 64px !important;
+  min-width: 64px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+}
+/* Col 4 Quantity — separate from Available */
+html body #medicines table.table.medTable th:nth-child(4),
+html body #medicines table.table.medTable td:nth-child(4),
+html body #medicines table.medTable th:nth-child(4),
+html body #medicines table.medTable td:nth-child(4) {
+  width: 88px !important;
+  min-width: 88px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  overflow: visible !important;
+}
+/* Col 5 Available */
+html body #medicines table.table.medTable th:nth-child(5),
+html body #medicines table.table.medTable td:nth-child(5),
+html body #medicines table.medTable th:nth-child(5),
+html body #medicines table.medTable td:nth-child(5) {
+  width: 88px !important;
+  min-width: 88px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  overflow: visible !important;
+}
+/* Col 6 Action */
+html body #medicines table.table.medTable th:nth-child(6),
+html body #medicines table.table.medTable td:nth-child(6),
+html body #medicines table.medTable th:nth-child(6),
+html body #medicines table.medTable td:nth-child(6) {
+  width: 130px !important;
+  min-width: 130px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+}
+</style>
+
+<script src="app.js?v=pro-med-force-v2"></script>
     </body>
     </html>
