@@ -61,6 +61,28 @@
 @media (min-width:901px){
   #yearlyGrowth .tablewrap{overflow-x:visible}
 }
+  /* Medicine Table Mobile Fix - Safe CSS */
+  #medTable th:nth-child(1), #medTable td:nth-child(1),
+  .medicine-table th:nth-child(1), .medicine-table td:nth-child(1) {
+    min-width: 65px !important;
+    width: 65px !important;
+    white-space: nowrap !important;
+    text-overflow: clip !important;
+  }
+
+  #medTable th:nth-child(2), #medTable td:nth-child(2),
+  .medicine-table th:nth-child(2), .medicine-table td:nth-child(2) {
+    min-width: 140px !important;
+    max-width: 190px !important;
+    word-break: break-word !important;
+  }
+
+  /* Quantity & Available Column Width Fix */
+  #medTable th, #medTable td,
+  .medicine-table th, .medicine-table td {
+    white-space: nowrap !important;
+    padding: 6px 8px !important;
+  }
 </style></head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
   <button type="button" class="navBtn navParent" id="patientsNavToggle">Patients ▾</button>
   <div class="navSub" id="patientsNavSub">
