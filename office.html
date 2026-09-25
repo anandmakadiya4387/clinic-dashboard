@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=pro-ygrowth-sep-v2"><style id="ygrowthCss">
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"><title>Anand Homoeopathy Multi Speciality Clinic — Office</title><link rel="stylesheet" href="style.css?v=pro-med-layout-v1"><style id="ygrowthCss">
 .ygPct{font-size:11px;font-weight:600;white-space:nowrap}
 .ygPct.ygUp{color:#059669}.ygPct.ygDown{color:#dc2626}
 .ygPct.ygFlat{color:#64748b}.ygPct.ygNew{color:#2563eb}
@@ -61,28 +61,98 @@
 @media (min-width:901px){
   #yearlyGrowth .tablewrap{overflow-x:visible}
 }
-  /* Medicine Table Mobile Fix - Safe CSS */
-  #medTable th:nth-child(1), #medTable td:nth-child(1),
-  .medicine-table th:nth-child(1), .medicine-table td:nth-child(1) {
-    min-width: 65px !important;
-    width: 65px !important;
-    white-space: nowrap !important;
-    text-overflow: clip !important;
-  }
 
-  #medTable th:nth-child(2), #medTable td:nth-child(2),
-  .medicine-table th:nth-child(2), .medicine-table td:nth-child(2) {
-    min-width: 140px !important;
-    max-width: 190px !important;
-    word-break: break-word !important;
+/* Medicine table — mobile + desktop safe layout (no logic change) */
+.medTableWrap,
+#medicines .tablewrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+}
+table.medTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+table.medTable th,
+table.medTable td {
+  padding: 6px 8px;
+  vertical-align: middle;
+  text-align: left;
+}
+/* 1 No. — full digits (e.g. 1300) */
+table.medTable th:nth-child(1),
+table.medTable td:nth-child(1) {
+  min-width: 72px !important;
+  width: 72px !important;
+  max-width: 88px !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-variant-numeric: tabular-nums;
+}
+/* 2 Medicine Name — slightly smaller share */
+table.medTable th:nth-child(2),
+table.medTable td:nth-child(2) {
+  min-width: 110px !important;
+  max-width: 160px !important;
+  word-break: break-word !important;
+  white-space: normal !important;
+}
+/* 3 Drawer */
+table.medTable th:nth-child(3),
+table.medTable td:nth-child(3) {
+  min-width: 56px !important;
+  width: 56px !important;
+  white-space: nowrap !important;
+}
+/* 4 Quantity — no overlap with Available */
+table.medTable th:nth-child(4),
+table.medTable td:nth-child(4) {
+  min-width: 70px !important;
+  width: 70px !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+}
+/* 5 Available */
+table.medTable th:nth-child(5),
+table.medTable td:nth-child(5) {
+  min-width: 72px !important;
+  width: 72px !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+}
+/* 6 Action */
+table.medTable th:nth-child(6),
+table.medTable td:nth-child(6) {
+  min-width: 120px !important;
+  white-space: nowrap !important;
+}
+@media (max-width: 900px) {
+  table.medTable {
+    min-width: 520px; /* enables horizontal scroll; columns stay readable */
   }
+  table.medTable th:nth-child(1),
+  table.medTable td:nth-child(1) {
+    min-width: 76px !important;
+    width: 76px !important;
+  }
+  table.medTable th:nth-child(2),
+  table.medTable td:nth-child(2) {
+    min-width: 100px !important;
+    max-width: 140px !important;
+  }
+  table.medTable th:nth-child(4),
+  table.medTable td:nth-child(4) {
+    min-width: 78px !important;
+  }
+  table.medTable th:nth-child(5),
+  table.medTable td:nth-child(5) {
+    min-width: 78px !important;
+  }
+}
 
-  /* Quantity & Available Column Width Fix */
-  #medTable th, #medTable td,
-  .medicine-table th, .medicine-table td {
-    white-space: nowrap !important;
-    padding: 6px 8px !important;
-  }
 </style></head><body data-role="office"><aside class="sidebar" id="side"><div class="brand"><div class="brandInner brandLogoOnly"><img class="brandFullLogo" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"></div></div><div class="nav"><button class="navBtn active" data-page="dashboard">Dashboard</button><div class="groupTitle">Control Center</div><div class="navGroup">
   <button type="button" class="navBtn navParent" id="patientsNavToggle">Patients ▾</button>
   <div class="navSub" id="patientsNavSub">
@@ -279,7 +349,7 @@ id="incomeExpensePanel" class="hidden">
   <div class="reportBox" style="background:linear-gradient(165deg,#fff5f5,#fde8e8)"><small>Empty stock</small><b id="medEmptyCount">0</b></div>
 </div></div>
 <div class="card hidden" id="emptyStockCard"><div class="cardHead"><h2>Empty stock Medicine</h2><button type="button" class="btn embossed" id="emptyStockClose">Close list</button></div>
-<div class="cardBody tablewrap"><table class="table"><thead><tr><th>Sr No.</th><th>No.</th><th>Name</th><th>Drawer</th><th>Quantity</th><th>Available</th><th>Action</th></tr></thead><tbody id="emptyStockBody"></tbody></table></div></div><div class="medicineGrid"><div class="card"><div class="cardHead"><h2>Add Medicine</h2></div><div class="cardBody"><form id="medicineForm" class="formgrid"><label>Medicine Name<input id="medName" required></label><label>Drawer<input id="medDrawer" required></label><label>Quantity<input id="medQty" type="number" min="0" value="0" required></label><label>Available / Not Available<select id="medAvail"><option>Yes</option><option>No</option></select></label><div class="full actions"><button class="primary">Register Medicine</button></div></form></div></div><div class="card"><div class="cardHead"><h2>Medicine List</h2><span>Name, drawer, quantity and availability — 25 per page</span></div><div class="cardBody"><div class="search"><input id="medSearch" placeholder="Search medicine name, drawer or availability"></div><div class="tablewrap"><table class="table medTable"><thead><tr><th>No.</th><th>Medicine Name</th><th>Drawer</th><th>Quantity</th><th>Available</th><th>Action</th></tr></thead><tbody id="medBody"></tbody></table></div><div class="pagination" id="medPagination" aria-label="Medicine list pages"></div></div></div></div></section>
+<div class="cardBody tablewrap"><table class="table"><thead><tr><th>Sr No.</th><th>No.</th><th>Name</th><th>Drawer</th><th>Quantity</th><th>Available</th><th>Action</th></tr></thead><tbody id="emptyStockBody"></tbody></table></div></div><div class="medicineGrid"><div class="card"><div class="cardHead"><h2>Add Medicine</h2></div><div class="cardBody"><form id="medicineForm" class="formgrid"><label>Medicine Name<input id="medName" required></label><label>Drawer<input id="medDrawer" required></label><label>Quantity<input id="medQty" type="number" min="0" value="0" required></label><label>Available / Not Available<select id="medAvail"><option>Yes</option><option>No</option></select></label><div class="full actions"><button class="primary">Register Medicine</button></div></form></div></div><div class="card"><div class="cardHead"><h2>Medicine List</h2><span>Name, drawer, quantity and availability — 25 per page</span></div><div class="cardBody"><div class="search"><input id="medSearch" placeholder="Search medicine name, drawer or availability"></div><div class="tablewrap medTableWrap"><table class="table medTable"><thead><tr><th>No.</th><th>Medicine Name</th><th>Drawer</th><th>Quantity</th><th>Available</th><th>Action</th></tr></thead><tbody id="medBody"></tbody></table></div><div class="pagination" id="medPagination" aria-label="Medicine list pages"></div></div></div></div></section>
 <section class="page" id="clinic"><div class="hero"><div><h1>Clinic Profile</h1><p>Edit clinic information and keep it synchronized.</p></div></div><div class="clinicPreview"><div class="card"><div class="cardBody"><img class="logoFit" src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic"><h2 id="clinicNameText">Anand Homoeopathy Multi Speciality Clinic</h2></div></div><div class="card"><div class="cardBody"><form id="clinicForm" class="formgrid"><label class="full">Clinic Name<input id="clinicName"></label><label class="full">Address<textarea id="clinicAddress"></textarea></label><label>Phone<input id="clinicPhone"></label><div class="full actions"><button class="primary">Update Clinic Profile</button></div></form></div></div></div></section>
 <section class="page" id="connection"><div class="hero"><div><h1>Server Connection</h1><p>This screen is optional. The application works offline without a server.</p></div><button class="primary" id="testConn">Check Connection</button></div><div class="card"><div class="cardBody"><div class="connectionBig off" id="connBig">Offline / not connected</div><p id="connDetail" class="mini"></p><div class="formgrid" style="margin-top:15px"><label class="full">Sync Server URL<input id="serverUrl" placeholder="http://192.168.1.25:8787"></label><div class="full actions"><button class="green" id="connectBtn">Connect & Sync</button></div></div></div></div><div class="card"><div class="cardBody"><p>Office and Reception can each continue working while the other computer is off. When both reconnect to the same sync server, records are merged by last update time.</p></div></div></section>
 <section class="page" id="permissions">
@@ -579,6 +649,6 @@ id="incomeExpensePanel" class="hidden">
     </div>
     </div>
     </div>
-    <script src="app.js?v=pro-ygrowth-sep-v2"></script>
+    <script src="app.js?v=pro-med-layout-v1"></script>
     </body>
     </html>
