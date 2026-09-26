@@ -4647,56 +4647,45 @@ function setupBackupUI() {
     startAutoBackupTimer();
 }
 
-function importBackup(e) {
+async function importBackup(e) {
     const f = e.target.files[0];
     if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
-        try {
-            const raw = JSON.parse(r.result);
-            const incoming = normalizeData(Object.assign(structuredClone(DEFAULT), raw));
-            // Full restore from JSON — patients/medicines/payments as in file
-            DB = incoming;
-            // Deleted list ONLY from backup file (not local deletions)
-            if (raw.meta && Array.isArray(raw.meta.deleted)) {
-                DB.meta = DB.meta || {};
-                DB.meta.deleted = [...raw.meta.deleted];
-            } else {
-                DB.meta = DB.meta || {};
-                DB.meta.deleted = [];
-            }
-            // Un-delete every record present in the backup
-            (DB.patients || []).forEach(p => {
-                if (!p) return;
-                p._deleted = false;
-                // Keep explicit pending from JSON; do not auto-receive
-                if (p.forcePending === true || (p.received === false && Number(p.partialPending || 0) > 0)) {
-                    p.forcePending = true;
-                    p.received = false;
-                    p.completedAt = null;
-                }
-            });
-            (DB.medicines || []).forEach(m => { if (m) m._deleted = false; });
-            (DB.payments || []).forEach(x => { if (x) x._deleted = false; });
-            // Remove restored ids from deleted tombstones
-            const liveIds = new Set([
-                ...(DB.patients || []).map(p => p && p.id),
-                ...(DB.medicines || []).map(m => m && m.id),
-                ...(DB.payments || []).map(x => x && x.id)
-            ].filter(Boolean));
-            DB.meta.deleted = (DB.meta.deleted || []).filter(id => !liveIds.has(id));
-            DB = normalizeData(DB);
-            saveLocal();
-            try { refreshAllPatientViews(); } catch (e) {}
-            try { renderMedicines(); } catch (e) {}
-            toast('Import full backup done');
-            try { syncNow(true); } catch (e) {}
-        } catch (err) {
-            console.warn(err);
-            toast('Invalid backup file', true)
-        }
-    };
-    r.readAsText(f)
+    try {
+        const fd = new FormData();
+        fd.append('file', f);
+        await fetch('/api/restore-file', { method: 'POST', body: fd });
+        alert('Backup restored successfully!');
+        location.reload();
+    } catch (err) {
+        alert('Import failed: ' + err.message);
+    }
+}
+async function importBackup(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+        const fd = new FormData();
+        fd.append('file', f);
+        await fetch('/api/restore-file', { method: 'POST', body: fd });
+        alert('Backup restored successfully!');
+        location.reload();
+    } catch (err) {
+        alert('Import failed: ' + err.message);
+    }
+}
+
+async function importPreviousData(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+        const fd = new FormData();
+        fd.append('file', f);
+        await fetch('/api/restore-file', { method: 'POST', body: fd });
+        alert('Previous data imported successfully!');
+        location.reload();
+    } catch (err) {
+        alert('Import failed: ' + err.message);
+    }
 }
 
 function searchPatientRange() {
