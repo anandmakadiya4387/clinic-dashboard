@@ -397,7 +397,8 @@ def create_fastapi_app():
 
     @app.post("/api/restore")
     async def restore(request: Request):
-        body = await request.json()
+        content = await request.body()
+        body = json.loads(content.decode("utf-8"))
         current = load_state()
         merged = merge_state(current, body)
         save_state(merged, "restore")
