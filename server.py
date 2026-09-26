@@ -401,7 +401,7 @@ def create_fastapi_app():
         current = load_state()
         merged = merge_state(current, body)
         save_state(merged, "restore")
-        return merged
+        return {"ok": True, "count": len(merged.get("patients", []))}
 
     @app.get("/api/backup/{name}")
     def get_backup(name: str):
