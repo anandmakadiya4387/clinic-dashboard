@@ -10,6 +10,61 @@ const SERVER_KEY = 'anandClinicServerV27';
 const DEVICE_KEY = 'anandClinicDeviceV27';
 const DEVICE_ID = localStorage.getItem(DEVICE_KEY) || ('device_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,10));
 localStorage.setItem(DEVICE_KEY, DEVICE_ID);
+
+/* ===== Large-data storage: IndexedDB primary, localStorage only if small =====
+   Avoids freeze / QuotaExceeded when patients/payments grow (e.g. full JSON import). */
+const IDB_NAME = 'anandClinicIDBv1';
+const IDB_STORE = 'kv';
+const LS_MAX_CHARS = 3500000; /* ~3.5MB safety under typical 5MB quota */
+
+function idbReq(req) {
+    return new Promise((resolve, reject) => {
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error || new Error('idb error'));
+    });
+}
+function idbOpen() {
+    return new Promise((resolve, reject) => {
+        const r = indexedDB.open(IDB_NAME, 1);
+        r.onupgradeneeded = () => {
+            const db = r.result;
+            if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+        };
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error || new Error('idb open failed'));
+    });
+}
+async function idbSet(key, value) {
+    const db = await idbOpen();
+    try {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(value, key);
+        await new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+    } finally { try { db.close(); } catch (e) {} }
+}
+async function idbGet(key) {
+    const db = await idbOpen();
+    try {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const v = await idbReq(tx.objectStore(IDB_STORE).get(key));
+        return v;
+    } finally { try { db.close(); } catch (e) {} }
+}
+function lsSafeSet(key, raw) {
+    if (typeof raw !== 'string') raw = JSON.stringify(raw);
+    if (raw.length > LS_MAX_CHARS) {
+        try { localStorage.removeItem(key); } catch (e) {}
+        return false;
+    }
+    try {
+        localStorage.setItem(key, raw);
+        return true;
+    } catch (e) {
+        try { localStorage.removeItem(key); } catch (e2) {}
+        return false;
+    }
+}
+
 const $ = s => document.querySelector(s),
     $$ = s => [...document.querySelectorAll(s)];
 const money = n => '₹ ' + Number(n || 0).toLocaleString('en-IN', {
@@ -202,6 +257,23 @@ const DEFAULT = {
     }
 };
 let DB = loadLocal();
+/* Hydrate from IndexedDB if it has more/newer data (localStorage may be empty after large import). */
+(function hydrateFromIndexedDB() {
+    try {
+        idbGet(KEY).then(function(stored) {
+            if (!stored || typeof stored !== 'object') return;
+            try {
+                const n = normalizeData(stored);
+                const nP = (n.patients || []).length;
+                const cP = (DB.patients || []).length;
+                if (nP > cP || (nP === cP && nP > 0 && !localStorage.getItem(KEY))) {
+                    DB = n;
+                    try { renderAll(); } catch (e) {}
+                }
+            } catch (e) { console.warn('idb hydrate', e); }
+        }).catch(function(){});
+    } catch (e) {}
+})();
 let server = localStorage.getItem(SERVER_KEY) || '';
 if (location.protocol === 'http:' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost') && (location.port === '8787' || location.port === '8789')) {
     if (!server || /^(https?:\/\/)(localhost|127\.0\.0\.1):(8787|8789)$/.test(server)) server = location.origin;
@@ -305,8 +377,12 @@ function loadLocal() {
 
 function saveLocal() {
     DB = normalizeData(DB);
-    localStorage.setItem(KEY, JSON.stringify(DB));
-    renderAll()
+    let raw = '';
+    try { raw = JSON.stringify(DB); } catch (e) { console.error('stringify failed', e); return; }
+    /* Prefer IndexedDB (large capacity). localStorage only if small enough. */
+    try { idbSet(KEY, DB).catch(function(err){ console.warn('idb save', err); }); } catch (e) {}
+    lsSafeSet(KEY, raw);
+    try { renderAll(); } catch (e) { console.error(e); }
 }
 
 function active(a) {
@@ -4647,62 +4723,11 @@ function setupBackupUI() {
     startAutoBackupTimer();
 }
 
-async function importBackup(e) {
-    const f = e.target.files[0];
-    if (!f) return;
-    if (!confirm("Badi file upload ho rahi hai. Thoda samay lag sakta hai, please OK dabakar wait karein.")) return;
 
-    try {
-        // File ko background mein asynchronously read karein taaki browser freeze na ho
-        const buffer = await f.arrayBuffer();
 
-        await fetch('/api/restore', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' },
-            body: buffer 
-        });
 
-        alert('Backup restored successfully!');
-        location.reload();
-    } catch (err) {
-        alert('Import failed: ' + err.message);
-    }
-}
 
-async function importPreviousData(e) {
-    const f = e.target.files[0];
-    if (!f) return;
-    if (!confirm("Previous data import ho raha hai. Please OK dabakar wait karein.")) return;
 
-    try {
-        const buffer = await f.arrayBuffer();
-
-        await fetch('/api/restore', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' },
-            body: buffer 
-        });
-
-        alert('Previous data imported successfully!');
-        location.reload();
-    } catch (err) {
-        alert('Import failed: ' + err.message);
-    }
-}
-
-async function importPreviousData(e) {
-    const f = e.target.files[0];
-    if (!f) return;
-    try {
-        const fd = new FormData();
-        fd.append('file', f);
-        await fetch('/api/restore-file', { method: 'POST', body: fd });
-        alert('Previous data imported successfully!');
-        location.reload();
-    } catch (err) {
-        alert('Import failed: ' + err.message);
-    }
-}
 
 function searchPatientRange() {
     patientFilterY = $('#patientYear')?.value || '';
@@ -4968,63 +4993,93 @@ function savePermissions() {
     toast('Reception permissions updated');
 }
 
-function importPreviousData(e) {
-    const f = e.target.files[0];
+
+
+
+async function importPreviousData(e) {
+    const f = e && e.target && e.target.files && e.target.files[0];
     if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
-        try {
-            const incoming = normalizeData(JSON.parse(r.result));
-            const merge = (a, b) => {
-                const m = new Map();
-                [...a, ...b].forEach(x => {
-                    if (!x?.id) return;
-                    const old = m.get(x.id);
-                    if (!old || String(x._updated || '') > String(old._updated || '')) m.set(x.id, x)
-                });
-                return [...m.values()]
-            };
-            // Ids present in incoming file are RESTORED (remove from local deleted tombstones)
-            const restoreIds = new Set();
-            (incoming.patients || []).forEach(p => { if (p?.id && !p._deleted) restoreIds.add(p.id); });
-            (incoming.payments || []).forEach(p => { if (p?.id && !p._deleted) restoreIds.add(p.id); });
-            (incoming.medicines || []).forEach(p => { if (p?.id && !p._deleted) restoreIds.add(p.id); });
-            DB.meta.deleted = (DB.meta.deleted || []).filter(id => !restoreIds.has(id));
-            // Merge: prefer newer _updated; clear _deleted on restored
-            const mergeRestore = (a, b) => {
-                const m = new Map();
-                [...(a || []), ...(b || [])].forEach(x => {
-                    if (!x?.id) return;
-                    const old = m.get(x.id);
-                    if (!old || String(x._updated || '') >= String(old._updated || '')) m.set(x.id, { ...x });
-                });
-                return [...m.values()].map(x => {
-                    if (restoreIds.has(x.id)) x._deleted = false;
-                    return x;
-                });
-            };
-            DB.patients = mergeRestore(DB.patients, incoming.patients);
-            DB.payments = mergeRestore(DB.payments, incoming.payments);
-            DB.medicines = mergeRestore(DB.medicines, incoming.medicines);
-            // Only keep tombstones that are still not restored
-            const stillDeleted = new Set([...(DB.meta.deleted || []), ...((incoming.meta && incoming.meta.deleted) || [])].filter(id => !restoreIds.has(id)));
-            DB.meta.deleted = [...stillDeleted];
-            DB.patients = DB.patients.filter(x => !x._deleted && !DB.meta.deleted.includes(x.id));
-            DB.payments = DB.payments.filter(x => !x._deleted && !DB.meta.deleted.includes(x.id));
-            DB.medicines = DB.medicines.filter(x => !x._deleted && !DB.meta.deleted.includes(x.id));
-            if (String(incoming.clinic?._updated || '') > String(DB.clinic?._updated || '')) DB.clinic = incoming.clinic;
-            if (String(incoming.settings?._updated || '') > String(DB.settings?._updated || '')) DB.settings = incoming.settings;
-            DB = normalizeData(DB);
-            saveLocal();
-            syncNow(true);
-            toast('Previous data imported and merged safely')
-        } catch {
-            toast('Invalid previous backup', true)
+    if (!confirm('Large JSON import. This may take a minute. Click OK and wait — do not close the tab.')) {
+        try { e.target.value = ''; } catch (err) {}
+        return;
+    }
+    const statusEl = document.getElementById('backupStatus') || document.getElementById('importStatus');
+    function setStatus(msg) { try { if (statusEl) statusEl.textContent = msg; toast(msg); } catch (err) {} }
+    setStatus('Reading file…');
+    try {
+        const text = await f.text();
+        setStatus('Parsing JSON…');
+        await new Promise(r => setTimeout(r, 30)); /* yield UI */
+        let incoming;
+        try { incoming = JSON.parse(text); } catch (err) { throw new Error('Invalid JSON file'); }
+        setStatus('Merging data…');
+        await new Promise(r => setTimeout(r, 30));
+        incoming = normalizeData(incoming);
+        const merge = (a, b) => {
+            const m = new Map();
+            [...(a || []), ...(b || [])].forEach(x => {
+                if (!x || !x.id) return;
+                const old = m.get(x.id);
+                if (!old || String(x._updated || '') > String(old._updated || '')) m.set(x.id, x);
+            });
+            return [...m.values()];
+        };
+        const restoreIds = new Set();
+        (incoming.patients || []).forEach(x => { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.payments || []).forEach(x => { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.medicines || []).forEach(x => { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.expenses || []).forEach(x => { if (x && x.id) restoreIds.add(x.id); });
+        DB.meta = DB.meta || {};
+        DB.meta.deleted = (DB.meta.deleted || []).filter(id => !restoreIds.has(id));
+        DB.patients = merge(DB.patients, incoming.patients);
+        DB.payments = merge(DB.payments, incoming.payments);
+        DB.medicines = merge(DB.medicines, incoming.medicines);
+        DB.expenses = merge(DB.expenses, incoming.expenses);
+        if (incoming.settings && String(incoming.settings._updated || '') > String((DB.settings || {})._updated || '')) {
+            DB.settings = Object.assign({}, DB.settings || {}, incoming.settings);
         }
-    };
-    r.readAsText(f);
-    e.target.value = ''
+        if (incoming.clinic && String(incoming.clinic._updated || '') > String((DB.clinic || {})._updated || '')) {
+            DB.clinic = Object.assign({}, DB.clinic || {}, incoming.clinic);
+        }
+        if (incoming.schemaVersion) DB.schemaVersion = Math.max(Number(DB.schemaVersion || 0), Number(incoming.schemaVersion || 0));
+        DB = normalizeData(DB);
+        setStatus('Saving to device storage…');
+        await new Promise(r => setTimeout(r, 30));
+        try { await idbSet(KEY, DB); } catch (err) { console.warn(err); }
+        const raw = JSON.stringify(DB);
+        lsSafeSet(KEY, raw); /* may skip if too large — OK, IDB has it */
+        /* Push to server if online (SQLite) — does not depend on localStorage size */
+        if (server) {
+            setStatus('Uploading to server…');
+            try {
+                await fetch(String(server).replace(/\/$/, '') + '/api/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: raw
+                });
+            } catch (err) {
+                console.warn('server restore', err);
+            }
+        }
+        setStatus('Import full backup done');
+        try { e.target.value = ''; } catch (err) {}
+        /* Reload instead of heavy renderAll — avoids long freeze */
+        setTimeout(function() { location.reload(); }, 400);
+    } catch (err) {
+        console.error(err);
+        setStatus('Import failed: ' + (err && err.message ? err.message : 'error'));
+        alert('Import failed: ' + (err && err.message ? err.message : err));
+        try { e.target.value = ''; } catch (e2) {}
+    }
 }
+window.importPreviousData = importPreviousData;
+
+
+async function importBackup(e) {
+    /* Same safe path as previous-data import — IDB + optional server, no localStorage blow-up */
+    return importPreviousData(e);
+}
+window.importBackup = importBackup;
 
 function getAppointmentHistoryRows() {
     let rows = caseRows().slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.caseNo) - Number(a.caseNo));
