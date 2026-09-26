@@ -4651,23 +4651,20 @@ async function importBackup(e) {
     const f = e.target.files[0];
     if (!f) return;
     try {
-        const fd = new FormData();
-        fd.append('file', f);
-        await fetch('/api/restore-file', { method: 'POST', body: fd });
+        await fetch('/api/restore', { method: 'POST', body: f });
         alert('Backup restored successfully!');
         location.reload();
     } catch (err) {
         alert('Import failed: ' + err.message);
     }
 }
-async function importBackup(e) {
+
+async function importPreviousData(e) {
     const f = e.target.files[0];
     if (!f) return;
     try {
-        const fd = new FormData();
-        fd.append('file', f);
-        await fetch('/api/restore-file', { method: 'POST', body: fd });
-        alert('Backup restored successfully!');
+        await fetch('/api/restore', { method: 'POST', body: f });
+        alert('Previous data imported successfully!');
         location.reload();
     } catch (err) {
         alert('Import failed: ' + err.message);
