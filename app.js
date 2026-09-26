@@ -4650,8 +4650,18 @@ function setupBackupUI() {
 async function importBackup(e) {
     const f = e.target.files[0];
     if (!f) return;
+    if (!confirm("Badi file upload ho rahi hai. Thoda samay lag sakta hai, please OK dabakar wait karein.")) return;
+
     try {
-        await fetch('/api/restore', { method: 'POST', body: f });
+        // File ko background mein asynchronously read karein taaki browser freeze na ho
+        const buffer = await f.arrayBuffer();
+
+        await fetch('/api/restore', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: buffer 
+        });
+
         alert('Backup restored successfully!');
         location.reload();
     } catch (err) {
@@ -4662,8 +4672,17 @@ async function importBackup(e) {
 async function importPreviousData(e) {
     const f = e.target.files[0];
     if (!f) return;
+    if (!confirm("Previous data import ho raha hai. Please OK dabakar wait karein.")) return;
+
     try {
-        await fetch('/api/restore', { method: 'POST', body: f });
+        const buffer = await f.arrayBuffer();
+
+        await fetch('/api/restore', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: buffer 
+        });
+
         alert('Previous data imported successfully!');
         location.reload();
     } catch (err) {
