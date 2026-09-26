@@ -379,10 +379,16 @@ function saveLocal() {
     DB = normalizeData(DB);
     let raw = '';
     try { raw = JSON.stringify(DB); } catch (e) { console.error('stringify failed', e); return; }
-    /* Prefer IndexedDB (large capacity). localStorage only if small enough. */
     try { idbSet(KEY, DB).catch(function(err){ console.warn('idb save', err); }); } catch (e) {}
     lsSafeSet(KEY, raw);
-    try { renderAll(); } catch (e) { console.error(e); }
+    /* Defer render so UI thread stays free after large saves */
+    try {
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(function() { try { renderAll(); } catch (e) {} });
+        } else {
+            setTimeout(function() { try { renderAll(); } catch (e) {} }, 0);
+        }
+    } catch (e) { console.error(e); }
 }
 
 function active(a) {
@@ -4996,41 +5002,93 @@ function savePermissions() {
 
 
 
+
+window.importPreviousData = importPreviousData;
+
+
+
+window.importBackup = importBackup;
+
+
+async function idbDelete(key) {
+    try {
+        const db = await idbOpen();
+        try {
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            tx.objectStore(IDB_STORE).delete(key);
+            await new Promise(function(res, rej) {
+                tx.oncomplete = function() { res(); };
+                tx.onerror = function() { rej(tx.error); };
+            });
+        } finally { try { db.close(); } catch (e) {} }
+    } catch (e) { console.warn('idbDelete', e); }
+}
+
 async function importPreviousData(e) {
     const f = e && e.target && e.target.files && e.target.files[0];
     if (!f) return;
-    if (!confirm('Large JSON import. This may take a minute. Click OK and wait — do not close the tab.')) {
+    const sizeMb = (f.size / (1024 * 1024)).toFixed(1);
+    if (!confirm('JSON import (~' + sizeMb + ' MB). Online ho to server pe direct jayega — browser freeze kam. OK dabayein aur wait karein, tab band mat karein.')) {
         try { e.target.value = ''; } catch (err) {}
         return;
     }
     const statusEl = document.getElementById('backupStatus') || document.getElementById('importStatus');
-    function setStatus(msg) { try { if (statusEl) statusEl.textContent = msg; toast(msg); } catch (err) {} }
+    function setStatus(msg) {
+        try { if (statusEl) statusEl.textContent = msg; } catch (err) {}
+        try { toast(msg); } catch (err) {}
+        console.log('[import]', msg);
+    }
     setStatus('Reading file…');
     try {
         const text = await f.text();
-        setStatus('Parsing JSON…');
-        await new Promise(r => setTimeout(r, 30)); /* yield UI */
+        const srv = (typeof server === 'string' && server) ? String(server).replace(/\/$/, '') : '';
+
+        /* ===== ONLINE: server parses JSON — client does NOT JSON.parse / merge / stringify ===== */
+        if (srv) {
+            setStatus('Uploading to server (no heavy browser work)…');
+            await new Promise(function(r) { setTimeout(r, 40); });
+            const res = await fetch(srv + '/api/restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: text
+            });
+            if (!res.ok) {
+                const t = await res.text().catch(function() { return ''; });
+                throw new Error('Server restore failed: ' + res.status + ' ' + (t || '').slice(0, 120));
+            }
+            setStatus('Clearing local cache…');
+            try { localStorage.removeItem(KEY); } catch (err) {}
+            try { await idbDelete(KEY); } catch (err) {}
+            setStatus('Import full backup done — reloading…');
+            try { e.target.value = ''; } catch (err) {}
+            setTimeout(function() { location.reload(); }, 500);
+            return;
+        }
+
+        /* ===== OFFLINE fallback: must parse on device (may still take time on very large files) ===== */
+        setStatus('Offline mode — parsing on device (please wait)…');
+        await new Promise(function(r) { setTimeout(r, 40); });
         let incoming;
         try { incoming = JSON.parse(text); } catch (err) { throw new Error('Invalid JSON file'); }
-        setStatus('Merging data…');
-        await new Promise(r => setTimeout(r, 30));
+        setStatus('Merging…');
+        await new Promise(function(r) { setTimeout(r, 40); });
         incoming = normalizeData(incoming);
-        const merge = (a, b) => {
+        const merge = function(a, b) {
             const m = new Map();
-            [...(a || []), ...(b || [])].forEach(x => {
+            (a || []).concat(b || []).forEach(function(x) {
                 if (!x || !x.id) return;
                 const old = m.get(x.id);
                 if (!old || String(x._updated || '') > String(old._updated || '')) m.set(x.id, x);
             });
-            return [...m.values()];
+            return Array.from(m.values());
         };
         const restoreIds = new Set();
-        (incoming.patients || []).forEach(x => { if (x && x.id) restoreIds.add(x.id); });
-        (incoming.payments || []).forEach(x => { if (x && x.id) restoreIds.add(x.id); });
-        (incoming.medicines || []).forEach(x => { if (x && x.id) restoreIds.add(x.id); });
-        (incoming.expenses || []).forEach(x => { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.patients || []).forEach(function(x) { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.payments || []).forEach(function(x) { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.medicines || []).forEach(function(x) { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.expenses || []).forEach(function(x) { if (x && x.id) restoreIds.add(x.id); });
         DB.meta = DB.meta || {};
-        DB.meta.deleted = (DB.meta.deleted || []).filter(id => !restoreIds.has(id));
+        DB.meta.deleted = (DB.meta.deleted || []).filter(function(id) { return !restoreIds.has(id); });
         DB.patients = merge(DB.patients, incoming.patients);
         DB.payments = merge(DB.payments, incoming.payments);
         DB.medicines = merge(DB.medicines, incoming.medicines);
@@ -5043,28 +5101,13 @@ async function importPreviousData(e) {
         }
         if (incoming.schemaVersion) DB.schemaVersion = Math.max(Number(DB.schemaVersion || 0), Number(incoming.schemaVersion || 0));
         DB = normalizeData(DB);
-        setStatus('Saving to device storage…');
-        await new Promise(r => setTimeout(r, 30));
+        setStatus('Saving to device (IndexedDB)…');
+        await new Promise(function(r) { setTimeout(r, 40); });
         try { await idbSet(KEY, DB); } catch (err) { console.warn(err); }
-        const raw = JSON.stringify(DB);
-        lsSafeSet(KEY, raw); /* may skip if too large — OK, IDB has it */
-        /* Push to server if online (SQLite) — does not depend on localStorage size */
-        if (server) {
-            setStatus('Uploading to server…');
-            try {
-                await fetch(String(server).replace(/\/$/, '') + '/api/restore', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: raw
-                });
-            } catch (err) {
-                console.warn('server restore', err);
-            }
-        }
-        setStatus('Import full backup done');
+        try { lsSafeSet(KEY, JSON.stringify(DB)); } catch (err) {}
+        setStatus('Import full backup done — reloading…');
         try { e.target.value = ''; } catch (err) {}
-        /* Reload instead of heavy renderAll — avoids long freeze */
-        setTimeout(function() { location.reload(); }, 400);
+        setTimeout(function() { location.reload(); }, 500);
     } catch (err) {
         console.error(err);
         setStatus('Import failed: ' + (err && err.message ? err.message : 'error'));
@@ -5074,20 +5117,20 @@ async function importPreviousData(e) {
 }
 window.importPreviousData = importPreviousData;
 
-
 async function importBackup(e) {
-    /* Same safe path as previous-data import — IDB + optional server, no localStorage blow-up */
     return importPreviousData(e);
 }
 window.importBackup = importBackup;
 
 function getAppointmentHistoryRows() {
-    let rows = caseRows().slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.caseNo) - Number(a.caseNo));
+    /* Single sort only — avoid caseRows() double-sort freeze on 2000+ patients */
+    let rows = active(DB.patients).slice();
+    rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || caseNoNumericPart(b.caseNo) - caseNoNumericPart(a.caseNo));
     const q = String(histQuery || '').trim().toLowerCase();
     if (q) {
         const digits = q.replace(/\D/g, '');
         rows = rows.filter(p => {
-            const name = `${p.title || ''} ${p.name || ''}`.toLowerCase();
+            const name = ((p.title || '') + ' ' + (p.name || '')).toLowerCase();
             const mobile = String(p.mobile || '').replace(/\D/g, '');
             const caseNo = String(p.caseNo || '');
             return name.includes(q) || caseNo.includes(q) || (digits && mobile.includes(digits)) || String(p.address || '').toLowerCase().includes(q);
@@ -5188,26 +5231,57 @@ function setupAppointmentHistory() {
     });
 }
 
+let _migrationsRan = false;
 function renderAll() {
-    try { clearAllExpensesOnce(); } catch (e) {}
-    try { migrateCaseNumbersToPrefixed(); } catch (e) {}
-    try { fixLegacyBackdatedUnpaid(); } catch (e) {}
-    renderDashboard();
-    renderCalendarInfo();
-    renderPermissions();
-    renderQueue();
-    renderMedicines();
-    renderClinic();
-    if ($('#reportBodyPatients')) { initPatientFilterSelects(); renderPatientReport(); }
-    if ($('#payMonthBody') || $('#paymentYearSelect')) {
-        initPaymentYearSelect();
-        renderPaymentSummary();
-        renderExpenses();
+    /* Light path first so UI stays responsive with large patient DB (2000+ rows). */
+    try {
+        if (!_migrationsRan) {
+            _migrationsRan = true;
+            try { clearAllExpensesOnce(); } catch (e) {}
+            try { migrateCaseNumbersToPrefixed(); } catch (e) {}
+            try { fixLegacyBackdatedUnpaid(); } catch (e) {}
+        }
+    } catch (e) {}
+    try { renderDashboard(); } catch (e) {}
+    try { renderCalendarInfo(); } catch (e) {}
+    try { renderPermissions(); } catch (e) {}
+    try { renderQueue(); } catch (e) {}
+    try { if (role === 'reception') renderReceptionQueue(); } catch (e) {}
+    try {
+        set('receptionPayState', DB.settings.receptionPaymentEnabled ? 'ON' : 'OFF');
+        if ($('#receptionPayToggle')) $('#receptionPayToggle').checked = !!DB.settings.receptionPaymentEnabled;
+    } catch (e) {}
+    /* Heavy panels: only if section is open / exists — deferred so first paint is fast */
+    const runHeavy = function() {
+        try {
+            const medPage = document.getElementById('medicines');
+            if (medPage && medPage.classList.contains('active')) renderMedicines();
+        } catch (e) {}
+        try { renderClinic(); } catch (e) {}
+        try {
+            if ($('#reportBodyPatients') && document.getElementById('reports')?.classList.contains('active')) {
+                initPatientFilterSelects(); renderPatientReport();
+            }
+        } catch (e) {}
+        try {
+            const payActive = document.getElementById('payments')?.classList.contains('active');
+            if (payActive && ($('#payMonthBody') || $('#paymentYearSelect'))) {
+                initPaymentYearSelect();
+                renderPaymentSummary();
+                renderExpenses();
+            }
+        } catch (e) {}
+        try {
+            const histActive = document.getElementById('history')?.classList.contains('active')
+                || document.getElementById('appointmentHistory')?.classList.contains('active');
+            if ($('#histBody') && histActive) renderAppointmentHistory();
+        } catch (e) {}
+    };
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { setTimeout(runHeavy, 0); });
+    } else {
+        setTimeout(runHeavy, 0);
     }
-    if (role === 'reception') renderReceptionQueue();
-    if ($('#histBody')) renderAppointmentHistory();
-    set('receptionPayState', DB.settings.receptionPaymentEnabled ? 'ON' : 'OFF');
-    if ($('#receptionPayToggle')) $('#receptionPayToggle').checked = !!DB.settings.receptionPaymentEnabled
 }
 let pollTimerId = null;
 let pollVisibilityBound = false;
@@ -6493,5 +6567,35 @@ window.openMultiYearGrowthModal = function() {
     if (!nav) return;
     if (nav.classList && nav.classList.contains('navParent')) return;
     setTimeout(closeSide, 40);
+  }, true);
+})();
+
+
+(function deferHeavyPageRender() {
+  document.addEventListener('click', function(ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var btn = t.closest('[data-page], [data-pay-view], [data-patient-view]');
+    if (!btn) return;
+    var page = btn.getAttribute('data-page') || '';
+    var pay = btn.getAttribute('data-pay-view') || '';
+    setTimeout(function() {
+      try {
+        if (page === 'history' || page === 'appointmentHistory' || document.getElementById('history')?.classList.contains('active')) {
+          if ($('#histBody')) renderAppointmentHistory();
+        }
+        if (page === 'medicines' || document.getElementById('medicines')?.classList.contains('active')) {
+          renderMedicines();
+        }
+        if (page === 'payments' || page === 'reports' || pay || document.getElementById('payments')?.classList.contains('active')) {
+          if ($('#payMonthBody') || $('#paymentYearSelect')) {
+            initPaymentYearSelect();
+            renderPaymentSummary();
+            renderExpenses();
+          }
+          if ($('#reportBodyPatients')) { initPatientFilterSelects(); renderPatientReport(); }
+        }
+      } catch (e) { console.warn(e); }
+    }, 50);
   }, true);
 })();
