@@ -457,19 +457,7 @@ function nextCase() {
 }
 
 function feeTotal(p) {
-    /* consultation + medicine always; renewal only if due OR this visit has a renewal payment
-       (avoids marking all cases Pending when JSON stores annual renewal on the patient row). */
-    if (!p) return 0;
-    let t = Number(p.consultation || 0) + Number(p.medicine || 0);
-    const ren = Number(p.renewal || 0);
-    if (ren <= 0) return t;
-    try {
-        if (renewalDue(p)) return t + ren;
-        if (active(DB.payments).some(function(x) {
-            return x.patientId === p.id && (x.feeCategory === 'renewal' || x.caseType === 'renewal') && Number(x.amount || 0) > 0;
-        })) return t + ren;
-    } catch (e) {}
-    return t;
+    return Number(p.consultation || 0) + Number(p.medicine || 0) + (renewalDue(p) ? Number(p.renewal || 0) : 0)
 }
 
 function paidFor(id) {
@@ -643,29 +631,35 @@ function paymentStatusInfo(p) {
     const fees = feeTotal(p);
     const paid = paidFor(p.id);
     const partialExtra = Math.max(0, Number(p.partialPending || 0));
-    const due = Math.max(0, fees - paid) + partialExtra;
+    const pending = Math.max(0, fees - paid) + partialExtra;
     // FOC only when explicitly marked
     if (p.foc === true) {
         return { kind: 'foc', label: 'FOC', pending: 0, paid: 0, fees: 0, locked: false };
     }
-    // User/JSON forced pending and not yet received
+    // Explicit pending / not received always wins over auto-payment matching
     if (p.forcePending === true && p.received !== true) {
-        return { kind: 'pending', label: 'Pending', pending: due || fees || partialExtra, paid: paid, fees: fees, locked: false };
+        return { kind: 'pending', label: 'Pending', pending: pending || fees || partialExtra, paid, fees, locked: false };
     }
-    /* Payments fully cover visit fees → Received (even if received flag missing/false in JSON) */
-    if (fees > 0 && paid >= fees && partialExtra <= 0 && p.forcePending !== true) {
-        return { kind: 'received', label: 'Received', pending: 0, paid: paid, fees: fees, locked: true };
+    if (p.received === false && fees > 0) {
+        if (paid > 0 && paid < fees) return { kind: 'partial', label: 'Partial pending', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
+        if (paid <= 0 || pending > 0) return { kind: 'pending', label: 'Pending', pending: pending || fees, paid, fees, locked: false };
     }
-    if (p.received === true && due <= 0) {
-        return { kind: 'received', label: 'Received', pending: 0, paid: paid, fees: fees, locked: true };
+    // Fully received only when explicitly marked received AND nothing due
+    if (p.received === true && Math.max(0, fees - paid) <= 0 && partialExtra <= 0) {
+        return { kind: 'received', label: 'Received', pending: 0, paid, fees, locked: true };
     }
-    if (paid > 0 && due > 0) {
-        return { kind: 'partial', label: 'Partial pending', pending: due, paid: paid, fees: fees, locked: false };
+    if (paid > 0 && (Math.max(0, fees - paid) > 0 || partialExtra > 0)) {
+        return { kind: 'partial', label: 'Partial pending', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
+    }
+    // Payments fully cover fees and not marked pending → received
+    if (fees > 0 && paid >= fees && partialExtra <= 0 && p.received !== false && !p.forcePending) {
+        return { kind: 'received', label: 'Received', pending: 0, paid, fees, locked: true };
     }
     if (fees <= 0 && paid <= 0 && !p.forcePending) {
+        // zero fee visit without FOC flag → still pending/waiting style, not auto FOC
         return { kind: 'pending', label: 'Pending', pending: 0, paid: 0, fees: 0, locked: false };
     }
-    return { kind: 'pending', label: 'Pending', pending: due || fees || 0, paid: paid || 0, fees: fees, locked: false };
+    return { kind: 'pending', label: 'Pending', pending: pending || 0, paid: paid || 0, fees, locked: false };
 }
 
 
