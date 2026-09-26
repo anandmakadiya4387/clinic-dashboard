@@ -4577,7 +4577,7 @@ async function refreshBackupList(){
 }
 async function restoreServerBackup(name){
     if(!confirm('Restore this backup? Newer records are kept and records are merged safely.')) return;
-    try{ const r=await fetch((server||location.origin).replace(/\/$/,'')+'/api/backup/'+name); if(!r.ok)throw 0; const data=await r.json(); const merged=await api('/api/restore','POST',data); mergeLocalRemote(merged); saveLocal(); toast('Import full backup done'); }
+    try{ const r=await fetch((server||location.origin).replace(/\/$/,'')+'/api/backup/'+name); if(!r.ok)throw 0; const data=await r.json(); await api('/api/restore','POST',data); alert('Backup restored successfully!'); location.reload(); 
     catch(e){ toast('Restore failed',true); }
 }
 window.restoreServerBackup=restoreServerBackup;
