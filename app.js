@@ -889,6 +889,46 @@ function setConn(ok, msg, lagMs) {
         }
     }
 }
+
+/** Fast Online badge: only /api/health (no full data sync). */
+async function quickHealthOnline() {
+    if (!server) {
+        setConn(false, 'Offline mode — no server selected.', null);
+        return false;
+    }
+    try {
+        const t0 = performance.now();
+        await api('/api/health');
+        const lag = Math.round(performance.now() - t0);
+        setConn(true, 'Server reachable · syncing data…', lag);
+        return true;
+    } catch (e) {
+        setConn(false, 'Server not reachable. Working offline.', null);
+        return false;
+    }
+}
+
+/** After import/restore: pull full state from server into DB + UI (no hard refresh). */
+async function loadFreshFromServer(statusFn) {
+    const say = typeof statusFn === 'function' ? statusFn : function() {};
+    say('Loading fresh data from server…');
+    const remote = await api('/api/data');
+    if (!remote || typeof remote !== 'object') throw new Error('Server returned empty data');
+    DB = normalizeData(remote);
+    try { await idbSet(KEY, DB); } catch (e) { console.warn(e); }
+    try {
+        const raw = JSON.stringify(DB);
+        lsSafeSet(KEY, raw);
+    } catch (e) {}
+    say('Updating screen…');
+    try { renderAll(); } catch (e) { console.warn(e); }
+    try {
+        if (role === 'reception') renderPermissions();
+    } catch (e) {}
+    try { setConn(true, 'Data loaded from server', null); } catch (e) {}
+    return DB;
+}
+
 async function testConn() {
     if (!server) {
         setConn(false, 'Enter a server URL such as http://192.168.1.25:8787');
@@ -5052,12 +5092,15 @@ async function importPreviousData(e) {
                 const t = await res.text().catch(function() { return ''; });
                 throw new Error('Server restore failed: ' + res.status + ' ' + (t || '').slice(0, 120));
             }
-            setStatus('Clearing local cache…');
-            try { localStorage.removeItem(KEY); } catch (err) {}
-            try { await idbDelete(KEY); } catch (err) {}
-            setStatus('Import full backup done — reloading…');
+            let info = {};
+            try { info = await res.json(); } catch (err) { info = {}; }
+            /* Pull full state from server and refresh UI — no hard refresh required */
+            await loadFreshFromServer(setStatus);
+            const pc = (info && info.count != null) ? info.count : ((DB.patients || []).length);
+            const payc = (info && info.payments != null) ? info.payments : ((DB.payments || []).length);
+            setStatus('Import full backup done · patients ' + pc + (payc != null ? ' · payments ' + payc : ''));
+            try { toast('Import done — data loaded (refresh not needed)'); } catch (err) {}
             try { e.target.value = ''; } catch (err) {}
-            setTimeout(function() { location.reload(); }, 500);
             return;
         }
 
@@ -5101,9 +5144,11 @@ async function importPreviousData(e) {
         await new Promise(function(r) { setTimeout(r, 40); });
         try { await idbSet(KEY, DB); } catch (err) { console.warn(err); }
         try { lsSafeSet(KEY, JSON.stringify(DB)); } catch (err) {}
-        setStatus('Import full backup done — reloading…');
+        setStatus('Updating screen…');
+        try { renderAll(); } catch (err) {}
+        setStatus('Import full backup done');
+        try { toast('Import done — data loaded'); } catch (err) {}
         try { e.target.value = ''; } catch (err) {}
-        setTimeout(function() { location.reload(); }, 500);
     } catch (err) {
         console.error(err);
         setStatus('Import failed: ' + (err && err.message ? err.message : 'error'));
@@ -5660,7 +5705,12 @@ function setup() {
     if (role === 'reception') renderReceptionQueue();
     renderAll();
     setConn(false, server ? 'Checking connection…' : 'Offline mode — no server selected.');
-    if (server) syncNow(true);
+    /* Online badge first (health only), then full sync in background — no long wait for badge */
+    if (server) {
+        quickHealthOnline().then(function(ok) {
+            if (ok) return syncNow(true);
+        }).catch(function() {});
+    }
     bindPollVisibility();
     startPollTimerIfNeeded(); // default 20s smart poll when tab visible
 }
