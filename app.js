@@ -1,12 +1,70 @@
+const APP_VERSION = 'PRO';
 const role = document.body.dataset.role || 'office';
-const savedTheme = localStorage.getItem('anandClinicTheme') || 'light';
-document.documentElement.dataset.theme = savedTheme;
+const savedTheme = 'light';
+document.documentElement.dataset.theme = 'light';
+try { localStorage.setItem('anandClinicTheme', 'light'); } catch(e) {}
+try { document.documentElement.removeAttribute('data-ui-theme'); } catch(e) {}
 const KEY = 'anandClinicV16_' + role;
 const OLD_KEYS = ['anandClinicV15_' + role, 'anandClinicV14_' + role, 'anandClinicV13_' + role, 'anandClinicV12_' + role];
 const SERVER_KEY = 'anandClinicServerV27';
 const DEVICE_KEY = 'anandClinicDeviceV27';
 const DEVICE_ID = localStorage.getItem(DEVICE_KEY) || ('device_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,10));
 localStorage.setItem(DEVICE_KEY, DEVICE_ID);
+
+/* ===== Large-data storage: IndexedDB primary, localStorage only if small =====
+   Avoids freeze / QuotaExceeded when patients/payments grow (e.g. full JSON import). */
+const IDB_NAME = 'anandClinicIDBv1';
+const IDB_STORE = 'kv';
+const LS_MAX_CHARS = 3500000; /* ~3.5MB safety under typical 5MB quota */
+
+function idbReq(req) {
+    return new Promise((resolve, reject) => {
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error || new Error('idb error'));
+    });
+}
+function idbOpen() {
+    return new Promise((resolve, reject) => {
+        const r = indexedDB.open(IDB_NAME, 1);
+        r.onupgradeneeded = () => {
+            const db = r.result;
+            if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+        };
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error || new Error('idb open failed'));
+    });
+}
+async function idbSet(key, value) {
+    const db = await idbOpen();
+    try {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(value, key);
+        await new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+    } finally { try { db.close(); } catch (e) {} }
+}
+async function idbGet(key) {
+    const db = await idbOpen();
+    try {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const v = await idbReq(tx.objectStore(IDB_STORE).get(key));
+        return v;
+    } finally { try { db.close(); } catch (e) {} }
+}
+function lsSafeSet(key, raw) {
+    if (typeof raw !== 'string') raw = JSON.stringify(raw);
+    if (raw.length > LS_MAX_CHARS) {
+        try { localStorage.removeItem(key); } catch (e) {}
+        return false;
+    }
+    try {
+        localStorage.setItem(key, raw);
+        return true;
+    } catch (e) {
+        try { localStorage.removeItem(key); } catch (e2) {}
+        return false;
+    }
+}
+
 const $ = s => document.querySelector(s),
     $$ = s => [...document.querySelectorAll(s)];
 const money = n => '₹ ' + Number(n || 0).toLocaleString('en-IN', {
@@ -37,6 +95,21 @@ function dueDate(p) {
     return p.lastRenewalDate ? addYear(p.lastRenewalDate) : addYear(p.date)
 }
 
+function hasRenewalPaidToday(p) {
+    if (!p) return false;
+    const today = isoToday();
+    const key = String(permanentCaseNo(p));
+    const ids = active(DB.patients)
+        .filter(x => String(x.linkedCaseNo || x.caseNo || '') === key || String(x.id) === String(p.id))
+        .map(x => x.id);
+    if (!ids.includes(p.id)) ids.push(p.id);
+    return active(DB.payments).some(x =>
+        ids.includes(x.patientId) &&
+        (x.feeCategory === 'renewal' || x.caseType === 'renewal') &&
+        String(x.date || '') === today &&
+        Number(x.amount || 0) > 0
+    );
+}
 function renewalDue(p, as = isoToday()) {
     return !!dueDate(p) && dueDate(p) <= as
 }
@@ -95,6 +168,28 @@ function familyPayments(pOrCaseNo) {
 }
 
 /** Total amount paid across the whole case family */
+
+/** Collected money for whole case family — same rules as Full History Grand Total.
+ *  Received visit → feeTotal; Partial → paidFor; Pending/FOC → 0. */
+function familyCollectedTotal(pOrCaseNo) {
+    const family = caseFamily(pOrCaseNo);
+    let total = 0;
+    family.forEach(v => {
+        if (!v) return;
+        const st = paymentStatusInfo(v);
+        if (st.kind === 'received') total += feeTotal(v);
+        else if (st.kind === 'partial') total += Math.min(paidFor(v.id), feeTotal(v));
+        // pending / foc → 0
+    });
+    return total;
+}
+
+/** Total still due across family visits */
+function familyPendingTotal(pOrCaseNo) {
+    const family = caseFamily(pOrCaseNo);
+    return family.reduce((a, v) => a + pendingFor(v), 0);
+}
+
 function familyPaidTotal(pOrCaseNo) {
     return familyPayments(pOrCaseNo).reduce((s, x) => s + Number(x.amount || 0), 0);
 }
@@ -131,19 +226,28 @@ const DEFAULT = {
         receptionPaymentEnabled: false,
         receptionPermissions: {
             patient: 'edit',
-            payment: 'view',
+            payment: 'hidden',
             paymentEntry: 'hidden',
-            medicine: 'view',
+            medicine: 'hidden',
             medicineEntry: 'hidden',
             reports: 'hidden',
             dashboard: 'edit',
-            clinic: 'hidden'
+            clinic: 'hidden',
+            dashNewOldEntry: 'edit',
+            dashTodayQueue: 'view',
+            dashQueueStatus: 'view',
+            dashMoreStats: 'view',
+            paymentClinic: 'hidden',
+            paymentYearly: 'hidden',
+            paymentIncome: 'hidden',
+            paymentSpend: 'hidden',
+            bill: 'hidden'
         },
         _updated: ''
     },
     clinic: {
         name: 'Anand Homoeopathy Multi Speciality Clinic',
-        logo: 'clinic-logo.jpg',
+        logo: 'clinic-logo.png',
         address: '',
         phone: '',
         _updated: ''
@@ -153,6 +257,23 @@ const DEFAULT = {
     }
 };
 let DB = loadLocal();
+/* Hydrate from IndexedDB if it has more/newer data (localStorage may be empty after large import). */
+(function hydrateFromIndexedDB() {
+    try {
+        idbGet(KEY).then(function(stored) {
+            if (!stored || typeof stored !== 'object') return;
+            try {
+                const n = normalizeData(stored);
+                const nP = (n.patients || []).length;
+                const cP = (DB.patients || []).length;
+                if (nP > cP || (nP === cP && nP > 0 && !localStorage.getItem(KEY))) {
+                    DB = n;
+                    try { renderAll(); } catch (e) {}
+                }
+            } catch (e) { console.warn('idb hydrate', e); }
+        }).catch(function(){});
+    } catch (e) {}
+})();
 let server = localStorage.getItem(SERVER_KEY) || '';
 if (location.protocol === 'http:' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost') && (location.port === '8787' || location.port === '8789')) {
     if (!server || /^(https?:\/\/)(localhost|127\.0\.0\.1):(8787|8789)$/.test(server)) server = location.origin;
@@ -162,7 +283,7 @@ let reportKind = 'patients',
     reportType = 'total',
     reportPeriod = 'daily',
     medPage = 1,
-    medPageSize = 10,
+    medPageSize = 25,
     receptionMedPage = 1,
     patientTypeFilter = 'new',
     patientReportPage = 1,
@@ -176,7 +297,7 @@ let reportKind = 'patients',
     spendLedgerY = '',
     spendLedgerM = '',
     histPage = 1,
-    histPageSize = 10,
+    histPageSize = 25,
     histQuery = '',
     queuePage = 1,
     queuePageSize = 10,
@@ -215,7 +336,16 @@ function normalizeData(d) {
     if (!('medicineEntry' in rp)) rp.medicineEntry = 'hidden';
     if (!('reports' in rp)) rp.reports = 'hidden';
     if (!('dashboard' in rp)) rp.dashboard = 'edit';
+    if (!('dashNewOldEntry' in rp)) rp.dashNewOldEntry = rp.dashboard || 'edit';
+    if (!('dashTodayQueue' in rp)) rp.dashTodayQueue = rp.dashboard || 'view';
+    if (!('dashQueueStatus' in rp)) rp.dashQueueStatus = rp.dashboard || 'view';
+    if (!('dashMoreStats' in rp)) rp.dashMoreStats = 'view';
+    if (!('paymentClinic' in rp)) rp.paymentClinic = rp.payment || 'hidden';
+    if (!('paymentYearly' in rp)) rp.paymentYearly = rp.payment || 'hidden';
+    if (!('paymentIncome' in rp)) rp.paymentIncome = rp.payment || 'hidden';
+    if (!('paymentSpend' in rp)) rp.paymentSpend = rp.payment || 'hidden';
     if (!('clinic' in rp)) rp.clinic = 'hidden';
+    if (!('bill' in rp)) rp.bill = 'hidden';
     out.clinic = Object.assign(structuredClone(DEFAULT.clinic), out.clinic || {});
     out.meta = Object.assign(structuredClone(DEFAULT.meta), out.meta || {});
     out.patients = Array.isArray(out.patients) ? out.patients.filter(x => x && x.id) : [];
@@ -247,21 +377,18 @@ function loadLocal() {
 
 function saveLocal() {
     DB = normalizeData(DB);
+    let raw = '';
+    try { raw = JSON.stringify(DB); } catch (e) { console.error('stringify failed', e); return; }
+    try { idbSet(KEY, DB).catch(function(err){ console.warn('idb save', err); }); } catch (e) {}
+    lsSafeSet(KEY, raw);
+    /* Defer render so UI thread stays free after large saves */
     try {
-        localStorage.setItem(KEY, JSON.stringify(DB));
-    } catch (err) {
-        console.error('saveLocal failed', err);
-        // Quota exceeded – try to free old local backups
-        try {
-            localStorage.removeItem('anandClinicLocalBackups_v63');
-            localStorage.setItem(KEY, JSON.stringify(DB));
-            toast('Storage almost full – old local backups cleared', true);
-        } catch (e2) {
-            toast('Storage full – cannot save. Export backup & clear browser data.', true);
-            return;
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(function() { try { renderAll(); } catch (e) {} });
+        } else {
+            setTimeout(function() { try { renderAll(); } catch (e) {} }, 0);
         }
-    }
-    renderAll()
+    } catch (e) { console.error(e); }
 }
 
 function active(a) {
@@ -339,45 +466,244 @@ function paidFor(id) {
 }
 
 function pendingFor(p) {
-    return Math.max(0, feeTotal(p) - paidFor(p.id))
+    if (!p) return 0;
+    if (p.foc === true) return 0;
+    const status = String(p.status || p.paymentStatus || '').toLowerCase();
+    if (status === 'foc') return 0;
+
+    const calcFee = Number(feeTotal(p)) || 0;
+    const directFee = Number(p.fees || p.fee || p.amount || 0);
+    const totalDue = calcFee > 0 ? calcFee : directFee;
+
+    const paid = Number(paidFor(p.id)) || Number(p.paid || 0);
+    const feePend = Math.max(0, totalDue - paid);
+
+    const ownPartial = Math.max(0, Number(p.partialPending || 0));
+    let carry = 0;
+    try { carry = Math.max(0, Number(getCarryPartialPending(permanentCaseNo(p)) || 0)); } catch (e) {}
+    const partial = Math.max(ownPartial, carry);
+
+    // Pending / partial visits must match history "₹ X due" (auto payment rows can zero feePend)
+    if (p.received !== true) {
+        try {
+            const st = paymentStatusInfo(p);
+            if (st && (st.kind === 'pending' || st.kind === 'partial')) {
+                const fromSt = Number(st.pending || 0);
+                if (fromSt > 0) return fromSt;
+                if (totalDue > 0) return totalDue + partial;
+                return partial;
+            }
+        } catch (e) {}
+        if (p.forcePending === true && totalDue > 0) {
+            return (feePend > 0 ? feePend : totalDue) + partial;
+        }
+    }
+    return feePend + partial;
 }
 
 /** Unified payment status: foc | pending | partial | received */
+
+/** Latest explicit partialPending for this permanent case (next-visit carry). */
+
+function patientDisplayName(p) {
+    if (!p) return '';
+    const t = (p.title || '').trim();
+    const n = (p.name || '').trim();
+    return ((t ? t + ' ' : '') + n).trim() || String(p.caseNo || p.id || '');
+}
+
+function outstandingPendingEntries() {
+    const byKey = new Map();
+    try {
+        active(DB.patients).forEach(p => {
+            if (!p || p.foc === true) return;
+            const amt = Number(pendingFor(p) || 0);
+            if (!(amt > 0)) return;
+            let key = '';
+            try { key = String(permanentCaseNo(p) || p.caseNo || p.id); } catch (e) { key = String(p.caseNo || p.id); }
+            let stLabel = 'Pending';
+            let kind = 'pending';
+            try {
+                const st = paymentStatusInfo(p);
+                if (st) {
+                    kind = st.kind || kind;
+                    if (st.kind === 'partial') stLabel = 'Partial pending';
+                    else if (st.kind === 'pending') stLabel = 'Pending';
+                    else if (st.label) stLabel = st.label;
+                }
+            } catch (e) {}
+            const row = {
+                id: p.id,
+                caseNo: p.caseNo || key,
+                name: patientDisplayName(p),
+                amount: amt,
+                status: stLabel,
+                kind: kind,
+                mobile: p.mobile || '',
+                date: p.date || p.createdAt || p.createdDate || p.caseDate || ''
+            };
+            const prev = byKey.get(key);
+            if (!prev) byKey.set(key, row);
+            else {
+                prev.amount = Number(prev.amount || 0) + amt;
+                // if any visit partial, show Partial pending on row
+                if (kind === 'partial') { prev.status = 'Partial pending'; prev.kind = 'partial'; }
+                if (p.caseType === 'new') {
+                    prev.name = row.name;
+                    prev.id = row.id;
+                    prev.caseNo = row.caseNo;
+                    prev.mobile = row.mobile || prev.mobile;
+                    prev.date = row.date || prev.date;
+                }
+            }
+        });
+    } catch (e) { console.error(e); }
+    return Array.from(byKey.values()).sort((a, b) => b.amount - a.amount);
+}
+
+function openOutstandingPendingList() {
+    let rows = [];
+    try { rows = outstandingPendingEntries(); } catch (e) { rows = []; }
+    rows.sort((a, b) => {
+    const numA = parseInt((a.caseNo || '').replace(/\D/g, ''), 10) || 0;
+    const numB = parseInt((b.caseNo || '').replace(/\D/g, ''), 10) || 0;
+    return numB - numA; // Bada number upar, chhota number (Case 1) sabse niche
+    });
+    const total = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+    const nPend = rows.filter(r => r.kind !== 'partial').length;
+    const nPart = rows.filter(r => r.kind === 'partial').length;
+    if (!rows.length) {
+        modal('Outstanding / Pending', '<p>No pending or partial pending amount found.</p>');
+        return;
+    }
+    let html = '<p class="mini" style="margin-bottom:10px"><b>' + rows.length + '</b> case(s) · Total: <b>' + money(total) + '</b>';
+    html += ' · Pending: ' + nPend + ' · Partial pending: ' + nPart + '</p>';
+    html += '<div class="tablewrap" style="max-height:60vh;overflow:auto"><table class="table compactTable" style="width:100%"><thead><tr>';
+    html += '<th>Case No</th><th>Patient</th><th>Mobile</th><th>Status</th><th>Amount</th><th></th></tr></thead><tbody>';
+    rows.forEach(r => {
+        html += '<tr>';
+        html += '<td>' + esc(r.caseNo) + '</td>';
+        html += '<td>' + esc(r.name) + '</td>';
+        html += '<td>' + esc(r.mobile || '-') + '</td>';
+        html += '<td>' + esc(r.status) + '</td>';
+        html += '<td><b>' + money(r.amount) + '</b></td>';
+        html += '<td><button type="button" class="btn embossed mini" data-pend-view="' + esc(String(r.id || '')) + '">View</button></td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    modal('Outstanding / Pending', html);
+    try {
+        const body = document.getElementById('modalBody');
+        if (body && !body._pendViewBound) {
+            body._pendViewBound = true;
+            body.addEventListener('click', function(ev) {
+                const btn = ev.target && ev.target.closest ? ev.target.closest('[data-pend-view]') : null;
+                if (!btn) return;
+                const pid = btn.getAttribute('data-pend-view');
+                if (!pid) return;
+                closeModal();
+                try { openPatientProfile(pid); } catch (e) {}
+            });
+        }
+    } catch (e) {}
+}
+
+
+function getCarryPartialPending(caseNo) {
+    const key = String(caseNo || '').trim();
+    if (!key) return 0;
+    let best = 0;
+    let bestTs = '';
+    active(DB.patients).forEach(x => {
+        if (String(x.linkedCaseNo || x.caseNo || '') !== key) return;
+        const pp = Math.max(0, Number(x.partialPending || 0));
+        if (pp <= 0) return;
+        const ts = String(x._updated || x.completedAt || x.date || x._created || '');
+        if (ts >= bestTs) {
+            bestTs = ts;
+            best = pp;
+        }
+    });
+    return best;
+}
+
 function paymentStatusInfo(p) {
-    if (!p) return { kind: 'foc', label: 'FOC', pending: 0, paid: 0, fees: 0, locked: false };
+    if (!p) return { kind: 'pending', label: 'Pending', pending: 0, paid: 0, fees: 0, locked: false };
     const fees = feeTotal(p);
     const paid = paidFor(p.id);
-    const pending = Math.max(0, fees - paid);
-    const explicitReceived = (p.received === true) ||
-        (String(p.paymentDetails || '').toLowerCase() === 'done') ||
-        (String(p.status || '').toLowerCase() === 'received');
-    if (fees <= 0 && paid <= 0) {
+    const partialExtra = Math.max(0, Number(p.partialPending || 0));
+    const pending = Math.max(0, fees - paid) + partialExtra;
+    // FOC only when explicitly marked
+    if (p.foc === true) {
         return { kind: 'foc', label: 'FOC', pending: 0, paid: 0, fees: 0, locked: false };
     }
-    // Explicit Received flag wins when full amount is considered paid (or payments auto-created)
-    if (explicitReceived && pending <= 0) {
-        return { kind: 'received', label: 'Received', pending: 0, paid: Math.max(paid, fees), fees, locked: true };
+    // Explicit pending / not received always wins over auto-payment matching
+    if (p.forcePending === true && p.received !== true) {
+        return { kind: 'pending', label: 'Pending', pending: pending || fees || partialExtra, paid, fees, locked: false };
     }
-    if (pending <= 0 && paid > 0) {
+    if (p.received === false && fees > 0) {
+        if (paid > 0 && paid < fees) return { kind: 'partial', label: 'Partial pending', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
+        if (paid <= 0 || pending > 0) return { kind: 'pending', label: 'Pending', pending: pending || fees, paid, fees, locked: false };
+    }
+    // Fully received only when explicitly marked received AND nothing due
+    if (p.received === true && Math.max(0, fees - paid) <= 0 && partialExtra <= 0) {
         return { kind: 'received', label: 'Received', pending: 0, paid, fees, locked: true };
     }
-    if (paid > 0 && pending > 0) {
-        return { kind: 'partial', label: 'Partial', pending, paid, fees, locked: false };
+    if (paid > 0 && (Math.max(0, fees - paid) > 0 || partialExtra > 0)) {
+        return { kind: 'partial', label: 'Partial pending', pending: Math.max(0, fees - paid) + partialExtra, paid, fees, locked: false };
     }
-    // Still respect explicit received even if payment records missing (safety)
-    if (explicitReceived && fees > 0) {
-        return { kind: 'received', label: 'Received', pending: 0, paid: fees, fees, locked: true };
+    // Payments fully cover fees and not marked pending → received
+    if (fees > 0 && paid >= fees && partialExtra <= 0 && p.received !== false && !p.forcePending) {
+        return { kind: 'received', label: 'Received', pending: 0, paid, fees, locked: true };
     }
-    return { kind: 'pending', label: 'Pending', pending, paid: 0, fees, locked: false };
+    if (fees <= 0 && paid <= 0 && !p.forcePending) {
+        // zero fee visit without FOC flag → still pending/waiting style, not auto FOC
+        return { kind: 'pending', label: 'Pending', pending: 0, paid: 0, fees: 0, locked: false };
+    }
+    return { kind: 'pending', label: 'Pending', pending: pending || 0, paid: paid || 0, fees, locked: false };
+}
+
+
+/** Aggregate payment status across all visits of permanent case (for patient list column). */
+function caseFamilyPaymentStatus(p) {
+    const family = (typeof caseFamily === 'function') ? caseFamily(p) : [p];
+    let hasPending = false, hasPartial = false, hasReceived = false, onlyFoc = true, anyFees = false;
+    family.forEach(v => {
+        if (!v) return;
+        const st = paymentStatusInfo(v);
+        if (st.kind === 'foc') return;
+        onlyFoc = false;
+        if (feeTotal(v) > 0 || Number(v.partialPending || 0) > 0) anyFees = true;
+        if (st.kind === 'pending') hasPending = true;
+        else if (st.kind === 'partial') hasPartial = true;
+        else if (st.kind === 'received') hasReceived = true;
+    });
+    if (onlyFoc || (!anyFees && !hasPending && !hasPartial && !hasReceived)) {
+        // all FOC or no fees
+        const anyFoc = family.some(v => v && v.foc === true);
+        if (anyFoc && !hasPending && !hasPartial && !hasReceived) return { kind: 'foc', label: 'FOC' };
+    }
+    // Partial pending = same visit/bill pe kuch paid + kuch due (hasPartial)
+    // Full visit pending (even if other visits received) = Pending — NOT Part Rec
+    if (hasPartial) {
+        return { kind: 'partial', label: 'Partial pending' };
+    }
+    if (hasPending) {
+        return { kind: 'pending', label: 'Pending' };
+    }
+    if (hasReceived) return { kind: 'received', label: 'Received' };
+    return paymentStatusInfo(p);
 }
 
 function paymentStatusHtml(p) {
-    const st = paymentStatusInfo(p);
+    // Family-level: Pending = full due visit(s); Partial pending = kuch paid + kuch due
+    const st = caseFamilyPaymentStatus(p);
     if (st.kind === 'foc') return '<span class="payFocTag">FOC</span>';
     if (st.kind === 'received') return '<span class="payReceivedTag">Received</span>';
-    if (st.kind === 'partial') return `<span class="payPartialTag">Partial</span> <span class="mini">Paid ${money(st.paid)} · Due ${money(st.pending)}</span>`;
-    return `<span class="payPendingTag">Pending ${money(st.pending)}</span>`;
+    if (st.kind === 'partial' || st.kind === 'part_rec') return '<span class="payPartRecTag">Partial pending</span>';
+    return '<span class="payPendingTag">Pending</span>';
 }
+
 
 function isPaymentLocked(p) {
     return paymentStatusInfo(p).locked === true;
@@ -411,13 +737,11 @@ async function api(path, method = 'GET', body) {
 }
 
 function mergeLocalRemote(remote) {
-    const dels = new Set([...(DB.meta?.deleted || []), ...((remote.meta || {}).deleted || [])]);
     const merge = (a, b) => {
         const map = new Map();
+        // Include soft-deleted too so _updated comparison works, then filter later
         [...(a || []), ...(b || [])].forEach(x => {
             if (!x || !x.id) return;
-            // Never resurrect a deleted id
-            if (dels.has(x.id) || x._deleted) return;
             const old = map.get(x.id);
             if (!old || String(x._updated || '') > String(old._updated || '')) map.set(x.id, x);
         });
@@ -427,15 +751,36 @@ function mergeLocalRemote(remote) {
     DB.payments = merge(DB.payments, remote.payments || []).filter(x => x && x.patientId && !x.demoSeed && Number(x.amount || 0) !== 1800);
     DB.medicines = merge(DB.medicines, remote.medicines || []);
     DB.expenses = merge(DB.expenses || [], remote.expenses || []);
-    ['patients', 'payments', 'medicines', 'expenses'].forEach(k => {
-        DB[k] = (DB[k] || []).filter(x => x && !dels.has(x.id) && !x._deleted);
-    });
-    if (String(remote.settings?._updated || '') > String(DB.settings?._updated || '')) DB.settings = remote.settings;
-    if (String(remote.clinic?._updated || '') > String(DB.clinic?._updated || '')) DB.clinic = remote.clinic;
-    DB.meta = DB.meta || { deleted: [] };
+    // Tombstones from both sides — ALWAYS honor deletes (do not strip live ids).
+    // (Old liveIds.forEach(dels.delete) made Reception keep deleted visits and they came back on Office.)
+    // JSON re-import of a previously deleted patient is handled in importPreviousData via restoreIds.
+    const dels = new Set([...(DB.meta.deleted || []), ...((remote.meta || {}).deleted || [])]);
     DB.meta.deleted = [...dels];
+    ['patients', 'payments', 'medicines', 'expenses'].forEach(k => {
+        DB[k] = (DB[k] || []).filter(x => x && !x._deleted && !dels.has(x.id));
+    });
+    if (remote.settings && String(remote.settings._updated || '') > String(DB.settings?._updated || '')) {
+        DB.settings = remote.settings;
+    }
+    if (String(remote.clinic?._updated || '') > String(DB.clinic?._updated || '')) DB.clinic = remote.clinic;
     DB.settings = Object.assign(structuredClone(DEFAULT.settings), DB.settings || {});
-    DB.settings.receptionPermissions = Object.assign(structuredClone(DEFAULT.settings.receptionPermissions), DB.settings.receptionPermissions || {});
+    const localPerm = (DB.settings && DB.settings.receptionPermissions) || {};
+    const remotePerm = (remote.settings && remote.settings.receptionPermissions) || null;
+    const remoteSettingsNewer = !!(remote.settings && String(remote.settings._updated || '') >= String((DB.settings && DB.settings._updated) || ''));
+    // Reception must follow Office permissions from server — do not snap back to local/default view
+    if (remotePerm && (role === 'reception' || remoteSettingsNewer)) {
+        DB.settings.receptionPermissions = Object.assign(
+            structuredClone(DEFAULT.settings.receptionPermissions),
+            remotePerm
+        );
+        if (remote.settings && remote.settings._updated) DB.settings._updated = remote.settings._updated;
+    } else {
+        DB.settings.receptionPermissions = Object.assign(
+            structuredClone(DEFAULT.settings.receptionPermissions),
+            localPerm
+        );
+    }
+    try { if (role === 'reception' && typeof renderPermissions === 'function') renderPermissions(); } catch (e) {}
 }
 
 let clinicWs = null;
@@ -482,14 +827,21 @@ async function syncNow(silent = false) {
     }
     const t0 = performance.now();
     try {
-        const remote = await api('/api/data');
-        mergeLocalRemote(remote);
+        // PUSH FIRST so Office delete / receive / payment edits hit server before any pull
         const out = await api('/api/sync', 'POST', DB);
         mergeLocalRemote(out);
+        // Enforce tombstones after merge
+        const dels = new Set(DB.meta?.deleted || []);
+        if (dels.size) {
+            ['patients', 'payments', 'medicines', 'expenses'].forEach(k => {
+                DB[k] = (DB[k] || []).filter(x => x && !x._deleted && !dels.has(x.id));
+            });
+        }
         saveLocal();
         const lag = Math.round(performance.now() - t0);
         setConn(true, 'Connected and synchronized.', lag);
         if (!clinicWs || clinicWs.readyState > 1) connectClinicWebSocket();
+        try { if (role === 'reception') renderPermissions(); } catch (e) {}
         if (!silent) toast('Synchronized successfully')
     } catch (e) {
         setConn(false, 'Offline mode. Local entries are safe and will sync when connection returns.', null);
@@ -502,11 +854,14 @@ function setConn(ok, msg, lagMs) {
         txt = $('#connText'),
         big = $('#connBig'),
         detail = $('#connDetail');
-    if (dot) dot.className = 'status ' + (ok ? 'ok' : 'off');
-    if (txt) txt.textContent = ok ? 'Connected' : 'Offline';
+    if (dot) {
+        dot.className = 'status ' + (ok ? 'ok' : 'off');
+        dot.textContent = ok ? 'Online' : 'Offline';
+    }
+    if (txt) txt.textContent = ok ? 'Online' : 'Offline';
     if (big) {
         big.textContent = ok
-            ? (`Live · lag ${lagMs != null ? lagMs : '—'} ms`)
+            ? (`Online · lag ${lagMs != null ? lagMs : '—'} ms`)
             : 'Offline / not connected';
         big.className = 'connectionBig ' + (ok ? 'ok' : 'off')
     }
@@ -515,11 +870,11 @@ function setConn(ok, msg, lagMs) {
     const live = $('#syncLiveBadge');
     if (live) {
         if (ok) {
-            live.textContent = lagMs != null ? `🟢 Live · ${lagMs} ms` : '🟢 Live Connected';
-            live.className = 'syncLiveBadge live';
+            live.textContent = lagMs != null ? `Online · ${lagMs} ms` : 'Online';
+            live.className = 'syncLiveBadge live online';
         } else {
-            live.textContent = '🔴 Offline';
-            live.className = 'syncLiveBadge off';
+            live.textContent = 'Offline';
+            live.className = 'syncLiveBadge off offline';
         }
     }
     const ls = $('#lastSyncText');
@@ -534,6 +889,46 @@ function setConn(ok, msg, lagMs) {
         }
     }
 }
+
+/** Fast Online badge: only /api/health (no full data sync). */
+async function quickHealthOnline() {
+    if (!server) {
+        setConn(false, 'Offline mode — no server selected.', null);
+        return false;
+    }
+    try {
+        const t0 = performance.now();
+        await api('/api/health');
+        const lag = Math.round(performance.now() - t0);
+        setConn(true, 'Server reachable · syncing data…', lag);
+        return true;
+    } catch (e) {
+        setConn(false, 'Server not reachable. Working offline.', null);
+        return false;
+    }
+}
+
+/** After import/restore: pull full state from server into DB + UI (no hard refresh). */
+async function loadFreshFromServer(statusFn) {
+    const say = typeof statusFn === 'function' ? statusFn : function() {};
+    say('Loading fresh data from server…');
+    const remote = await api('/api/data');
+    if (!remote || typeof remote !== 'object') throw new Error('Server returned empty data');
+    DB = normalizeData(remote);
+    try { await idbSet(KEY, DB); } catch (e) { console.warn(e); }
+    try {
+        const raw = JSON.stringify(DB);
+        lsSafeSet(KEY, raw);
+    } catch (e) {}
+    say('Updating screen…');
+    try { renderAll(); } catch (e) { console.warn(e); }
+    try {
+        if (role === 'reception') renderPermissions();
+    } catch (e) {}
+    try { setConn(true, 'Data loaded from server', null); } catch (e) {}
+    return DB;
+}
+
 async function testConn() {
     if (!server) {
         setConn(false, 'Enter a server URL such as http://192.168.1.25:8787');
@@ -549,6 +944,27 @@ async function testConn() {
 
 function caseRows() {
     return active(DB.patients).sort((a, b) => caseNoNumericPart(a.caseNo) - caseNoNumericPart(b.caseNo) || String(a.date).localeCompare(String(b.date)))
+}
+
+/** Bill patient list: ONLY unique New Case registrations (one name once), latest case no on top */
+function billUniquePatients() {
+    const map = new Map();
+    active(DB.patients).forEach(p => {
+        if ((p.caseType || '') !== 'new') return;
+        const key = String(permanentCaseNo(p) || p.caseNo || p.id);
+        const prev = map.get(key);
+        if (!prev) {
+            map.set(key, p);
+            return;
+        }
+        if (String(p.date || '') < String(prev.date || '')) map.set(key, p);
+    });
+    return [...map.values()].sort((a, b) => {
+        const nb = caseNoNumericPart(b.caseNo || permanentCaseNo(b));
+        const na = caseNoNumericPart(a.caseNo || permanentCaseNo(a));
+        if (nb !== na) return nb - na;
+        return String(b.date || '').localeCompare(String(a.date || ''));
+    });
 }
 
 function periodMatch(date, p) {
@@ -768,9 +1184,9 @@ function set(id, v) {
 }
 
 function patientQueueStatus(p) {
-    const pending = pendingFor(p);
-    const fullyReceived = p.received === true && pending <= 0;
-    if (fullyReceived || p.completedAt) return 'completed';
+    // Waiting → With Doctor → Completed only after Office Receive (or explicit FOC)
+    if (p.foc === true && (p.received === true || !!p.completedAt)) return 'completed';
+    if (p.received === true && pendingFor(p) <= 0) return 'completed';
     if (p.withDoctor) return 'doctor';
     return 'waiting';
 }
@@ -819,6 +1235,7 @@ function renderDashboard() {
     set('pendingTotal', money(active(DB.patients).reduce((a, p) => a + pendingFor(p), 0)));
     try { renderQueue(); } catch (e) {}
     try { renderReceptionQueue(); } catch (e) {}
+    try { setupKpiCollapse(); } catch (e) {}
 }
 
 function financialYearRange(label) {
@@ -915,7 +1332,9 @@ function renderReports() {
         growthPct = Math.round(((newFy - newPrev) / newPrev) * 1000) / 10;
         growthLabel = newFy + ' new vs ' + newPrev + ' previous FY (' + prevLab + ')';
     }
-    const pendingAll = active(DB.patients).reduce((a, p) => a + pendingFor(p), 0);
+   const pendingAll = outstandingPendingEntries()
+     .filter(x => inFy(x.date || x.createdAt || x.createdDate || ''))
+     .reduce((a, x) => a + Number(x.amount || 0), 0);
     const expFy = active(DB.expenses || []).filter(x => inFy(x.date) && (!x._deleted) && (typeof expenseCountsInTotals !== 'function' || expenseCountsInTotals(x))).reduce((a, x) => a + Number(x.amount || 0), 0);
 
     set('repFy', money(fyTotal));
@@ -983,8 +1402,9 @@ function openPatientProfile(id) {
     const famPays = (typeof familyPayments === 'function' ? familyPayments(p) : active(DB.payments).filter(x => family.some(v => v.id === x.patientId)));
     const visits = family.length;
     const lastVisit = family.map(x => x.date).filter(Boolean).sort().reverse()[0] || p.date;
-    const pend = family.reduce((a, x) => a + pendingFor(x), 0);
-    const paid = famPays.reduce((a, x) => a + Number(x.amount || 0), 0);
+    // PAID / PENDING must match Full History Grand Total logic (not raw payment sum)
+    const pend = familyPendingTotal(p);
+    const paid = familyCollectedTotal(p);
     const due = typeof dueDate === 'function' ? dueDate(p) : null;
     const renew = typeof renewalDue === 'function' ? renewalDue(p) : false;
     const apptRows = family.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map((v, i) =>
@@ -1037,68 +1457,51 @@ function openPatientProfile(id) {
 }
 
 
-
-async function loadLanInfo() {
-    const setUrl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
-    try {
-        const base = (typeof server === 'string' && server) ? server.replace(/\/$/, '') : (location.origin || '');
-        const r = await fetch(base + '/api/lan-info');
-        if (!r.ok) throw new Error('no lan');
-        const j = await r.json();
-        setUrl('lanLocalUrl', j.localUrl);
-        setUrl('lanMobileUrl', j.mobileUrl);
-        const h = document.getElementById('lanInfoHint');
-        if (h) h.textContent = 'Mobile + PC same Wi‑Fi. Firewall me Private network allow karein.';
-        const copyBtn = document.getElementById('copyMobileUrlBtn');
-        if (copyBtn && !copyBtn._bound) {
-            copyBtn._bound = true;
-            copyBtn.addEventListener('click', async () => {
-                try {
-                    await navigator.clipboard.writeText(j.mobileUrl || '');
-                    toast('Mobile URL copied');
-                } catch (e) {
-                    prompt('Copy this URL for mobile:', j.mobileUrl || '');
-                }
-            });
-        }
-        // Prefill server URL with LAN origin if empty
-        if ($('#serverUrl') && !($('#serverUrl').value || '').trim() && j.mobileUrl) {
-            $('#serverUrl').value = (j.mobileUrl || '').replace(/\/office\.html$|\/reception\.html$/i, '');
-        }
-    } catch (e) {
-        // Fallback: same host as page
-        const origin = location.origin || ('http://' + location.host);
-        const page = (typeof role !== 'undefined' && role === 'reception') ? 'reception.html' : 'office.html';
-        setUrl('lanLocalUrl', origin + '/' + page);
-        const host = location.hostname;
-        if (host && host !== '127.0.0.1' && host !== 'localhost') {
-            setUrl('lanMobileUrl', origin + '/' + page);
-        } else {
-            setUrl('lanMobileUrl', 'PC pe server chalao — phir yahan Mobile URL dikhega');
-        }
-        const h = document.getElementById('lanInfoHint');
-        if (h) h.textContent = 'Server se LAN IP nahi mila. Start-Office.bat se chalao aur page refresh karo.';
-    }
-}
-
 function openPage(id) {
+    if (!id || id === 'undefined' || id === 'null') return;
     if (role === 'reception') {
-        const map = {dashboard:'dashboard', patients:'patient', payments:'payment', medicines:'medicine', clinic:'clinic', reports:'reports', appointmentHistory:'dashboard'};
+        const map = {dashboard:'dashboard', patients:'patient', payments:'payment', medicines:'medicine', clinic:'clinic', reports:'reports', appointmentHistory:'dashboard', bill:'bill'};
         const mod = map[id];
         if (mod && !receptionCanView(mod)) {
             toast('This interface is hidden by Office', true);
-            return
+            return;
         }
     }
+    try {
+        $('#patientsNavSub')?.classList.remove('open');
+        $('#paymentNavSub')?.classList.remove('open');
+    } catch (e) {}
+    try { closeModal(); } catch (e) {}
+    // Do NOT auto-close case overlays here when id is dashboard after opening form —
+    // only hide overlays when navigating to OTHER pages (not dashboard / not form hosts)
+    if (id !== 'dashboard' && id !== 'newCasePage' && id !== 'oldCasePage') {
+        try { closeForm(); } catch (e) {}
+        try { closeOldAppointmentPanel(); } catch (e) {}
+    }
+    try {
+        document.querySelectorAll('#oldApptPanel, .oldApptPanel, #patientFormWrap').forEach(el => {
+            el.classList.add('hidden'); el.classList.remove('open','active');
+        });
+    } catch (e) {}
+    // Map legacy case page ids → dashboard (forms are overlays)
+    if (id === 'newCasePage' || id === 'oldCasePage') id = 'dashboard';
     $$('.page').forEach(x => x.classList.remove('active'));
-    $('#' + id)?.classList.add('active');
-    $$('.navBtn').forEach(b => b.classList.toggle('active', b.dataset.page === id));
-    if (window.innerWidth < 700) $('#side')?.classList.remove('open');
-    renderPage(id)
+    const pageEl = $('#' + id);
+    if (pageEl) pageEl.classList.add('active');
+    $$('.navBtn').forEach(b => {
+        if (b.classList.contains('navParent')) {
+            b.classList.remove('active');
+            return;
+        }
+        b.classList.toggle('active', b.dataset.page === id);
+    });
+    if (window.innerWidth < 900) { $('#side')?.classList.remove('open'); document.body.classList.remove('side-open'); }
+    try { renderPage(id); } catch (e) { console.warn('renderPage', e); }
 }
 
+
 function renderPage(id) {
-    if (id === 'dashboard') renderDashboard();
+    if (id === 'dashboard') { renderDashboard(); try { setupKpiCollapse(); } catch (e) {} }
     if (id === 'patients') renderReportPage();
     if (id === 'payments') {
         initPaymentYearSelect();
@@ -1107,7 +1510,7 @@ function renderPage(id) {
     }
     if (id === 'medicines') renderMedicines();
     if (id === 'clinic') renderClinic();
-    if (id === 'connection') { setConn(!!server, server ? 'Checking connection…' : 'Offline mode — no server selected.'); try { loadLanInfo(); } catch (e) {} }
+    if (id === 'connection') setConn(!!server, server ? 'Checking connection…' : 'Offline mode — no server selected.');
     if (id === 'medicines' && role === 'reception') renderReceptionMedicines();
     if (id === 'appointmentHistory') renderAppointmentHistory();
     if (id === 'bill') setupBillPage(true);
@@ -1120,13 +1523,16 @@ function openOldAppointmentPanel() {
         toast('Not allowed by Office permissions', true);
         return;
     }
-    $('#patientForm')?.classList.add('hidden');
+    try { $('#patientForm')?.classList.add('hidden'); $('#patientForm')?.classList.remove('caseOverlayOpen'); } catch (e) {}
     const panel = $('#oldAppointmentPanel');
     if (!panel) {
         toast('Old appointment panel missing', true);
         return;
     }
+    try { openPage('dashboard'); } catch (e) {}
     panel.classList.remove('hidden');
+    panel.classList.add('caseOverlayOpen');
+    try { document.body.classList.add('caseFormOpen'); } catch (e) {}
     const inp = $('#oldApptSearch');
     if (inp) {
         inp.value = '';
@@ -1136,11 +1542,15 @@ function openOldAppointmentPanel() {
     if (res) res.innerHTML = '<div class="mini">Type name, mobile or case number and press Find</div>';
     $('#oldApptSelected')?.classList.add('hidden');
     if ($('#oldApptSelected')) $('#oldApptSelected').innerHTML = '';
-    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try { window.scrollTo(0, 0); } catch (e) {}
 }
 
 function closeOldAppointmentPanel() {
-    $('#oldAppointmentPanel')?.classList.add('hidden');
+    try {
+        const p = $('#oldAppointmentPanel');
+        if (p) { p.classList.add('hidden'); p.classList.remove('caseOverlayOpen'); }
+    } catch (e) {}
+    try { document.body.classList.remove('caseFormOpen'); } catch (e) {}
 }
 
 function runOldApptSearch() {
@@ -1191,7 +1601,6 @@ function selectOldApptPatient(id) {
         toast('Patient not found', true);
         return;
     }
-    // Clear search results after selection (user already chose one)
     const resBox = $('#oldApptResults');
     if (resBox) resBox.innerHTML = '';
     const searchInp = $('#oldApptSearch');
@@ -1202,35 +1611,92 @@ function selectOldApptPatient(id) {
     box.classList.remove('hidden');
     const renew = renewalDue(p) && !hasRenewalPayment(p);
     const renewFee = Number(p.renewal || 0) || 0;
-    box.innerHTML = `
+    let priorPend = 0;
+    let priorPendIds = [];
+    try {
+        const key = String(p.linkedCaseNo || p.caseNo || '');
+        active(DB.patients).forEach(x => {
+            const pend = pendingFor(x);
+            if (String(x.linkedCaseNo || x.caseNo || '') === key && pend > 0) {
+                priorPend += pend;
+                priorPendIds.push(x.id);
+            }
+        });
+    } catch (e) {
+        priorPend = pendingFor(p);
+        if (priorPend > 0) priorPendIds = [p.id];
+    }
+    // Explicit partial pending from last visit (carry to next visit)
+    const carryPartial = getCarryPartialPending(p.linkedCaseNo || p.caseNo);
+    const todayStr = isoToday();
+    if (role === 'reception') {
+      box.innerHTML = `
       <div class="oldApptLine embossed oldApptSelectedActive">
         <span class="oldLineCase">#${p.caseNo}</span>
         <span class="oldLineName">${esc(p.title)} ${esc(p.name)}</span>
         <span class="oldLineMeta">${esc(p.mobile || '—')}</span>
         <span class="oldLineMeta">${esc(p.address || '—')}</span>
-        <span class="oldLineMeta">Reg ${fmtDate(p.date)} · ${p.caseType || ''}</span>
-        ${renew ? '<span class="renewBadge">Renewal due</span>' : ''}
+        <span class="oldLineMeta">Reg ${fmtDate(p.date)}</span>
       </div>
-      <div class="oldApptActions">
+      <div class="oldApptActions oldApptOneLine">
+        <label class="oldMedLabel">Appointment date
+          <input type="date" id="oldApptDate" value="${todayStr}" min="${todayStr}" max="${todayStr}" readonly>
+        </label>
+        <input type="hidden" id="oldApptMedicine" value="0">
+        <input type="hidden" id="oldApptRenewal" value="0">
+        <input type="hidden" id="oldApptPayPending" value="${carryPartial}">
+        <input type="hidden" id="oldApptFoc" value="">
+        <button type="button" class="btn embossed primary" id="oldApptConfirm">Add appointment</button>
+      </div>
+      ${carryPartial > 0 ? `<p class="mini partialCarryHint">Partial pending from last visit: <b>${money(carryPartial)}</b> (Office will update when paid)</p>` : ''}
+      <p class="mini">Reception: only add today's appointment. Payment is done in Office after With Doctor.</p>
+    `;
+    } else {
+      box.innerHTML = `
+      <div class="oldApptLine embossed oldApptSelectedActive">
+        <span class="oldLineCase">#${p.caseNo}</span>
+        <span class="oldLineName">${esc(p.title)} ${esc(p.name)}</span>
+        <span class="oldLineMeta">${esc(p.mobile || '—')}</span>
+        <span class="oldLineMeta">${esc(p.address || '—')}</span>
+        <span class="oldLineMeta">Reg ${fmtDate(p.date)}</span>
+        ${renew ? '<span class="renewBadge">Renewal due</span>' : ''}
+        ${priorPend > 0 ? `<span class="payPartialTag">Prior pending ${money(priorPend)}</span>` : ''}
+      </div>
+      <div class="oldApptActions oldApptOneLine">
         <label class="oldMedLabel">Medicine charges (₹)
-          <input type="number" id="oldApptMedicine" min="0" step="1" value="0">
+          <input type="number" id="oldApptMedicine" min="0" step="1" value="0" title="Medicine fees only — not mixed with partial pending">
         </label>
         ${renew ? `<label class="oldMedLabel renewHighlightLabel">Renewal charges (₹)
           <input type="number" id="oldApptRenewal" min="0" step="1" value="${renewFee}" class="renewHighlightInput">
-          <span class="mini">Due on ${fmtDate(dueDate(p))}</span>
-        </label>` : ''}
+        </label>` : `<input type="hidden" id="oldApptRenewal" value="0">`}
+        <label class="oldMedLabel pendingPayLabel">Partial pending amount (₹)
+          <input type="number" id="oldApptPayPending" min="0" step="1" value="${carryPartial}" title="Carried from last visit if any. Separate from medicine. 0 = clear">
+        </label>
+        ${carryPartial > 0 ? `<span class="mini partialCarryHint">Last visit se carry: ${money(carryPartial)}</span>` : ''}
         <label class="oldMedLabel">Appointment date
-          <input type="date" id="oldApptDate" value="${isoToday()}">
+          <input type="date" id="oldApptDate" value="${todayStr}">
         </label>
-        <label class="oldApptPendingLabel" style="display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:700">
-          <input type="checkbox" id="oldApptPending"> Mark payment as <b style="color:#b45309">Pending</b>
-          <span class="mini" style="font-weight:600">(back-dated: leave unticked = Received)</span>
-        </label>
-        <button type="button" class="btn embossed primary addApptBtn" id="oldApptConfirm" data-id="${p.id}">Add Appointment</button>
+        <label class="oldFocLabel" title="Free of charge visit"><input type="checkbox" id="oldApptFoc"> FOC</label>
+        <button type="button" class="btn embossed primary" id="oldApptConfirm">Add appointment</button>
+        ${priorPend > 0 ? `<button type="button" class="btn embossed" id="oldApptRecvPrior">Receive prior pending</button>` : ''}
       </div>
-      <p class="mini">Old case pe sirf medicine charges${renew ? ' + renewal (if due)' : ''}. Consultation 0. Case type = OLD. Counts in Old Cases.</p>
+      <p class="mini">Medicine / Renewal = received. Payment pending = baaki amount (next visit pe carry). FOC = free visit.</p>
     `;
+    }
+        // FOC clears amounts
+    $('#oldApptFoc')?.addEventListener('change', () => {
+        if ($('#oldApptFoc').checked) {
+            if ($('#oldApptMedicine')) $('#oldApptMedicine').value = 0;
+            if ($('#oldApptRenewal')) $('#oldApptRenewal').value = 0;
+            if ($('#oldApptPayPending')) $('#oldApptPayPending').value = 0;
+        }
+    });
     $('#oldApptConfirm')?.addEventListener('click', () => confirmOldAppointment(p.id));
+    $('#oldApptRecvPrior')?.addEventListener('click', () => {
+        // Receive oldest pending in family first
+        const id = priorPendIds[0];
+        if (id) receiveP(id);
+    });
     box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -1244,12 +1710,20 @@ function confirmOldAppointment(sourceId) {
         toast('Patient not found', true);
         return;
     }
-    const med = Math.max(0, Number($('#oldApptMedicine')?.value || 0));
-    const ren = Math.max(0, Number($('#oldApptRenewal')?.value || 0));
+    const isFoc = role === 'reception' ? false : !!($('#oldApptFoc')?.checked);
+    let medRecv = Math.max(0, Number($('#oldApptMedicine')?.value || 0));
+    let renRecv = Math.max(0, Number($('#oldApptRenewal')?.value || 0));
+    let payPend = Math.max(0, Number($('#oldApptPayPending')?.value || 0));
     const date = $('#oldApptDate')?.value || isoToday();
-    const forcePending = !!($('#oldApptPending')?.checked);
-    // Case number NEVER changes — same as original registration
+    if (isFoc) {
+        medRecv = 0; renRecv = 0; payPend = 0;
+    }
+    // Medicine fees and partial pending are SEPARATE — never add payPend into medicine
+    const medFee = medRecv; // only medicine charges entered
+    const renFee = renRecv;
     const permanentCaseNo = src.linkedCaseNo || src.caseNo;
+    let lastRen = src.lastRenewalDate || src.date;
+    if (renFee > 0) lastRen = date;
     const appt = {
         id: uid('pat'),
         caseNo: permanentCaseNo,
@@ -1263,32 +1737,61 @@ function confirmOldAppointment(sourceId) {
         age: Number(src.age || 0),
         refBy: src.refBy || '',
         consultation: 0,
-        medicine: med,
-        renewal: ren,
-        lastRenewalDate: src.lastRenewalDate || src.date,
+        medicine: medFee,
+        renewal: renFee,
+        partialPending: payPend, // separate field — NOT in medicine, NOT in total collection
+        lastRenewalDate: lastRen,
         linkedFromId: src.id,
         linkedCaseNo: permanentCaseNo,
         withDoctor: false,
         received: false,
         completedAt: null,
-        forcePending: forcePending
+        foc: isFoc,
+        forcePending: false
     };
     markUpdated(appt);
     DB.patients.push(appt);
-    // Back-dated follow-up → auto Received (payments created), unless "Pending" ticked
-    if (!isTodayCase(appt)) {
-        if (forcePending) {
+    if (renFee > 0) {
+        const key = String(permanentCaseNo);
+        active(DB.patients).forEach(x => {
+            if (String(x.linkedCaseNo || x.caseNo || '') === key) {
+                x.lastRenewalDate = date;
+                markUpdated(x);
+            }
+        });
+        src.lastRenewalDate = date;
+        markUpdated(src);
+    }
+    appt._created = new Date().toISOString();
+    if (role === 'reception') {
+        appt.received = false;
+        appt.foc = false;
+        appt.withDoctor = false;
+        appt.completedAt = null;
+        appt.consultation = 0;
+        appt.medicine = 0;
+        appt.renewal = 0;
+        // Keep partial pending so Reception can SHOW carry amount (Office updates/pays)
+        appt.partialPending = payPend;
+    } else if (isFoc) {
+        appt.received = true;
+        appt.foc = true;
+        appt.completedAt = new Date().toISOString();
+    } else if (medRecv > 0 || renRecv > 0) {
+        // Record received medicine/renewal; partialPending stays on appt (not mixed into fees)
+        applyReceiveAmounts(appt, { consultation: 0, medicine: medRecv, renewal: renRecv }, date);
+        appt.partialPending = payPend;
+        if (payPend > 0) {
             appt.received = false;
             appt.completedAt = null;
-        } else {
-            reconcileBackdatedPayments(appt);
         }
+    } else if (!isTodayCase(appt)) {
+        // Back-dated with nothing received → keep pending (do not auto-receive)
+        appt.received = false;
+        appt.completedAt = null;
     } else {
-        // Today: stay pending until Receive (unless zero fees)
-        if (feeTotal(appt) <= 0) {
-            appt.received = true;
-            appt.completedAt = new Date().toISOString();
-        }
+        appt.received = false;
+        appt.completedAt = null;
     }
     markUpdated(appt);
     saveLocal();
@@ -1298,11 +1801,18 @@ function confirmOldAppointment(sourceId) {
         if (typeof renderReportPage === 'function') renderReportPage();
         if (typeof renderAppointmentHistory === 'function') renderAppointmentHistory();
     }
-    let msg = `Follow-up visit for case #${appt.caseNo} — ${src.title} ${src.name}`;
-    if (med > 0) msg += ` · Medicine ${money(med)}`;
-    if (ren > 0) msg += ` · Renewal ${money(ren)}`;
-    if (!isTodayCase(appt) && !forcePending) msg += ' · Received';
-    else if (forcePending) msg += ' · Pending';
+    const pendLeft = pendingFor(appt);
+    let msg = `Follow-up #${appt.caseNo} — ${src.title} ${src.name}`;
+    if (role === 'reception') {
+        msg += '';
+    } else if (isFoc) {
+        msg += ' · FOC';
+    } else {
+        if (medRecv > 0) msg += ` · Medicine ${money(medRecv)}`;
+        if (renRecv > 0) msg += ` · Renewal ${money(renRecv)}`;
+        if (payPend > 0) msg += ` · Partial pending ${money(payPend)}`;
+        else if (medFee + renFee > 0 && payPend <= 0) msg += ' · Fees set';
+    }
     toast(msg);
     try { syncNow(true); } catch (e) {}
 }
@@ -1326,8 +1836,16 @@ function setupOldAppointmentPanel() {
 
 function buildPatientForm(type, patient = null) {
     const f = $('#patientForm');
-    f.classList.remove('hidden');
+    if (!f) return;
     $('#formTitle').textContent = patient ? 'Edit Case' : (type === 'new' ? 'New Case Registration' : 'Old Case Registration');
+    // Full-screen overlay (no openPage — avoids hang/loops)
+    try { $('#oldAppointmentPanel')?.classList.add('hidden'); } catch (e) {}
+    try { openPage('dashboard'); } catch (e) {}
+    f.classList.remove('hidden');
+    f.classList.add('caseOverlayOpen');
+    try { document.body.classList.add('caseFormOpen'); } catch (e) {}
+    try { f.scrollIntoView({ behavior: 'instant', block: 'start' }); } catch (e) {}
+
     const fb = $('#patientForm button.primary');
     if (fb) fb.textContent = patient ? 'Update' : 'Register';
     $('#caseType').value = type;
@@ -1344,6 +1862,38 @@ function buildPatientForm(type, patient = null) {
     $('#consultation').value = patient?.consultation ?? 0;
     $('#medicine').value = patient?.medicine ?? 0;
     $('#renewal').value = patient?.renewal ?? 0;
+    try {
+      const pendEl = $('#partialPendingEdit');
+      const wrap = $('#partialPendingEditWrap');
+      if (pendEl) {
+        let curPend = patient ? Math.max(0, Number(patient.partialPending || 0)) : 0;
+        if (patient && curPend <= 0) {
+          const carried = getCarryPartialPending(patient.linkedCaseNo || patient.caseNo);
+          if (carried > 0) curPend = carried;
+        }
+        pendEl.value = curPend;
+        // Office: always show for New Case + Edit
+        if (wrap) wrap.style.display = (role === 'office') ? '' : 'none';
+        if (role === 'office' && wrap) wrap.classList.remove('hidden');
+      }
+    } catch (e) {}
+    // Reception: no fee entry / no mark-pending — Office handles payment
+    try {
+      const isRec = role === 'reception';
+      ['consultation','medicine','renewal'].forEach(id => {
+        const lab = $('#'+id)?.closest('label');
+        if (lab) lab.style.display = isRec ? 'none' : '';
+      });
+      const bp = document.querySelector('.backdatePendingWrap');
+      if (bp) bp.style.display = isRec ? 'none' : '';
+      if (isRec && !patient) {
+        $('#consultation').value = 0;
+        $('#medicine').value = 0;
+        $('#renewal').value = 0;
+        const bpc = $('#backdatePending');
+        if (bpc) bpc.checked = false;
+      }
+    } catch (e) {}
     const locked = patient ? isPaymentLocked(patient) : false;
     ['consultation', 'medicine', 'renewal'].forEach(id => {
         const el = $('#' + id);
@@ -1429,18 +1979,22 @@ function fixLegacyBackdatedUnpaid() {
     let n = 0;
     active(DB.patients).forEach(p => {
         if (!p || isTodayCase(p)) return;
-        if (p.forcePending) return;
-        const fees = feeTotal(p);
-        if (fees <= 0) {
-            if (!p.received) {
-                p.received = true;
-                p.completedAt = p.completedAt || (p.date + 'T12:00:00');
-                markUpdated(p);
-                n++;
-            }
+        // Respect explicit pending from JSON / user — NEVER auto-receive
+        if (p.forcePending === true) return;
+        if (p.received === false && p.forcePending !== false && Number(p.partialPending || 0) > 0) return;
+        // If JSON says not received and has no auto-backdated flag, keep pending
+        if (p.received === false && !p.completedAt && feeTotal(p) > 0) {
+            // Intentionally unpaid / pending in backup — leave as pending
+            p.forcePending = true;
             return;
         }
-        if (pendingFor(p) > 0) {
+        const fees = feeTotal(p);
+        if (fees <= 0) {
+            // zero-fee FOC-style only if already marked received/foc in data
+            return;
+        }
+        // Only auto-reconcile if data already claims received but payments missing
+        if (p.received === true && pendingFor(p) > 0) {
             reconcileBackdatedPayments(p);
             markUpdated(p);
             n++;
@@ -1454,6 +2008,8 @@ function fixLegacyBackdatedUnpaid() {
 
 function reconcileBackdatedPayments(p) {
     if (isTodayCase(p)) return;
+    if (p.forcePending === true) return; // never auto-receive forced pending
+    if (p.received === false && p.forcePending) return;
     createBackdatedPayments(p);
     // FOC (zero fees): mark completed but not payment-locked
     if (feeTotal(p) <= 0) {
@@ -1589,6 +2145,42 @@ function registerCase(e) {
         if (oldP.linkedCaseNo) p.linkedCaseNo = oldP.linkedCaseNo;
         if (oldP.permanentCaseNo) p.permanentCaseNo = oldP.permanentCaseNo;
     }
+    // Reception new/old register: always Waiting, never FOC/completed
+    if (role === 'reception' && !id) {
+        p.withDoctor = false;
+        p.received = false;
+        p.foc = false;
+        p.completedAt = null;
+        p.consultation = Number(p.consultation || 0);
+        p.medicine = Number(p.medicine || 0);
+        p.renewal = Number(p.renewal || 0);
+    }
+    // Office: Partial pending is a SEPARATE field — never merge into medicine/consultation.
+    // Total Collection = consultation + medicine + renewal only.
+    if (role === 'office' && !receivedLocked) {
+        try {
+            const wantPend = Math.max(0, Number($('#partialPendingEdit')?.value || 0));
+            p.partialPending = wantPend; // 0 clears; does NOT change fee fields
+            if (wantPend > 0) {
+                p.received = false;
+                p.completedAt = null;
+                p.foc = false;
+            } else {
+                // Cleared — also clear older visits of same case so next visit does not re-carry
+                try {
+                    const key = String(p.linkedCaseNo || p.caseNo || '');
+                    active(DB.patients).forEach(x => {
+                        if (x.id === p.id) return;
+                        if (String(x.linkedCaseNo || x.caseNo || '') === key && Number(x.partialPending || 0) > 0) {
+                            x.partialPending = 0;
+                            markUpdated(x);
+                        }
+                    });
+                } catch (e) {}
+            }
+        } catch (e) {}
+    }
+    if (!id) p._created = new Date().toISOString();
     markUpdated(p);
     // Robust replace by id (string-safe)
     const pid = String(p.id);
@@ -1602,9 +2194,13 @@ function registerCase(e) {
 }
 
 function closeForm() {
-    $('#patientForm')?.classList.add('hidden');
+    try {
+        const f = $('#patientForm');
+        if (f) { f.classList.add('hidden'); f.classList.remove('caseOverlayOpen'); }
+    } catch (e) {}
     const ei = $('#editId');
     if (ei) ei.value = '';
+    try { document.body.classList.remove('caseFormOpen'); } catch (e) {}
 }
 
 /** After any patient / payment change — refresh every related screen */
@@ -1632,75 +2228,109 @@ function isTodayCase(p) {
 }
 
 function queueStatus(p) {
-    const pending = pendingFor(p);
-    if (p.received === true || pending <= 0) return 'received';
+    if (p.foc === true && (p.received === true || p.completedAt)) return 'received';
+    if (p.received === true && pendingFor(p) <= 0) return 'received';
     if (p.withDoctor) return 'doctor';
     return 'pending';
+}
+
+
+function patientEntryTime(p) {
+    // First registered earlier → smaller key (top of active queue)
+    return String(p._created || p._updated || p.id || '');
+}
+function patientCompletedTime(p) {
+    return String(p.completedAt || p._updated || '');
+}
+function splitTodayQueue(arr) {
+    const active = [];
+    const done = [];
+    arr.forEach(p => {
+        const st = queueStatus(p);
+        if (st === 'received') done.push(p);
+        else active.push(p);
+    });
+    // Active: pehle entry upar, last entry niche
+    active.sort((a, b) => patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    // Completed: sabse last completed sabse upar
+    done.sort((a, b) => patientCompletedTime(b).localeCompare(patientCompletedTime(a)));
+    return { active, done };
+}
+function receptionPayStatusLabel(p) {
+    const st = paymentStatusInfo(p);
+    if (st.kind === 'received') return '<span class="payReceivedTag">Received</span>';
+    if (st.kind === 'foc') return '<span class="payFocTag">FOC</span>';
+    if (st.kind === 'partial') return `<span class="payPartialTag">Pending</span> <span class="mini">Partial · due ${money(st.pending)}</span>`;
+    // fees set or not — jab tak Office Receive na kare
+    return '<span class="payPendingTag">Pending</span>';
 }
 
 function renderQueue() {
     const b = $('#queueBody');
     if (!b) return;
     const q = ($('#queueSearch')?.value || '').toLowerCase();
-    let arr = caseRows().filter(isTodayCase).filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile} ${p.address}`.toLowerCase().includes(q));
-    const totalPages = Math.max(1, Math.ceil(arr.length / queuePageSize));
-    if (queuePage > totalPages) queuePage = totalPages;
-    if (queuePage < 1) queuePage = 1;
-    const slice = arr.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
-    set('queueCountHint', `${arr.length} patient${arr.length === 1 ? '' : 's'} today`);
-    b.innerHTML = slice.map((p, i) => {
-        const pending = pendingFor(p),
-            withDoc = !!p.withDoctor,
-            status = queueStatus(p);
-        const stPay = paymentStatusInfo(p);
-        const fullyReceived = stPay.kind === 'received';
+    let arr = caseRows().filter(isTodayCase).filter(p => p.caseType === 'new' || p.caseType === 'old').filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile} ${p.address}`.toLowerCase().includes(q));
+    const { active, done } = splitTodayQueue(arr);
+    const waiting = active.filter(p => queueStatus(p) !== 'doctor');
+    const doctor = active.filter(p => queueStatus(p) === 'doctor');
+    waiting.sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    doctor.sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    done.sort((a,b)=>patientCompletedTime(b).localeCompare(patientCompletedTime(a)));
+
+    // Queue is intentionally NOT paginated: show every today's entry in one
+    // vertically scrollable table so the user can see all patients by scrolling.
+    const sliceWaiting = waiting;
+    const sliceDoctor = doctor;
+    set('queueCountHint', `${waiting.length} waiting · ${doctor.length} with doctor · ${done.length} completed today`);
+
+    const rowHtml = (p, i, statusSection) => {
+        const pending = pendingFor(p), withDoc = !!p.withDoctor, status = queueStatus(p);
+        const stPay = paymentStatusInfo(p), fullyReceived = stPay.kind === 'received';
         const pulse = fullyReceived && p.completedAt && (Date.now() - new Date(p.completedAt).getTime() < 8000);
         const renewHighlight = renewalDue(p) && !hasRenewalPayment(p);
-        let rowClass = stPay.kind === 'foc' ? 'focRow' : (status === 'received' ? 'receivedRow' : status === 'doctor' ? 'doctorRow' : 'pendingRow');
+        let rowClass = stPay.kind === 'foc' ? 'focRow' : (statusSection === 'done' || status === 'received' ? 'receivedRow' : (status === 'doctor' ? 'doctorRow' : 'pendingRow'));
         if (stPay.kind === 'partial') rowClass += ' partialPendingRow';
         if (renewHighlight) rowClass += ' renewDueRow';
-        let payLabel = paymentStatusHtml(p);
-        const locked = fullyReceived;
-        const dis = locked ? ' disabled' : '';
-        const lockCls = locked ? ' actLocked' : '';
-        const sr = (queuePage - 1) * queuePageSize + i + 1;
+        if (hasRenewalPaidToday(p)) rowClass += ' renewPaidTodayRow';
+        const consF = Number(p.consultation || 0);
+        const medF = Number(p.medicine || 0);
+        const renF = Number(p.renewal || 0);
+        const pendAmt = Math.max(0, Number(p.partialPending || 0));
+        const feeBreak = `<div class="payBreakup feeBreakup"><div>Consultation: <b>${money(consF)}</b></div><div>Medicine: <b>${money(medF)}</b></div><div>Renewal: <b>${money(renF)}</b></div>${pendAmt > 0 ? `<div class="partialPendLine">Partial pending: <b>${money(pendAmt)}</b></div>` : ''}</div>`;
+        const payLabel = paymentStatusHtml(p);
+        const locked = fullyReceived, dis = locked ? ' disabled' : '', lockCls = locked ? ' actLocked' : '';
+        const sr = i + 1;
         return `<tr class="${rowClass}${pulse?' receivedPulse':''}">
    <td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
-   <td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
-   <td class="amount">${money(feeTotal(p))}</td>
-   <td class="totalPayCell">${payLabel}</td>
-   <td><span class="queueStatusTag ${status}">${status==='doctor'?'With Doctor':status==='received'?'Completed':'Waiting'}</span></td>
+   <td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
+   <td class="payBreakCell">${feeBreak}</td><td class="amount totalCollectCell"><b>${money(consF + medF + renF)}</b></td>
+   <td class="statusCell"><span class="queueStatusTag ${statusSection==='done'||status==='received'?'received':(status==='doctor'?'doctor':(p.forcePending?'pending':'waiting'))}">${statusSection==='done'||status==='received'?'Completed':(status==='doctor'?'With Doctor':(p.forcePending?'Pending':'Waiting'))}</span></td>
    <td><div class="actions embossedActions compactActions queueActions">
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>Doctor</button>`:''}
-    ${(role!=='reception'||receptionCanEdit('paymentEntry'))?`<button class="btn embossed ${fullyReceived?'actReceived':'actNeutral'}${lockCls}" onclick="receiveP('${p.id}')"${fullyReceived?' disabled':''}>Receive</button>`:''}
+    ${(role!=='reception'||receptionCanEdit('paymentEntry'))?`<button class="btn embossed ${fullyReceived?'actReceived':'actNeutral'}${lockCls}" onclick="receiveP('${p.id}')"${fullyReceived?' disabled':''}>Rec</button>`:''}
     ${(role!=='reception'||receptionCanEdit('paymentEntry'))?`<button class="btn embossed actNeutral${lockCls}" onclick="pendingP('${p.id}')"${dis}>Pend</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button>`:''}
     </div></td></tr>`;
-    }).join('') || '<tr><td colspan="8">No today\'s patients in the queue</td></tr>';
-    const pag = $('#queuePagination');
-    if (pag) {
-        if (arr.length <= queuePageSize) {
-            pag.innerHTML = arr.length ? `<span class="mini">Showing all ${arr.length}</span>` : '';
-        } else {
-            let html = `<button type="button" class="btn embossed" data-qpg="prev" ${queuePage<=1?'disabled':''}>‹ Prev</button>`;
-            for (let i = 1; i <= totalPages; i++) {
-                html += `<button type="button" class="btn embossed ${i===queuePage?'active':''}" data-qpg="${i}">${i}</button>`;
-            }
-            html += `<button type="button" class="btn embossed" data-qpg="next" ${queuePage>=totalPages?'disabled':''}>Next ›</button>`;
-            html += `<span class="mini" style="margin-left:8px">Page ${queuePage}/${totalPages}</span>`;
-            pag.innerHTML = html;
-            pag.querySelectorAll('[data-qpg]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const v = btn.getAttribute('data-qpg');
-                    if (v === 'prev') queuePage = Math.max(1, queuePage - 1);
-                    else if (v === 'next') queuePage = Math.min(totalPages, queuePage + 1);
-                    else queuePage = Number(v) || 1;
-                    renderQueue();
-                });
-            });
-        }
+    };
+
+    let html = '';
+    if (sliceWaiting.length) {
+        html += `<tr class="queueSectionBreak"><td colspan="9">Waiting Today</td></tr>`;
+        sliceWaiting.forEach((p,i)=>html += rowHtml(p,i,'waiting'));
     }
+    if (sliceDoctor.length) {
+        html += `<tr class="queueSectionBreak"><td colspan="9">With Doctor Today</td></tr>`;
+        sliceDoctor.forEach((p,i)=>html += rowHtml(p,i,'doctor'));
+    }
+    if (done.length) {
+        html += `<tr class="queueSectionBreak"><td colspan="9">Completed today</td></tr>`;
+        done.forEach((p,i)=>{ html += rowHtml(p, i, 'done'); });
+    }
+    if (!html) html = '<tr><td colspan="9">No new or old case entries today</td></tr>';
+    b.innerHTML = html;
+    const pag=$('#queuePagination');
+    if(pag) pag.innerHTML=`<span class="mini">${waiting.length} waiting · ${doctor.length} with doctor · ${done.length} completed today · all entries shown</span>`;
 }
 
 
@@ -1757,7 +2387,11 @@ function renderPatientReport() {
             if (!prev || String(p.date) < String(prev.date)) byCase.set(key, p);
         });
         rows = [...byCase.values()].filter(p => patientDateMatch(p.date))
-            .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || caseNoNumericPart(b.caseNo) - caseNoNumericPart(a.caseNo));
+            .sort((a, b) => {
+              const numA = parseInt(String(a.caseNo || permanentCaseNo(a) || '').replace(/\D/g, ''), 10) || 0;
+              const numB = parseInt(String(b.caseNo || permanentCaseNo(b) || '').replace(/\D/g, ''), 10) || 0;
+              return numB - numA;
+            })
     }
 
     set('pCountNew', rows.length);
@@ -2126,17 +2760,31 @@ function setupPaymentView() {
     const sub = $('#paymentNavSub');
     if (tog && sub && !tog._payBound) {
         tog._payBound = true;
-        tog.addEventListener('click', () => sub.classList.toggle('open'));
+        tog.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Toggle payment submenu only — do NOT navigate / open dashboard
+            const willOpen = !sub.classList.contains('open');
+            sub.classList.toggle('open', willOpen);
+            $('#patientsNavSub')?.classList.remove('open');
+        });
     }
     $$('.navSubBtn[data-pay-view]').forEach(btn => {
         if (btn._payBound) return;
         btn._payBound = true;
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const v = btn.getAttribute('data-pay-view') || 'clinicPayment';
             openPage('payments');
             applyPaymentView(v);
             // close submenu after selection
             $('#paymentNavSub')?.classList.remove('open');
+            // Mobile: close sidebar after choosing a sub-interface
+            if (window.innerWidth < 900) {
+                $('#side')?.classList.remove('open');
+                document.body.classList.remove('side-open');
+            }
         });
     });
     // recurring spend buttons
@@ -2374,10 +3022,12 @@ function buildExpenseMonthlyYearSelect() {
     if (!sel) return;
     const cy = new Date().getFullYear();
     const start = 2019;
-    if (!expenseMonthlyYear || Number(expenseMonthlyYear) < start || Number(expenseMonthlyYear) > cy) {
-        expenseMonthlyYear = String(cy);
+    if (!expenseMonthlyYear) expenseMonthlyYear = String(cy);
+    if (expenseMonthlyYear !== 'all') {
+        const n = Number(expenseMonthlyYear);
+        if (!n || n < start || n > cy) expenseMonthlyYear = String(cy);
     }
-    let html = '';
+    let html = `<option value="all"${expenseMonthlyYear === 'all' ? ' selected' : ''}>All years</option>`;
     for (let y = cy; y >= start; y--) {
         const ys = String(y);
         html += `<option value="${ys}"${ys === String(expenseMonthlyYear) ? ' selected' : ''}>${ys}</option>`;
@@ -2385,14 +3035,19 @@ function buildExpenseMonthlyYearSelect() {
     sel.innerHTML = html;
     sel.onchange = () => {
         expenseMonthlyYear = sel.value || String(cy);
-        renderExpenseMonthlyCompare();
+        // Refresh summary boxes + monthly table for selected year
+        try { renderExpenses(); } catch (e) {
+            renderExpenseMonthlyCompare();
+            renderExpenseYearComparison();
+        }
     };
 }
 
 function renderExpenseMonthlyCompare() {
     const cb = $('#expenseCompareBody');
     if (!cb) return;
-    const y = String(expenseMonthlyYear || new Date().getFullYear());
+    let y = String(expenseMonthlyYear || new Date().getFullYear());
+    if (y === 'all') y = String(new Date().getFullYear());
     let totalIncome = 0, totalExpense = 0, totalNet = 0;
     const rows = [];
     for (let m = 1; m <= 12; m++) {
@@ -2628,16 +3283,47 @@ function clearAllExpensesOnce() {
 function renderExpenses() {
     renderSpendLedger();
     const today = isoToday();
-    const expD = expenseAmount('custom', today.slice(0, 4), today.slice(5, 7), today.slice(8, 10));
-    const expM = expenseAmount('custom', today.slice(0, 4), today.slice(5, 7), null);
-    const expY = expenseAmount('custom', today.slice(0, 4), null, null);
-    set('expenseToday', money(expD)); set('expenseMonth', money(expM)); set('expenseYear', money(expY));
+    const selY = String(expenseMonthlyYear || 'all');
+    const isAll = (selY === 'all' || selY === '');
     set('grossExpensesLifetime', money(totalExpensesSum()));
-    const st = stats(); // incomeD/M/Y already net of filtered expenses
-    set('netToday', money(st.incomeD || 0));
-    set('netMonth', money(st.incomeM || 0));
-    set('netYear', money(st.incomeY || 0));
     updateGrossIncomeLifetime();
+    let expM, expY, netM, netY, netD;
+    if (isAll) {
+        const mm = today.slice(5, 7);
+        expM = expenseAmount('custom', today.slice(0, 4), mm, null);
+        expY = expenseAmount('total');
+        const grossAll = active(DB.payments).reduce((a, x) => a + Number(x.amount || 0), 0);
+        netY = grossAll - totalExpensesSum();
+        const grossM = active(DB.payments).filter(x => String(x.date || '').slice(0, 7) === today.slice(0, 7)).reduce((a, x) => a + Number(x.amount || 0), 0);
+        netM = grossM - expM;
+        const grossD = active(DB.payments).filter(x => String(x.date || '') === today).reduce((a, x) => a + Number(x.amount || 0), 0);
+        const expD = expenseAmount('custom', today.slice(0, 4), mm, today.slice(8, 10));
+        netD = grossD - expD;
+        set('expenseToday', money(expD));
+    } else {
+        const y = selY;
+        const mm = today.slice(5, 7);
+        expM = expenseAmount('custom', y, mm, null);
+        expY = expenseAmount('custom', y, null, null);
+        const grossY = active(DB.payments).filter(x => String(x.date || '').slice(0, 4) === y).reduce((a, x) => a + Number(x.amount || 0), 0);
+        const grossM = active(DB.payments).filter(x => String(x.date || '').slice(0, 7) === (y + '-' + mm)).reduce((a, x) => a + Number(x.amount || 0), 0);
+        netY = grossY - expY;
+        netM = grossM - expM;
+        if (y === today.slice(0, 4)) {
+            const grossD = active(DB.payments).filter(x => String(x.date || '') === today).reduce((a, x) => a + Number(x.amount || 0), 0);
+            const expD = expenseAmount('custom', y, mm, today.slice(8, 10));
+            netD = grossD - expD;
+            set('expenseToday', money(expD));
+        } else {
+            netD = 0;
+            set('expenseToday', money(0));
+        }
+    }
+    set('expenseMonth', money(expM));
+    set('expenseYear', money(expY));
+    set('netToday', money(netD));
+    set('netMonth', money(netM));
+    set('netYear', money(netY));
     buildExpenseMonthlyYearSelect();
     renderExpenseMonthlyCompare();
     renderExpenseYearComparison();
@@ -2680,15 +3366,41 @@ function renderPaymentSummary() {
         totY = paymentAmountBy(y, month || null, day || null, 'total');
     }
 
-    // Outstanding = sum of pendingFor across all active patients (ledger gap)
-    const outstanding = active(DB.patients).reduce((a, p) => a + pendingFor(p), 0);
+   
+const patientOut = active(DB.patients).reduce((a, p) => a + pendingFor(p), 0);
+const apptOut = (DB.appointments || []).filter(a => !a.deleted).reduce((sum, a) => {
+    const st = String(a.status || a.paymentStatus || '').toLowerCase();
+    const fee = Number(a.fees || a.fee || a.amount || 0);
+    const paid = Number(a.paid || 0);
+    if (st === 'pending') {
+        return sum + Math.max(0, fee - paid || fee);
+    } else if (st === 'partial') {
+        return sum + Math.max(0, fee - paid);
+    }
+    return sum;
+}, 0);
+const outstanding = Math.max(patientOut, apptOut) > 0 ? (patientOut + apptOut) : 0;
 
     set('paySumNew', money(newY));
         set('paySumRenewal', money(renY));
     set('paySumMedicine', money(medY));
-    set('paySumReceived', money(totY));
+    // Received box removed (was duplicate of Total Collected)
     set('paySumPending', money(outstanding));
     set('paySumTotal', money(totY));
+    try {
+        const box = document.querySelector('.paySummaryBox.pend') || document.getElementById('paySumPending')?.closest('.paySummaryBox');
+        if (box) {
+            box.style.cursor = 'pointer';
+            box.title = 'Click to view pending / partial pending patients';
+            if (!box.dataset.pendBound) {
+                box.dataset.pendBound = '1';
+                box.addEventListener('click', function(ev) {
+                    ev.preventDefault();
+                    try { openOutstandingPendingList(); } catch (e) { console.error(e); }
+                });
+            }
+        }
+    } catch (e) {}
 
     let label = year === 'ALL' ? 'All years (Till Date)' : `Year ${year}`;
     if (useCustom) {
@@ -2893,7 +3605,7 @@ function openEmptyStockDetails() {
     }).join('') || '<tr><td colspan="7">No empty-stock medicines</td></tr>';
     modal(`Empty stock Medicine — ${list.length}`, `
       <p class="mini">Medicines with quantity 0 or marked Not Available. Data from Medicine interface.</p>
-      <div class="tablewrap"><table class="table">
+      <div class="tablewrap modalTableWrap"><table class="table modalDataTable emptyStockTable">
         <thead><tr><th>Sr</th><th>No.</th><th>Name</th><th>Drawer</th><th>Qty</th><th>Available</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
@@ -3005,7 +3717,7 @@ function openRenewalDueList() {
     }).join('') || '<tr><td colspan="8">No patients with renewal due</td></tr>';
     modal(`Renewal Due — ${list.length} patient(s)`, `
       <p class="mini">Patients whose renewal date has passed and renewal payment is still unpaid. Case number never changes.</p>
-      <div class="tablewrap"><table class="table">
+      <div class="tablewrap modalTableWrap"><table class="table modalDataTable renewalDueTable">
         <thead><tr><th>Sr</th><th>Case No.</th><th>Patient</th><th>Mobile</th><th>Reg. date</th><th>Due date</th><th>Renewal fee</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
@@ -3031,7 +3743,7 @@ function openTodayPendingList() {
     const totalPend = list.reduce((a, p) => a + pendingFor(p), 0);
     modal(`Today's Pending Payment — ${money(totalPend)}`, `
       <p class="mini">Today's queue cases with unpaid balance. Only collected amounts count in income.</p>
-      <div class="tablewrap"><table class="table">
+      <div class="tablewrap modalTableWrap"><table class="table modalDataTable todayPendingTable">
         <thead><tr><th>Sr</th><th>Case No.</th><th>Type</th><th>Patient</th><th>Mobile</th><th>Fees</th><th>Pending</th><th>Paid</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
@@ -3056,16 +3768,27 @@ function setupPatientsNav() {
     const sub = $('#patientsNavSub');
     if (tog && sub && !tog._bound) {
         tog._bound = true;
-        tog.addEventListener('click', () => sub.classList.toggle('open'));
+        tog.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Toggle patients submenu only — stay on current page (no dashboard jump)
+            const willOpen = !sub.classList.contains('open');
+            sub.classList.toggle('open', willOpen);
+            // close other submenu so sidebar remains scrollable cleanly
+            $('#paymentNavSub')?.classList.remove('open');
+        });
     }
     $$('.navSubBtn[data-patient-view]').forEach(btn => {
         if (btn._bound) return;
         btn._bound = true;
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             patientTypeFilter = btn.getAttribute('data-patient-view') || 'new';
             patientReportPage = 1;
             openPage('patients');
             $$('.navSubBtn').forEach(b => b.classList.toggle('active', b === btn));
+            // keep parent active look via sub item; do not force dashboard
             sub?.classList.remove('open');
         });
     });
@@ -3162,50 +3885,78 @@ function viewPatientHistory(id) {
     const family = caseFamily(p);
     const famPays = familyPayments(p);
     const byDate = {};
-    famPays.forEach(x => {
-        const d = String(x.date || '');
-        if (!byDate[d]) byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: '' };
-        const cat = x.feeCategory || 'other';
-        if (cat === 'consultation' || cat === 'medicine' || cat === 'renewal') byDate[d][cat] += Number(x.amount || 0);
-        else byDate[d].other += Number(x.amount || 0);
-    });
+    // Source of truth for billed amounts = visit record fees (not summed payments which can be wrong after import)
     family.forEach(v => {
         const d = String(v.date || '');
         if (!byDate[d]) byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: v.caseType || '' };
+        byDate[d].consultation = Number(v.consultation || 0);
+        byDate[d].medicine = Number(v.medicine || 0);
+        byDate[d].renewal = Number(v.renewal || 0);
         if (v.caseType) byDate[d].type = v.caseType;
-        const vPaid = paidFor(v.id);
-        const vTotal = feeTotal(v);
         byDate[d]._visitId = v.id;
-        byDate[d]._visitFees = vTotal;
-        if (vTotal > 0 && vPaid < vTotal) {
-            byDate[d]._pendingVisit = true;
-        }
-        if (vTotal <= 0 && vPaid <= 0) {
-            byDate[d]._focVisit = true;
+        byDate[d]._visitFees = feeTotal(v);
+        byDate[d]._partial = Math.max(0, Number(v.partialPending || 0));
+        const st = paymentStatusInfo(v);
+        byDate[d]._pendingVisit = st.kind === 'pending' || st.kind === 'partial' || v.forcePending === true || (v.received === false && feeTotal(v) > 0);
+        byDate[d]._focVisit = st.kind === 'foc' || (feeTotal(v) <= 0 && !v.forcePending);
+        byDate[d]._receivedVisit = st.kind === 'received';
+    });
+    // If a date has payments but no visit row fees, fall back to payment sums
+    famPays.forEach(x => {
+        const d = String(x.date || '');
+        if (!byDate[d]) {
+            byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: '' };
+            const cat = x.feeCategory || 'other';
+            if (cat === 'consultation' || cat === 'medicine' || cat === 'renewal') byDate[d][cat] += Number(x.amount || 0);
+            else byDate[d].other += Number(x.amount || 0);
         }
     });
     // Newest visit first
     const dates = Object.keys(byDate).sort((a, b) => String(b).localeCompare(String(a)));
-    let totalAll = 0;
+    let totalAll = 0, sumCons = 0, sumMed = 0, sumRen = 0;
     const rows = dates.map((d, i) => {
         const g = byDate[d];
         const lineTotal = g.consultation + g.medicine + g.renewal + g.other;
-        totalAll += lineTotal;
         const isRenew = g.renewal > 0;
         const visitRow = family.find(v => String(v.date || '') === d) || null;
         const stV = visitRow ? paymentStatusInfo(visitRow) : null;
-        const isPendingVisit = stV ? (stV.kind === 'pending' || stV.kind === 'partial') : (!!g._pendingVisit && lineTotal === 0);
-        const isFocVisit = stV ? stV.kind === 'foc' : (lineTotal === 0 && !g._pendingVisit);
+        const isPendingVisit = stV ? (stV.kind === 'pending' || stV.kind === 'partial') : !!g._pendingVisit;
+        const isFocVisit = stV ? stV.kind === 'foc' : (!!g._focVisit && !g._pendingVisit);
+        // Only received (collected) amounts count in category + grand totals — pending excluded
+        if (!isPendingVisit && !isFocVisit) {
+            totalAll += lineTotal;
+            sumCons += Number(g.consultation || 0);
+            sumMed += Number(g.medicine || 0);
+            sumRen += Number(g.renewal || 0);
+        } else if (!isPendingVisit && isFocVisit) {
+            // FOC contributes 0
+        }
         const typeTag = g.type ? `<span class="tag ${g.type}" style="margin-left:6px;font-size:10px">${String(g.type).toUpperCase()}</span>` : '';
         const vid = (visitRow && visitRow.id) || g._visitId || '';
-        const recvBtn = isPendingVisit && vid
-            ? ` <button type="button" class="btn embossed receiveBtn miniAction" onclick="receiveP('${vid}');closeModal()">Receive</button>`
-            : (isFocVisit && vid ? ` <button type="button" class="btn embossed miniAction" onclick="editP('${vid}');closeModal()">Add Payment</button>` : '');
+        const isOffice = (role !== 'reception');
+        // Office pending: small "pending" text + Rec + FOC only (no Pend button — already pending).
+        // Reception: status text only — no Rec/FOC power.
         let actionCell;
-        if (isFocVisit) actionCell = `<span class="histAction histFoc">FOC</span>${recvBtn}`;
-        else if (stV && stV.kind === 'partial') actionCell = `<span class="histAction histPartial">Partial</span> <span class="mini">Due ${money(stV.pending)}</span>${recvBtn}`;
-        else if (isPendingVisit) actionCell = `<span class="histAction histPending">Pending</span>${recvBtn}`;
-        else actionCell = `<span class="histAction histReceived">Received</span>`;
+        if (isFocVisit) {
+            actionCell = `<span class="histAction histFoc">FOC</span>`;
+            if (isOffice && vid) {
+                actionCell += ` <button type="button" class="btn embossed miniAction histMiniBtn" onclick="editP('${vid}');closeModal()">Add Pay</button>`;
+            }
+        } else if (isPendingVisit || (stV && stV.kind === 'partial')) {
+            const dueAmt = stV ? money(stV.pending || g._visitFees || lineTotal) : money(g._visitFees || lineTotal);
+            if (isOffice && vid) {
+                actionCell = `<span class="histPendingLabel">pending</span>` +
+                    `<span class="histActionBtns">` +
+                    `<button type="button" class="btn histBtn histRecBtn" title="Mark received" onclick="receiveVisitFromHistory('${vid}')">Rec</button>` +
+                    `<button type="button" class="btn histBtn histFocBtn" title="Mark FOC (amount 0)" onclick="focVisitFromHistory('${vid}')">FOC</button>` +
+                    `</span><span class="mini histDueHint">${dueAmt} due</span>`;
+            } else {
+                if (stV && stV.kind === 'partial') actionCell = `<span class="histAction histPartial">Partial</span> <span class="mini">${dueAmt} due</span>`;
+                else actionCell = `<span class="histAction histPending">Pending</span>`;
+            }
+        } else {
+            actionCell = `<span class="histAction histReceived">Received</span>`;
+        }
         return `<tr class="${isRenew ? 'renewRow' : ''}${isPendingVisit ? ' pendingRow' : ''}">
           <td>${i + 1}</td>
           <td>${fmtDate(d)}${typeTag}</td>
@@ -3231,11 +3982,20 @@ function viewPatientHistory(id) {
       </div>
       <h3 style="margin:12px 0 8px;font-size:15px">Visit / payment history</h3>
       <p class="mini">Saari visits (new + follow-up) ek saath. Renewal rows light green. Pending pe Receive button.</p>
-      <div class="tablewrap"><table class="table payHistoryTable">
+      <div class="tablewrap modalTableWrap"><table class="table payHistoryTable modalDataTable">
         <thead><tr><th>Sr No.</th><th>Date</th><th>Consultation</th><th>Medicine</th><th>Renewal</th><th>Action</th><th>Total</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="6"><b>Grand Total</b></td><td><b>${money(totalAll)}</b></td></tr></tfoot>
+        <tfoot>
+          <tr class="summaryBreakRow"><td colspan="2"><b>Category Totals</b></td><td><b>${money(sumCons)}</b></td><td><b>${money(sumMed)}</b></td><td><b>${money(sumRen)}</b></td><td></td><td></td></tr>
+          <tr class="summaryTotalRow"><td colspan="6"><b>Grand Total</b></td><td><b>${money(totalAll)}</b></td></tr>
+        </tfoot>
       </table></div>
+      <div class="histTotalsBar" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px">
+        <div class="paySummaryBox" style="min-width:150px"><small>Consultation Total</small><b>${money(sumCons)}</b></div>
+        <div class="paySummaryBox med" style="min-width:150px"><small>Medicine Total</small><b>${money(sumMed)}</b></div>
+        <div class="paySummaryBox renewal" style="min-width:150px"><small>Renewal Total</small><b>${money(sumRen)}</b></div>
+        <div class="paySummaryBox total" style="min-width:150px"><small>Grand Total</small><b>${money(totalAll)}</b></div>
+      </div>
       <div class="actions" style="margin-top:14px;flex-wrap:wrap">
         <button type="button" class="btn embossed" onclick="editP('${p.id}')">Edit</button>
         <button type="button" class="btn embossed" onclick="closeModal()">Close</button>
@@ -3271,17 +4031,16 @@ function editP(id) {
 
 function delP(id) {
     if (!enforceReceptionEdit('patient')) return;
-    if (!confirm('Delete ONLY this visit entry?\n\n• Sirf yeh wali entry delete hogi\n• Is entry ki payments delete hongi\n• Is patient ki purani visits / purani payment history SAFE rahegi\n• Case number reuse nahi hoga')) return;
+    if (!confirm('Delete ONLY this visit entry?\n\n• Sirf yeh wali entry delete hogi\n• Is entry ki payments delete hongi\n• Is patient ki purani visits / purani payment history SAFE rahegi')) return;
     if (!DB.meta) DB.meta = { deleted: [] };
     if (!Array.isArray(DB.meta.deleted)) DB.meta.deleted = [];
-    // Soft-delete + tombstone THIS visit only — other visits with same caseNo stay
     const p = DB.patients.find(x => x.id === id);
     if (p) {
         p._deleted = true;
         markUpdated(p);
     }
     if (!DB.meta.deleted.includes(id)) DB.meta.deleted.push(id);
-    // Only payments linked to THIS visit id (not whole case history)
+    // Only payments for THIS visit id (not whole case history)
     (DB.payments || []).forEach(pay => {
         if (pay && String(pay.patientId || '') === String(id)) {
             pay._deleted = true;
@@ -3314,8 +4073,8 @@ function docP(id) {
     saveLocal();
     renderQueue();
     renderReceptionQueue();
-    toast(p.withDoctor ? 'Patient is with doctor' : 'Patient marked available');
-    syncNow(true);
+    // no toast popup — status shows in queue
+    try { syncNow(true); } catch (e) {}
 }
 
 function categoryPaid(patientId, feeCategory) {
@@ -3327,6 +4086,7 @@ function categoryPaid(patientId, feeCategory) {
 }
 
 function applyReceiveAmounts(p, amounts, payDate) {
+    try { p.forcePending = false; } catch (e) {}
     // amounts: { consultation, medicine, renewal } — amounts being collected NOW (can be partial)
     const date = payDate || (isTodayCase(p) ? isoToday() : (p.date || isoToday()));
     let collected = 0;
@@ -3360,9 +4120,7 @@ function applyReceiveAmounts(p, amounts, payDate) {
             });
         }
     });
-    // Recompute after payments pushed
     let pend = pendingFor(p);
-    // If we just collected enough to cover remaining fees, treat as fully received
     if (pend <= 0 || (collected > 0 && feeTotal(p) > 0 && paidFor(p.id) >= feeTotal(p))) {
         p.received = true;
         p.paymentDetails = 'Done';
@@ -3372,7 +4130,6 @@ function applyReceiveAmounts(p, amounts, payDate) {
         p.completedAt = new Date().toISOString();
         pend = 0;
     } else {
-        // Partial: keep pending, do not fully complete
         p.received = false;
         p.completedAt = null;
     }
@@ -3384,95 +4141,161 @@ function receiveP(id) {
     if (!enforceReceptionEdit('paymentEntry')) return;
     const p = active(DB.patients).find(x => x.id === id);
     if (!p) return;
-    // Office can always clear forcePending / receive
-    if (p.forcePending) {
-        p.forcePending = false;
-        markUpdated(p);
-    }
     if (isPaymentLocked(p)) {
         toast('Already fully received — payment locked', true);
         return;
     }
-    let consDue = Math.max(0, Number(p.consultation || 0) - categoryPaid(p.id, 'consultation'));
-    let medDue = Math.max(0, Number(p.medicine || 0) - categoryPaid(p.id, 'medicine'));
+    const consDue = Math.max(0, Number(p.consultation || 0) - categoryPaid(p.id, 'consultation'));
+    const medDue = Math.max(0, Number(p.medicine || 0) - categoryPaid(p.id, 'medicine'));
     const showRenewal = !!renewalDue(p);
     const renFee = showRenewal ? Number(p.renewal || 0) : 0;
-    let renDue = Math.max(0, renFee - categoryPaid(p.id, 'renewal'));
-    // Fallback: if category split is 0 but overall still unpaid, put remainder on medicine
-    let totalDue = consDue + medDue + renDue;
-    const overallPending = pendingFor(p);
-    if (totalDue <= 0 && overallPending > 0) {
-        medDue = overallPending;
-        totalDue = overallPending;
-    }
-    const renewBlock = showRenewal && renDue > 0
-        ? `<label>Renewal (due ${money(renDue)})<input name="renewal" id="recvRenewal" type="number" min="0" step="1" value="${renDue}"></label>`
+    const renDue = Math.max(0, renFee - categoryPaid(p.id, 'renewal'));
+    // Existing unpaid balance (if any)
+    const alreadyPending = Math.max(0, pendingFor(p));
+    const renewBlock = showRenewal
+        ? `<label class="recvCompact">Renewal<input name="renewal" id="recvRenewal" type="number" min="0" step="1" value="${renDue}" placeholder="0"></label>`
         : `<input type="hidden" name="renewal" id="recvRenewal" value="0">`;
-    const html = `<form class="formgrid" id="receiveForm">
-      <p class="mini full">Jo amount ab collect kar rahe ho wohi likho. Baaki <b>Partial pending</b> me automatic aayega — sirf collected amount totals me count hoga.</p>
-      <label>Date<input name="date" type="date" value="${isTodayCase(p) ? isoToday() : (p.date || isoToday())}" required></label>
-      <label>Consultation (due ${money(consDue)})<input name="consultation" id="recvCons" type="number" min="0" step="1" value="${consDue}"></label>
-      <label>Medicine (due ${money(medDue)})<input name="medicine" id="recvMed" type="number" min="0" step="1" value="${medDue}"></label>
+    const html = `<form class="formgrid recvFormOneLine" id="receiveForm">
+      <label class="recvCompact">Date<input name="date" type="date" value="${isTodayCase(p) ? isoToday() : (p.date || isoToday())}" required></label>
+      <label class="recvCompact">Consultation<input name="consultation" id="recvCons" type="number" min="0" step="1" value="${consDue}"></label>
+      <label class="recvCompact">Medicine<input name="medicine" id="recvMed" type="number" min="0" step="1" value="${medDue}"></label>
       ${renewBlock}
-      <label class="full partialPendingBox">Partial pending payment (balance)
-        <input type="number" id="recvPartialPending" readonly value="${totalDue}" style="font-weight:800;color:#9a3412;background:#fff7ed;border:1px solid #fdba74">
-        <span class="mini">Total due ${money(totalDue)} − ab collect = pending balance. Pending sab jagah dikhega jab tak Receive na ho.</span>
-      </label>
-      <div class="full actions"><button class="primary embossed" type="submit">Confirm Receive</button></div>
+      <label class="recvCompact pendingCompact">Partial pending<input type="number" name="partialPending" id="recvPartialPending" min="0" step="1" value="${Math.max(0, Number(p.partialPending || 0))}" placeholder="Next visit"></label>
+      <div class="recvActions"><button class="primary embossed" type="submit">Confirm Receive</button></div>
     </form>`;
     modal(`Receive payment — #${p.caseNo} ${esc(p.title)} ${esc(p.name)}`, html, e => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        // Cap each field at due so user cannot over-receive category
-        const c = Math.min(consDue, Math.max(0, Number(fd.get('consultation') || 0)));
-        const m = Math.min(medDue, Math.max(0, Number(fd.get('medicine') || 0)));
-        const r = Math.min(renDue, Math.max(0, Number(fd.get('renewal') || 0)));
-        // Re-find patient in case reference is stale
-        const target = active(DB.patients).find(x => x.id === id) || p;
-        const result = applyReceiveAmounts(target, {
+        let c = Math.max(0, Number(fd.get('consultation') || 0));
+        let m = Math.max(0, Number(fd.get('medicine') || 0));
+        let r = Math.max(0, Number(fd.get('renewal') || 0));
+        let pendExtra = Math.max(0, Number(fd.get('partialPending') || 0));
+        const payDate = fd.get('date') || isoToday();
+
+        // If renewal entered while due, ensure renewal fee on patient covers received amount
+        if (showRenewal && r > 0) {
+            const paidRen = categoryPaid(p.id, 'renewal');
+            p.renewal = Math.max(Number(p.renewal || 0), paidRen + r);
+        }
+        // Ensure consultation/medicine fees cover what is being received
+        if (c > 0) {
+            const paidC = categoryPaid(p.id, 'consultation');
+            p.consultation = Math.max(Number(p.consultation || 0), paidC + c);
+        }
+        if (m > 0) {
+            const paidM = categoryPaid(p.id, 'medicine');
+            p.medicine = Math.max(Number(p.medicine || 0), paidM + m);
+        }
+
+        const result = applyReceiveAmounts(p, {
             consultation: c,
             medicine: m,
             renewal: r
-        }, fd.get('date'));
-        // Force full received if nothing left pending
-        if (result.pending <= 0) {
-            target.received = true;
-            target.paymentDetails = 'Done';
-            target.status = 'received';
-            target.withDoctor = false;
-            target.completedAt = new Date().toISOString();
-            markUpdated(target);
+        }, payDate);
+
+        // Partial pending is separate — never merge into medicine/consultation fees
+        p.partialPending = pendExtra;
+        if (pendExtra > 0) {
+            p.received = false;
+            p.completedAt = null;
+            p.foc = false;
         }
+
+        // Renewal received today → next renewal from this date
+        if (showRenewal && r > 0) {
+            p.lastRenewalDate = payDate;
+            const caseKey = String(permanentCaseNo(p));
+            active(DB.patients).forEach(x => {
+                if (String(x.linkedCaseNo || x.caseNo || '') === caseKey) {
+                    x.lastRenewalDate = payDate;
+                    markUpdated(x);
+                }
+            });
+        }
+
+        const left = pendingFor(p);
+        if (left <= 0) {
+            p.received = true;
+            p.completedAt = new Date().toISOString();
+        } else {
+            p.received = false;
+            p.completedAt = null;
+        }
+        markUpdated(p);
         saveLocal();
         closeModal();
-        try { refreshAllPatientViews(); } catch (err) {}
-        try { renderDashboard(); } catch (err) {}
-        try { renderQueue(); } catch (err) {}
-        try { if ($('#histBody')) renderAppointmentHistory(); } catch (err) {}
-        try { renderReportPage(); } catch (err) {}
-        if (result.pending > 0) {
-            toast(`Received ${money(result.collected)} · Partial pending ${money(result.pending)}`);
+        refreshAllPatientViews();
+        if (left > 0) {
+            toast(`Received ${money(result.collected)} · Pending ${money(left)} (next visit)`);
         } else {
             toast('Fully received — case completed');
         }
-        try { syncNow(true); } catch (err) {}
+        try { syncNow(true); } catch (e) {}
     });
-    // Live partial pending calculator
-    setTimeout(() => {
-        const upd = () => {
-            const c = Math.min(consDue, Math.max(0, Number($('#recvCons')?.value || 0)));
-            const m = Math.min(medDue, Math.max(0, Number($('#recvMed')?.value || 0)));
-            const r = Math.min(renDue, Math.max(0, Number($('#recvRenewal')?.value || 0)));
-            const bal = Math.max(0, totalDue - c - m - r);
-            const el = $('#recvPartialPending');
-            if (el) el.value = bal;
-        };
-        ['recvCons','recvMed','recvRenewal'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('input', upd);
+}
+
+
+
+/** Office-only: mark a visit FOC from history (fees → 0, status FOC). */
+function focVisitFromHistory(id) {
+    if (role === 'reception') {
+        toast('Reception cannot mark FOC — Office only', true);
+        return;
+    }
+    if (!enforceReceptionEdit('paymentEntry')) return;
+    const p = active(DB.patients).find(x => x.id === id);
+    if (!p) return;
+    if (!confirm('Mark this visit as FOC? Amount will become 0 and not count in totals.')) return;
+    p.foc = true;
+    p.received = false;
+    p.forcePending = false;
+    p.consultation = 0;
+    p.medicine = 0;
+    p.renewal = 0;
+    p.partialPending = 0;
+    p.completedAt = p.completedAt || new Date().toISOString();
+    p.withDoctor = false;
+    markUpdated(p);
+    // Remove linked payments for this visit so totals stay clean
+    try {
+        const keep = [];
+        (DB.payments || []).forEach(x => {
+            if (x && x.patientId === id) {
+                x._deleted = true;
+                if (DB.meta && Array.isArray(DB.meta.deleted)) DB.meta.deleted.push(x.id);
+            } else keep.push(x);
         });
-        upd();
-    }, 30);
+        DB.payments = (DB.payments || []).filter(x => x && x.patientId !== id && !x._deleted);
+    } catch (e) {}
+    saveLocal();
+    try { refreshAllPatientViews(); } catch (e) {}
+    toast('Visit marked FOC');
+    try { syncNow(true); } catch (e) {}
+    try { viewPatientHistory(id); } catch (e) {
+        // reopen by permanent case primary if visit id was FOC
+        try {
+            const prim = primaryRegistration(permanentCaseNo(p));
+            if (prim) viewPatientHistory(prim.id);
+        } catch (e2) {}
+    }
+}
+
+/** Office-only: receive visit from history then refresh history. */
+function receiveVisitFromHistory(id) {
+    if (role === 'reception') {
+        toast('Reception cannot receive payment — Office only', true);
+        return;
+    }
+    receiveP(id);
+    setTimeout(() => {
+        try {
+            const p = active(DB.patients).find(x => x.id === id);
+            if (p) {
+                const prim = primaryRegistration(permanentCaseNo(p)) || p;
+                viewPatientHistory(prim.id);
+            }
+        } catch (e) {}
+    }, 400);
 }
 
 function pendingP(id) {
@@ -3483,9 +4306,13 @@ function pendingP(id) {
         toast('Fully received — cannot mark pending. Use Edit if needed.', true);
         return;
     }
+    // Mark payment pending — NEVER send back to Waiting
+    // Keep withDoctor so patient stays in With Doctor section until Receive
     p.received = false;
-    p.withDoctor = false;
+    p.forcePending = true;
+    p.foc = false;
     p.completedAt = null;
+    // do NOT clear withDoctor
     markUpdated(p);
     saveLocal();
     renderDashboard();
@@ -3493,7 +4320,7 @@ function pendingP(id) {
     renderReceptionQueue();
     renderReportPage();
     if ($('#histBody')) renderAppointmentHistory();
-    toast('Case marked pending');
+    toast('Case marked pending (stays With Doctor until received)');
     syncNow(true);
 }
 
@@ -3714,14 +4541,13 @@ function downloadBackupFile(data, filename) {
 }
 
 function exportBackup() {
-    try { pushLocalFullBackup("Export Full Backup"); } catch (e) {}
-
+    // Export only downloads a file — does NOT add to Last 5 Full Backups list
     const s = loadBackupSettings();
     const includeRec = role === 'office' && (s.includeReception !== false);
     const data = buildBackupPayload(includeRec);
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     downloadBackupFile(data, `anand-clinic-backup-${role}-${stamp}.json`);
-    toast('Backup downloaded');
+    toast('Export full backup done');
 }
 
 function manualBackupNow() {
@@ -3827,15 +4653,20 @@ function renderLocalBackupList() {
     if (!box) return;
     const list = getLocalBackupList();
     if (!list.length) {
-        box.innerHTML = '<div class="mini">No full backups yet. Click <b>Backup Now</b> or <b>Export Full Backup</b>.</div>';
+        box.innerHTML = '<div class="mini">No full backups yet. Use <b>Backup Now</b> or <b>Save Safe Server Backup</b> to add entries here (Export only downloads a file).</div>';
         return;
     }
+    // list is already newest-first (unshift). Show date & time clearly at top.
     box.innerHTML = list.map((e, i) => {
-        const when = e.at ? new Date(e.at).toLocaleString() : '';
+        const when = e.at ? new Date(e.at).toLocaleString(undefined, {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }) : '';
         const c = e.counts || {};
+        const topMark = i === 0 ? ' <span class="mini" style="color:#137b4c;font-weight:700">(Latest)</span>' : '';
         return `<div class="backupRow">
-          <span><b>#${i + 1} ${esc(e.tag || 'Full Backup')}</b>
-          <small>${esc(when)} · ${c.patients || 0} patients · ${c.payments || 0} payments</small></span>
+          <span><b>#${i + 1} ${esc(e.tag || 'Full Backup')}</b>${topMark}
+          <small><b>${esc(when)}</b> · ${c.patients || 0} patients · ${c.payments || 0} payments</small></span>
           <button type="button" class="btn embossed" onclick="restoreLocalBackup('${e.id}')">Restore</button>
         </div>`;
     }).join('');
@@ -3850,7 +4681,7 @@ function restoreLocalBackup(id) {
         mergeLocalRemote(entry.data);
         saveLocal();
         refreshAllPatientViews();
-        toast('Local full backup restored');
+        toast('Import full backup done');
         try { syncNow(true); } catch (e) {}
     } catch (e) {
         toast('Restore failed', true);
@@ -3884,7 +4715,7 @@ async function refreshBackupList(){
 }
 async function restoreServerBackup(name){
     if(!confirm('Restore this backup? Newer records are kept and records are merged safely.')) return;
-    try{ const r=await fetch((server||location.origin).replace(/\/$/,'')+'/api/backup/'+name); if(!r.ok)throw 0; const data=await r.json(); const merged=await api('/api/restore','POST',data); mergeLocalRemote(merged); saveLocal(); toast('Backup restored successfully'); }
+    try{ const r=await fetch((server||location.origin).replace(/\/$/,'')+'/api/backup/'+name); if(!r.ok)throw 0; const data=await r.json(); await api('/api/restore','POST',data); alert('Backup restored successfully!'); location.reload();} 
     catch(e){ toast('Restore failed',true); }
 }
 window.restoreServerBackup=restoreServerBackup;
@@ -3954,83 +4785,11 @@ function setupBackupUI() {
     startAutoBackupTimer();
 }
 
-function ensurePaymentRecordsForReceived() {
-    // After import: if a patient/visit is marked received/Done but has no covering payment,
-    // create one so paymentStatusInfo shows Received (not Pending).
-    if (!DB.payments) DB.payments = [];
-    const existingPayIds = new Set(active(DB.payments).map(x => String(x.patientId || '')));
-    let created = 0;
-    for (const p of active(DB.patients || [])) {
-        const fees = feeTotal(p);
-        if (fees <= 0) continue;
-        const alreadyPaid = paidFor(p.id);
-        const wantsReceived = (p.received === true) ||
-            (String(p.paymentDetails || '').toLowerCase() === 'done') ||
-            (String(p.status || '').toLowerCase() === 'received');
-        if (wantsReceived && alreadyPaid < fees) {
-            const need = fees - alreadyPaid;
-            const payId = 'pay_auto_' + String(p.id || p.caseNo || Math.random()).replace(/[^a-zA-Z0-9]/g, '_') + '_' + Date.now().toString(36);
-            DB.payments.push(markUpdated({
-                id: payId,
-                patientId: p.id,
-                caseNo: p.caseNo || '',
-                amount: need,
-                date: p.date || p.completedAt || isoToday(),
-                category: 'import',
-                note: 'Auto-created on import (Received)',
-                _deleted: false
-            }));
-            p.received = true;
-            created++;
-        }
-    }
-    return created;
-}
 
-function importBackup(e) {
-    const f = e.target.files[0];
-    if (!f) return;
-    toast('Importing… please wait');
-    const r = new FileReader();
-    r.onload = () => {
-        try {
-            const parsed = JSON.parse(r.result);
-            // Support both full DB shape and our extraction shape { patients, medicines }
-            let incoming = parsed;
-            if (parsed && !parsed.patients && Array.isArray(parsed)) {
-                // rare: pure array
-                incoming = { patients: parsed };
-            }
-            DB = Object.assign(structuredClone(DEFAULT), incoming);
-            // Ensure arrays exist
-            if (!Array.isArray(DB.patients)) DB.patients = [];
-            if (!Array.isArray(DB.payments)) DB.payments = [];
-            if (!Array.isArray(DB.medicines)) DB.medicines = [];
-            if (!Array.isArray(DB.expenses)) DB.expenses = [];
 
-            // Normalize ids for patients that may only have caseNo
-            for (const p of DB.patients) {
-                if (!p.id) {
-                    p.id = (p.caseNo || 'x') + '_' + String(p.date || '').replace(/-/g, '') + '_' + String(p.completedAt || p.time || '').replace(/[:T]/g, '').slice(0, 14);
-                }
-                if (p.received === true || String(p.paymentDetails || '').toLowerCase() === 'done') {
-                    p.received = true;
-                }
-            }
 
-            const created = ensurePaymentRecordsForReceived();
-            saveLocal();
-            toast('Backup imported' + (created ? ` · ${created} payments fixed to Received` : ''));
-            try { syncNow(true); } catch (err) {}
-            try { renderAll(); } catch (err) {}
-        } catch (err) {
-            console.error(err);
-            toast('Invalid backup file or file too large', true);
-        }
-    };
-    r.onerror = () => toast('Could not read file', true);
-    r.readAsText(f);
-}
+
+
 
 function searchPatientRange() {
     patientFilterY = $('#patientYear')?.value || '';
@@ -4070,16 +4829,51 @@ function resetReportRange(kind) {
 }
 
 function setupNav() {
-    $$('.navBtn').forEach(b => b.onclick = () => openPage(b.dataset.page));
-    $('#toggleSide')?.addEventListener('click', () => {
+    $$('.navBtn').forEach(b => {
+        // Parent toggles (Patients / Payment) — NEVER navigate
+        if (b.classList.contains('navParent') || !b.dataset.page) {
+            b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); };
+            return;
+        }
+        b.onclick = (e) => {
+            e.preventDefault();
+            openPage(b.dataset.page);
+            // Mobile: close side drawer after opening any interface
+            if (window.innerWidth < 900) {
+                const side = document.getElementById('side');
+                if (side) {
+                    side.classList.remove('open');
+                    document.body.classList.remove('side-open');
+                }
+            }
+        };
+    });
+    $('#toggleSide')?.addEventListener('click', (ev) => {
         const side = $('#side');
         const main = document.querySelector('.main');
-        side?.classList.toggle('collapsed');
-        main?.classList.toggle('sidebar-collapsed');
-        // mobile overlay open
-        if (window.innerWidth < 900) side?.classList.toggle('open');
+        if (!side) return;
+        if (window.innerWidth < 900) {
+            // Mobile: drawer open/close only (do not use collapsed)
+            side.classList.remove('collapsed');
+            main?.classList.remove('sidebar-collapsed');
+            side.classList.toggle('open');
+            document.body.classList.toggle('side-open', side.classList.contains('open'));
+        } else {
+            // Desktop: collapse/expand
+            side.classList.remove('open');
+            document.body.classList.remove('side-open');
+            side.classList.toggle('collapsed');
+            main?.classList.toggle('sidebar-collapsed');
+        }
+        try { ev.stopPropagation(); } catch (e) {}
     });
-    $('#mobileSide')?.addEventListener('click', () => $('#side').classList.toggle('open'));
+    $('#mobileSide')?.addEventListener('click', () => {
+        const side = $('#side');
+        if (!side) return;
+        side.classList.remove('collapsed');
+        side.classList.toggle('open');
+        document.body.classList.toggle('side-open', side.classList.contains('open'));
+    });
     initPatientFilterSelects();
     $('#searchPatientRange')?.addEventListener('click', searchPatientRange);
     $('#clearPatientRange')?.addEventListener('click', () => resetReportRange('patients'));
@@ -4176,29 +4970,83 @@ function renderPermissions() {
         const patientView = receptionCanView('patient');
         const paymentView = receptionCanView('payment');
         const medicineView = receptionCanView('medicine');
-        $('#newCase')?.toggleAttribute('disabled', !receptionCanEdit('patient'));
-        $('#oldCase')?.toggleAttribute('disabled', !receptionCanEdit('patient'));
+        const dashOk = receptionCanView('dashboard');
+        const allowNewOld = dashOk && receptionCanView('dashNewOldEntry');
+        const allowQueue = dashOk && receptionCanView('dashTodayQueue');
+        const allowQStatus = dashOk && receptionCanView('dashQueueStatus');
+        const allowMore = dashOk && receptionCanView('dashMoreStats');
+        $('#newCase')?.toggleAttribute('disabled', !(receptionCanEdit('patient') && allowNewOld));
+        $('#oldCase')?.toggleAttribute('disabled', !(receptionCanEdit('patient') && allowNewOld));
+        document.querySelector('.hero .actions')?.classList.toggle('hidden', !allowNewOld);
+        if (role === 'reception') {
+            $('#queueStatusStrip')?.classList.remove('hidden');
+        } else {
+            $('#queueStatusStrip')?.classList.toggle('hidden', !allowQStatus);
+        }
+        $('#kpiCommand')?.classList.toggle('hidden', !allowMore);
+        $('#kpiMoreWrap')?.classList.toggle('hidden', !allowMore);
+        document.querySelector('.card.glassCard') && null;
+        const queueCard = document.querySelector('#dashboard .card.glassCard, #dashboard .card');
+        // Today's Patient Queue card
+        const qCard = Array.from(document.querySelectorAll('#dashboard .card')).find(c => c.querySelector('#queueSearch, .queueTable'));
+        qCard?.classList.toggle('hidden', !allowQueue);
         $('#receptionPatientArea')?.classList.toggle('hidden', !patientView);
         document.querySelector('[data-page="payments"]')?.classList.toggle('hidden', !paymentView);
         document.querySelector('[data-page="medicines"]')?.classList.toggle('hidden', !medicineView);
+        document.querySelector('[data-page="clinic"]')?.classList.toggle('hidden', !receptionCanView('clinic'));
+        document.querySelector('[data-page="reports"]')?.classList.toggle('hidden', !receptionCanView('reports'));
+        document.querySelector('[data-page="bill"]')?.classList.toggle('hidden', !receptionCanView('bill'));
         $('#receptionMedicineEntryCard')?.classList.toggle('hidden', !receptionCanEdit('medicineEntry'));
-        document.querySelector('[data-page="dashboard"]')?.classList.toggle('hidden', !receptionCanView('dashboard') && !patientView);
+        document.querySelector('[data-page="dashboard"]')?.classList.toggle('hidden', !dashOk && !patientView);
+        // Payment sub-views: only what Office allowed
+        const allowPayClinic = paymentView && receptionCanView('paymentClinic');
+        const allowPayYearly = paymentView && receptionCanView('paymentYearly');
+        const allowPayIncome = paymentView && receptionCanView('paymentIncome');
+        const allowPaySpend = paymentView && receptionCanView('paymentSpend');
+        const paySel = $('#paymentViewSelect');
+        if (paySel) {
+            [...paySel.options].forEach(opt => {
+                const v = opt.value;
+                let show = true;
+                if (v === 'clinicPayment') show = allowPayClinic;
+                else if (v === 'yearlyPayment') show = allowPayYearly;
+                else if (v === 'incomeExpense') show = allowPayIncome;
+                else if (v === 'spendEntries') show = allowPaySpend;
+                opt.hidden = !show;
+                opt.disabled = !show;
+            });
+            // If current selection is hidden, jump to first allowed
+            const cur = paySel.value;
+            const curOpt = [...paySel.options].find(o => o.value === cur);
+            if (curOpt && (curOpt.hidden || curOpt.disabled)) {
+                const first = [...paySel.options].find(o => !o.hidden && !o.disabled);
+                if (first) {
+                    paySel.value = first.value;
+                    try { applyPaymentView(first.value); } catch (e) {}
+                }
+            }
+        }
+        $('#clinicPaymentPanel')?.classList.toggle('hidden', !allowPayClinic || ($('#paymentViewSelect')?.value !== 'clinicPayment'));
+        $('#yearlyPaymentPanel')?.classList.toggle('hidden', !allowPayYearly || ($('#paymentViewSelect')?.value !== 'yearlyPayment'));
+        $('#incomeExpensePanel')?.classList.toggle('hidden', !allowPayIncome || ($('#paymentViewSelect')?.value !== 'incomeExpense'));
+        $('#spendEntriesPanel')?.classList.toggle('hidden', !allowPaySpend || ($('#paymentViewSelect')?.value !== 'spendEntries'));
         document.querySelectorAll('[data-reception-edit]').forEach(el => {
             el.disabled = !receptionCanEdit(el.dataset.receptionEdit);
             el.classList.toggle('viewOnly', el.disabled);
         });
         if (!patientView) closeForm();
-        renderReceptionPayment();
-        renderReceptionMedicines();
+        try { renderReceptionPayment(); } catch (e) {}
+        try { renderReceptionMedicines(); } catch (e) {}
     }
-    const ids = ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic'];
-    const modules = ['patient','payment','paymentEntry','medicine','medicineEntry','reports','dashboard','clinic'];
+    const ids = ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic','permDashNewOld','permDashTodayQueue','permDashQueueStatus','permDashMoreStats','permPayClinic','permPayYearly','permPayIncome','permPaySpend','permBill'];
+    const modules = ['patient','payment','paymentEntry','medicine','medicineEntry','reports','dashboard','clinic','dashNewOldEntry','dashTodayQueue','dashQueueStatus','dashMoreStats','paymentClinic','paymentYearly','paymentIncome','paymentSpend','bill'];
     ids.forEach((id,i) => { if ($('#'+id)) $('#'+id).value = perms[modules[i]] || 'hidden'; });
 }
 function savePermissions() {
-    const modules = ['patient','payment','paymentEntry','medicine','medicineEntry','reports','dashboard','clinic'];
-    const ids = ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic'];
-    const receptionPermissions = {};
+    const modules = ['patient','payment','paymentEntry','medicine','medicineEntry','reports','dashboard','clinic','dashNewOldEntry','dashTodayQueue','dashQueueStatus','dashMoreStats','paymentClinic','paymentYearly','paymentIncome','paymentSpend','bill'];
+    const ids = ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic','permDashNewOld','permDashTodayQueue','permDashQueueStatus','permDashMoreStats','permPayClinic','permPayYearly','permPayIncome','permPaySpend','permBill'];
+    const prev = DB.settings.receptionPermissions || {};
+    const receptionPermissions = { ...prev };
     modules.forEach((m,i) => receptionPermissions[m] = $('#'+ids[i])?.value || 'hidden');
     DB.settings = markUpdated({...DB.settings, receptionPermissions});
     saveLocal();
@@ -4207,50 +5055,143 @@ function savePermissions() {
     toast('Reception permissions updated');
 }
 
-function importPreviousData(e) {
-    const f = e.target.files[0];
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
+
+
+
+
+window.importPreviousData = importPreviousData;
+
+
+
+window.importBackup = importBackup;
+
+
+async function idbDelete(key) {
+    try {
+        const db = await idbOpen();
         try {
-            const incoming = normalizeData(JSON.parse(r.result));
-            const merge = (a, b) => {
-                const m = new Map();
-                [...a, ...b].forEach(x => {
-                    if (!x?.id) return;
-                    const old = m.get(x.id);
-                    if (!old || String(x._updated || '') > String(old._updated || '')) m.set(x.id, x)
-                });
-                return [...m.values()]
-            };
-            DB.patients = merge(DB.patients, incoming.patients);
-            DB.payments = merge(DB.payments, incoming.payments);
-            DB.medicines = merge(DB.medicines, incoming.medicines);
-            DB.meta.deleted = [...new Set([...(DB.meta.deleted || []), ...(incoming.meta?.deleted || [])])];
-            DB.patients = DB.patients.filter(x => !DB.meta.deleted.includes(x.id));
-            DB.payments = DB.payments.filter(x => !DB.meta.deleted.includes(x.id));
-            DB.medicines = DB.medicines.filter(x => !DB.meta.deleted.includes(x.id));
-            if (String(incoming.clinic?._updated || '') > String(DB.clinic?._updated || '')) DB.clinic = incoming.clinic;
-            if (String(incoming.settings?._updated || '') > String(DB.settings?._updated || '')) DB.settings = incoming.settings;
-            DB = normalizeData(DB);
-            saveLocal();
-            syncNow(true);
-            toast('Previous data imported and merged safely')
-        } catch {
-            toast('Invalid previous backup', true)
-        }
-    };
-    r.readAsText(f);
-    e.target.value = ''
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            tx.objectStore(IDB_STORE).delete(key);
+            await new Promise(function(res, rej) {
+                tx.oncomplete = function() { res(); };
+                tx.onerror = function() { rej(tx.error); };
+            });
+        } finally { try { db.close(); } catch (e) {} }
+    } catch (e) { console.warn('idbDelete', e); }
 }
 
+async function importPreviousData(e) {
+    const f = e && e.target && e.target.files && e.target.files[0];
+    if (!f) return;
+    const sizeMb = (f.size / (1024 * 1024)).toFixed(1);
+    if (!confirm('JSON import (~' + sizeMb + ' MB). Online ho to server pe direct jayega — browser freeze kam. OK dabayein aur wait karein, tab band mat karein.')) {
+        try { e.target.value = ''; } catch (err) {}
+        return;
+    }
+    const statusEl = document.getElementById('backupStatus') || document.getElementById('importStatus');
+    function setStatus(msg) {
+        try { if (statusEl) statusEl.textContent = msg; } catch (err) {}
+        try { toast(msg); } catch (err) {}
+        console.log('[import]', msg);
+    }
+    setStatus('Reading file…');
+    try {
+        const text = await f.text();
+        const srv = (typeof server === 'string' && server) ? String(server).replace(/\/$/, '') : '';
+
+        /* ===== ONLINE: server parses JSON — client does NOT JSON.parse / merge / stringify ===== */
+        if (srv) {
+            setStatus('Uploading to server (no heavy browser work)…');
+            await new Promise(function(r) { setTimeout(r, 40); });
+            const res = await fetch(srv + '/api/restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: text
+            });
+            if (!res.ok) {
+                const t = await res.text().catch(function() { return ''; });
+                throw new Error('Server restore failed: ' + res.status + ' ' + (t || '').slice(0, 120));
+            }
+            let info = {};
+            try { info = await res.json(); } catch (err) { info = {}; }
+            /* Pull full state from server and refresh UI — no hard refresh required */
+            await loadFreshFromServer(setStatus);
+            const pc = (info && info.count != null) ? info.count : ((DB.patients || []).length);
+            const payc = (info && info.payments != null) ? info.payments : ((DB.payments || []).length);
+            setStatus('Import full backup done · patients ' + pc + (payc != null ? ' · payments ' + payc : ''));
+            try { toast('Import done — data loaded (refresh not needed)'); } catch (err) {}
+            try { e.target.value = ''; } catch (err) {}
+            return;
+        }
+
+        /* ===== OFFLINE fallback: must parse on device (may still take time on very large files) ===== */
+        setStatus('Offline mode — parsing on device (please wait)…');
+        await new Promise(function(r) { setTimeout(r, 40); });
+        let incoming;
+        try { incoming = JSON.parse(text); } catch (err) { throw new Error('Invalid JSON file'); }
+        setStatus('Merging…');
+        await new Promise(function(r) { setTimeout(r, 40); });
+        incoming = normalizeData(incoming);
+        const merge = function(a, b) {
+            const m = new Map();
+            (a || []).concat(b || []).forEach(function(x) {
+                if (!x || !x.id) return;
+                const old = m.get(x.id);
+                if (!old || String(x._updated || '') > String(old._updated || '')) m.set(x.id, x);
+            });
+            return Array.from(m.values());
+        };
+        const restoreIds = new Set();
+        (incoming.patients || []).forEach(function(x) { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.payments || []).forEach(function(x) { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.medicines || []).forEach(function(x) { if (x && x.id) restoreIds.add(x.id); });
+        (incoming.expenses || []).forEach(function(x) { if (x && x.id) restoreIds.add(x.id); });
+        DB.meta = DB.meta || {};
+        DB.meta.deleted = (DB.meta.deleted || []).filter(function(id) { return !restoreIds.has(id); });
+        DB.patients = merge(DB.patients, incoming.patients);
+        DB.payments = merge(DB.payments, incoming.payments);
+        DB.medicines = merge(DB.medicines, incoming.medicines);
+        DB.expenses = merge(DB.expenses, incoming.expenses);
+        if (incoming.settings && String(incoming.settings._updated || '') > String((DB.settings || {})._updated || '')) {
+            DB.settings = Object.assign({}, DB.settings || {}, incoming.settings);
+        }
+        if (incoming.clinic && String(incoming.clinic._updated || '') > String((DB.clinic || {})._updated || '')) {
+            DB.clinic = Object.assign({}, DB.clinic || {}, incoming.clinic);
+        }
+        if (incoming.schemaVersion) DB.schemaVersion = Math.max(Number(DB.schemaVersion || 0), Number(incoming.schemaVersion || 0));
+        DB = normalizeData(DB);
+        setStatus('Saving to device (IndexedDB)…');
+        await new Promise(function(r) { setTimeout(r, 40); });
+        try { await idbSet(KEY, DB); } catch (err) { console.warn(err); }
+        try { lsSafeSet(KEY, JSON.stringify(DB)); } catch (err) {}
+        setStatus('Updating screen…');
+        try { renderAll(); } catch (err) {}
+        setStatus('Import full backup done');
+        try { toast('Import done — data loaded'); } catch (err) {}
+        try { e.target.value = ''; } catch (err) {}
+    } catch (err) {
+        console.error(err);
+        setStatus('Import failed: ' + (err && err.message ? err.message : 'error'));
+        alert('Import failed: ' + (err && err.message ? err.message : err));
+        try { e.target.value = ''; } catch (e2) {}
+    }
+}
+window.importPreviousData = importPreviousData;
+
+async function importBackup(e) {
+    return importPreviousData(e);
+}
+window.importBackup = importBackup;
+
 function getAppointmentHistoryRows() {
-    let rows = caseRows().slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.caseNo) - Number(a.caseNo));
+    /* Single sort only — avoid caseRows() double-sort freeze on 2000+ patients */
+    let rows = active(DB.patients).slice();
+    rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || caseNoNumericPart(b.caseNo) - caseNoNumericPart(a.caseNo));
     const q = String(histQuery || '').trim().toLowerCase();
     if (q) {
         const digits = q.replace(/\D/g, '');
         rows = rows.filter(p => {
-            const name = `${p.title || ''} ${p.name || ''}`.toLowerCase();
+            const name = ((p.title || '') + ' ' + (p.name || '')).toLowerCase();
             const mobile = String(p.mobile || '').replace(/\D/g, '');
             const caseNo = String(p.caseNo || '');
             return name.includes(q) || caseNo.includes(q) || (digits && mobile.includes(digits)) || String(p.address || '').toLowerCase().includes(q);
@@ -4269,24 +5210,34 @@ function renderAppointmentHistory() {
     if (histPage < 1) histPage = 1;
     const slice = rows.slice((histPage - 1) * histPageSize, histPage * histPageSize);
     body.innerHTML = slice.map((p, i) => {
-        const paid = paidFor(p.id);
-        const total = feeTotal(p);
+        /* FEES = consultation + medicine + renewal on this visit (feeTotal).
+           PAID = payments linked to this visit id. When fully received they should match. */
+        let total = feeTotal(p);
+        let paid = paidFor(p.id);
         const pend = pendingFor(p);
+        if (p.foc === true) { total = 0; paid = 0; }
         const fully = p.received === true && pend <= 0;
-        const status = fully ? '<span class="payReceivedTag">Received</span>' : (pend > 0 && paid > 0 ? '<span class="payPartialTag">Partial</span>' : (pend > 0 ? '<span class="payPendingTag">Pending</span>' : '<span class="payReceivedTag">Received</span>'));
+        let statusHtml;
+        if (p.foc === true && total <= 0) statusHtml = '<span class="payFocTag">FOC</span>';
+        else if (fully) statusHtml = '<span class="payReceivedTag">Received</span>';
+        else if (pend > 0 && paid > 0) statusHtml = '<span class="payPartRecTag">Part Rec</span>';
+        else if (pend > 0) statusHtml = '<span class="payPendingTag">Pending</span>';
+        else statusHtml = '<span class="payReceivedTag">Received</span>';
+        const actBtns = role === 'reception'
+          ? `<button class="btn embossed histMiniBtn" onclick="viewPatientHistory('${p.id}')">View</button>`
+          : `<button class="btn embossed histMiniBtn" onclick="viewPatientHistory('${p.id}')">View</button>
+             ${pend > 0 ? `<button type="button" class="btn embossed receiveBtn histMiniBtn" onclick="receiveP('${p.id}')" title="Receive">Rec</button>` : ''}
+             <button class="btn embossed histMiniBtn" onclick="editP('${p.id}')">Edit</button>
+             <button class="btn embossed deleteBox histMiniBtn" onclick="delP('${p.id}')">Del</button>`;
         return `<tr>
           <td><b>${permanentCaseNo(p)}</b></td>
           <td>${fmtDate(p.date)}</td>
-          <td><span class="tag ${p.caseType}">${(p.caseType || '').toUpperCase()}</span></td>
-          <td>${esc(p.title)} ${esc(p.name)}<div class="mini">${esc(p.mobile || '')}</div></td>
+          <td><span class="tag ${p.caseType}">${(p.caseType || 'old').toUpperCase()}</span></td>
+          <td class="histPatientCell"><div class="patientNameOneLine">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile || '')}</div></td>
           <td class="amount">${money(total)}</td>
           <td class="amount">${money(paid)}</td>
-          <td>${status}${pend > 0 ? ` <button type="button" class="btn embossed receiveBtn histMiniBtn" onclick="receiveP('${p.id}')" title="Receive pending">Recv</button>` : ''}</td>
-          <td><div class="compactActions histActions">
-            <button class="btn embossed histMiniBtn" onclick="viewPatientHistory('${p.id}')">View</button>
-            <button class="btn embossed histMiniBtn" onclick="editP('${p.id}')">Edit</button>
-            <button class="btn embossed deleteBox histMiniBtn" onclick="delP('${p.id}')">Del</button>
-          </div></td>
+          <td>${statusHtml}</td>
+          <td><div class="compactActions histActions">${actBtns}</div></td>
         </tr>`;
     }).join('') || '<tr><td colspan="8">No appointments found</td></tr>';
     if (pag) {
@@ -4341,34 +5292,121 @@ function setupAppointmentHistory() {
     });
 }
 
+let _migrationsRan = false;
 function renderAll() {
-    try { clearAllExpensesOnce(); } catch (e) {}
-    try { migrateCaseNumbersToPrefixed(); } catch (e) {}
-    try { fixLegacyBackdatedUnpaid(); } catch (e) {}
-    renderDashboard();
-    renderCalendarInfo();
-    renderPermissions();
-    renderQueue();
-    renderMedicines();
-    renderClinic();
-    if ($('#reportBodyPatients')) { initPatientFilterSelects(); renderPatientReport(); }
-    if ($('#payMonthBody') || $('#paymentYearSelect')) {
-        initPaymentYearSelect();
-        renderPaymentSummary();
-        renderExpenses();
-    }
-    if (role === 'reception') renderReceptionQueue();
-    if ($('#histBody')) renderAppointmentHistory();
-    set('receptionPayState', DB.settings.receptionPaymentEnabled ? 'ON' : 'OFF');
-    if ($('#receptionPayToggle')) $('#receptionPayToggle').checked = !!DB.settings.receptionPaymentEnabled
-}
-async function forceRefresh() {
-    renderAll();
-    if (server) {
-        await syncNow(true)
+    /* Light path first so UI stays responsive with large patient DB (2000+ rows). */
+    try {
+        if (!_migrationsRan) {
+            _migrationsRan = true;
+            try { clearAllExpensesOnce(); } catch (e) {}
+            try { migrateCaseNumbersToPrefixed(); } catch (e) {}
+            try { fixLegacyBackdatedUnpaid(); } catch (e) {}
+        }
+    } catch (e) {}
+    try { renderDashboard(); } catch (e) {}
+    try { renderCalendarInfo(); } catch (e) {}
+    try { renderPermissions(); } catch (e) {}
+    try { renderQueue(); } catch (e) {}
+    try { if (role === 'reception') renderReceptionQueue(); } catch (e) {}
+    try {
+        set('receptionPayState', DB.settings.receptionPaymentEnabled ? 'ON' : 'OFF');
+        if ($('#receptionPayToggle')) $('#receptionPayToggle').checked = !!DB.settings.receptionPaymentEnabled;
+    } catch (e) {}
+    /* Heavy panels: only if section is open / exists — deferred so first paint is fast */
+    const runHeavy = function() {
+        try {
+            const medPage = document.getElementById('medicines');
+            if (medPage && medPage.classList.contains('active')) renderMedicines();
+        } catch (e) {}
+        try { renderClinic(); } catch (e) {}
+        try {
+            if ($('#reportBodyPatients') && document.getElementById('reports')?.classList.contains('active')) {
+                initPatientFilterSelects(); renderPatientReport();
+            }
+        } catch (e) {}
+        try {
+            const payActive = document.getElementById('payments')?.classList.contains('active');
+            if (payActive && ($('#payMonthBody') || $('#paymentYearSelect'))) {
+                initPaymentYearSelect();
+                renderPaymentSummary();
+                renderExpenses();
+            }
+        } catch (e) {}
+        try {
+            const histActive = document.getElementById('history')?.classList.contains('active')
+                || document.getElementById('appointmentHistory')?.classList.contains('active');
+            if ($('#histBody') && histActive) renderAppointmentHistory();
+        } catch (e) {}
+    };
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { setTimeout(runHeavy, 0); });
     } else {
-        toast('Refreshed from local data')
+        setTimeout(runHeavy, 0);
     }
+}
+let pollTimerId = null;
+let pollVisibilityBound = false;
+
+/** Default 20s smart auto-poll. URL ?sync=30|60 overrides. ?sync=off disables auto-poll. */
+function getSyncPollMs() {
+    try {
+        const q = new URLSearchParams(window.location.search || '');
+        let v = q.get('sync');
+        if (v != null && String(v).trim() !== '') {
+            v = String(v).trim().toLowerCase();
+            if (v === '0' || v === 'off' || v === 'false' || v === 'no') return 0;
+            const n = parseInt(v, 10);
+            if (Number.isFinite(n) && n > 0) return Math.min(600, Math.max(5, n)) * 1000;
+        }
+    } catch (e) {}
+    return 20000; // default 20 seconds
+}
+
+function runPollTick() {
+    try { renderAll(); } catch (e) {}
+    try { if (server) syncNow(true); } catch (e) {}
+}
+
+function stopPollTimer() {
+    try { if (pollTimerId) clearInterval(pollTimerId); } catch (e) {}
+    pollTimerId = null;
+}
+
+function startPollTimerIfNeeded() {
+    stopPollTimer();
+    const ms = getSyncPollMs();
+    if (!ms) return; // auto-poll off (?sync=off)
+    // Smart: only while tab is visible
+    if (typeof document !== 'undefined' && document.hidden) return;
+    pollTimerId = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        runPollTick();
+    }, ms);
+}
+
+function resetPollTimer() {
+    // After manual refresh: restart interval from 0 only if URL sync is on + tab visible
+    startPollTimerIfNeeded();
+}
+
+function bindPollVisibility() {
+    if (pollVisibilityBound) return;
+    pollVisibilityBound = true;
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopPollTimer(); // tab minimize / background → pause, no data waste
+        } else {
+            startPollTimerIfNeeded(); // tab active again → resume if ?sync= set
+        }
+    });
+}
+
+function forceRefresh() {
+    // Instant Refresh Data — always works (Office + Reception)
+    try { saveLocal(); } catch (e) {}
+    runPollTick();
+    resetPollTimer();
+    try { toast('Refresh Data done'); } catch (e) {}
 }
 
 
@@ -4377,7 +5415,7 @@ function searchPatientsQuery(q) {
     if (!q) return [];
     const digits = q.replace(/\D/g, '');
     const tokens = q.split(/\s+/).filter(Boolean);
-    return caseRows().filter(p => {
+    const hits = caseRows().filter(p => {
         const name = `${p.title || ''} ${p.name || ''}`.toLowerCase();
         const mobile = String(p.mobile || '');
         const mobileDigits = mobile.replace(/\D/g, '');
@@ -4387,14 +5425,27 @@ function searchPatientsQuery(q) {
         const last = String(p.date || '');
         const due = (typeof dueDate === 'function' ? dueDate(p) : '') || '';
         const blob = [name, mobile, mobileDigits, caseNo, address, last, due, pend > 0 ? 'pending' : '', (typeof renewalDue === 'function' && renewalDue(p)) ? 'renewal due' : ''].join(' ').toLowerCase();
-        if (name.includes(q) || address.includes(q) || caseNo.includes(q)) return true;
-        if (digits && mobileDigits.includes(digits)) return true;
-        if (mobile.toLowerCase().includes(q)) return true;
-        if (q.length >= 4 && last.includes(q)) return true;
+        if (digits && (mobileDigits.includes(digits) || caseNo.replace(/\D/g, '').includes(digits))) return true;
         if (tokens.length && tokens.every(t => blob.includes(t))) return true;
         return false;
-    }).slice(0, 30);
+    });
+    // ONE row per permanent case number — prefer NEW registration, else earliest visit
+    const byCase = new Map();
+    hits.forEach(p => {
+        const key = String(permanentCaseNo(p) || p.caseNo || p.id);
+        const prev = byCase.get(key);
+        if (!prev) {
+            byCase.set(key, p);
+            return;
+        }
+        const pNew = (p.caseType || '') === 'new';
+        const prevNew = (prev.caseType || '') === 'new';
+        if (pNew && !prevNew) byCase.set(key, p);
+        else if (pNew === prevNew && String(p.date || '') < String(prev.date || '')) byCase.set(key, p);
+    });
+    return [...byCase.values()].slice(0, 30);
 }
+
 
 function runGlobalPatientSearch() {
     const input = $('#globalPatientSearch');
@@ -4414,11 +5465,12 @@ function runGlobalPatientSearch() {
     }
     box.classList.remove('hidden');
     box.innerHTML = hits.map(p => {
-        const pend = pendingFor(p);
-        const payLabel = paymentStatusInfo(p).kind === 'foc' ? 'FOC' : (pend > 0 ? (paidFor(p.id) > 0 ? `Partial ${money(pend)}` : `Pending ${money(pend)}`) : 'Received');
+        const st = caseFamilyPaymentStatus(p);
+        const payLabel = st.label || st.kind;
+        const cn = permanentCaseNo(p) || p.caseNo;
         return `<button type="button" class="gsItem" role="option" data-id="${p.id}">
-          <span class="gsCase">#${p.caseNo}</span>${esc(p.title)} ${esc(p.name)}
-          <span class="gsMeta">${esc(p.mobile || '—')} · ${fmtDate(p.date)} · ${p.caseType || ''} · ${payLabel}</span>
+          <span class="gsCase">#${cn}</span>${esc(p.title)} ${esc(p.name)}
+          <span class="gsMeta">${esc(p.mobile || '—')} · ${payLabel}</span>
         </button>`;
     }).join('');
     box.querySelectorAll('.gsItem').forEach(btn => {
@@ -4485,11 +5537,14 @@ function showPatientDetail(id) {
         }
     });
     const dates = Object.keys(byDate).sort((a, b) => String(b).localeCompare(String(a)));
-    let histTotal = 0;
+    let histTotal = 0, sumCons = 0, sumMed = 0, sumRen = 0;
     const histRows = dates.map((d, i) => {
         const g = byDate[d];
         const lineTotal = g.consultation + g.medicine + g.renewal + g.other;
         histTotal += lineTotal;
+        sumCons += Number(g.consultation || 0);
+        sumMed += Number(g.medicine || 0);
+        sumRen += Number(g.renewal || 0);
         const isRenew = g.renewal > 0;
         const isPendingVisit = !!g._pendingVisit && lineTotal === 0;
         const actionLabel = isPendingVisit ? 'Pending' : (lineTotal > 0 ? 'Received' : 'Pending');
@@ -4536,13 +5591,22 @@ function showPatientDetail(id) {
       <div>
         <h3 style="margin:0 0 8px;font-size:15px">Visit / payment history (all visits of this case)</h3>
         <p class="mini">Saari visits (new + follow-up) ek saath. Latest pehle. Renewal rows light green. Pending pe Receive button.</p>
-        <div class="tablewrap"><table class="table payHistoryTable">
+        <div class="tablewrap modalTableWrap"><table class="table payHistoryTable modalDataTable">
           <thead><tr>
             <th>Sr No.</th><th>Date</th><th>Consultation</th><th>Medicine</th><th>Renewal</th><th>Action</th><th>Total Payment</th>
           </tr></thead>
           <tbody>${histRows}</tbody>
-          <tfoot><tr><td colspan="6"><b>Grand Total (all visits)</b></td><td><b>${money(histTotal)}</b></td></tr></tfoot>
+          <tfoot>
+            <tr class="summaryBreakRow"><td colspan="2"><b>Category Totals</b></td><td><b>${money(sumCons)}</b></td><td><b>${money(sumMed)}</b></td><td><b>${money(sumRen)}</b></td><td></td><td></td></tr>
+            <tr class="summaryTotalRow"><td colspan="6"><b>Grand Total (all visits)</b></td><td><b>${money(histTotal)}</b></td></tr>
+          </tfoot>
         </table></div>
+        <div class="histTotalsBar" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px">
+          <div class="paySummaryBox" style="min-width:150px"><small>Consultation Total</small><b>${money(sumCons)}</b></div>
+          <div class="paySummaryBox med" style="min-width:150px"><small>Medicine Total</small><b>${money(sumMed)}</b></div>
+          <div class="paySummaryBox renewal" style="min-width:150px"><small>Renewal Total</small><b>${money(sumRen)}</b></div>
+          <div class="paySummaryBox total" style="min-width:150px"><small>Grand Total</small><b>${money(histTotal)}</b></div>
+        </div>
         ${pend > 0 ? `<div style="margin-top:12px;padding:12px 14px;border-radius:12px;background:linear-gradient(165deg,#fff5f5,#fde8e8);border:1px solid #f0c2c2;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <span style="font-weight:700;color:#b91c1c">This visit pending: ${money(pend)}</span>
           <button type="button" class="btn embossed receiveBtn" onclick="receiveP('${p.id}');closeModal()">Receive Pending Payment</button>
@@ -4591,6 +5655,17 @@ function setupGlobalPatientSearch() {
 
 function setup() {
     setupNav();
+    try { setupKpiCollapse(); } catch(e) {}
+    try {
+      const forceProBadge = () => {
+        document.querySelectorAll('.appVersionBadge').forEach(el => {
+          el.textContent = 'PRO';
+          el.title = 'Anand Clinic PRO';
+        });
+      };
+      forceProBadge();
+      setInterval(forceProBadge, 2000);
+    } catch(e) {}
     setupGlobalPatientSearch();
     setupOldAppointmentPanel();
     setupAppointmentHistory();
@@ -4599,7 +5674,7 @@ function setup() {
     $('#reconnectBtn')?.addEventListener('click', async () => {
         setConn(false, '🟡 Syncing…', null);
         const live = $('#syncLiveBadge');
-        if (live) { live.textContent = '🟡 Syncing…'; live.className = 'syncLiveBadge syncing'; }
+        if (live) { live.textContent = 'Syncing…'; live.className = 'syncLiveBadge syncing'; }
         try { await syncNow(false); connectClinicWebSocket(); } catch (e) { toast('Reconnect failed', true); }
     });
     setupBackupUI();
@@ -4622,7 +5697,7 @@ function setup() {
     $('#exportBtn')?.addEventListener('click', exportBackup);
     $('#importInput')?.addEventListener('change', importBackup);
     $('#importPreviousInput')?.addEventListener('change', importPreviousData);
-    ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic'].forEach(id => $('#' + id)?.addEventListener('change', savePermissions));
+    ['permPatient','permPayment','permPaymentEntry','permMedicine','permMedicineEntry','permReports','permDashboard','permClinic','permDashNewOld','permDashTodayQueue','permDashQueueStatus','permDashMoreStats','permPayClinic','permPayYearly','permPayIncome','permPaySpend'].forEach(id => $('#' + id)?.addEventListener('change', savePermissions));
     $('#savePermissionsBtn')?.addEventListener('click', savePermissions);
     $('#receptionMedicineForm')?.addEventListener('submit', receptionAddMedicine);
     $('#modal')?.addEventListener('click', e => {
@@ -4631,13 +5706,9 @@ function setup() {
     $('#modalClose')?.addEventListener('click', closeModal);
     $('#testConn')?.addEventListener('click', testConn);
     $('#refreshBtn')?.addEventListener('click', forceRefresh);
-    if ($('#themeToggle')) $('#themeToggle').textContent = savedTheme === 'dark' ? '☀ Light' : '☾ Dark';
-    $('#themeToggle')?.addEventListener('click', () => {
-        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-        document.documentElement.dataset.theme = next;
-        localStorage.setItem('anandClinicTheme', next);
-        if ($('#themeToggle')) $('#themeToggle').textContent = next === 'dark' ? '☀ Light' : '☾ Dark';
-    });
+    // Dark mode disabled — single light brown UI only
+    document.documentElement.dataset.theme = 'light';
+
     $('#connectBtn')?.addEventListener('click', async () => {
         server = $('#serverUrl').value.trim().replace(/\/$/, '');
         localStorage.setItem(SERVER_KEY, server);
@@ -4654,93 +5725,72 @@ function setup() {
     if (role === 'reception') renderReceptionQueue();
     renderAll();
     setConn(false, server ? 'Checking connection…' : 'Offline mode — no server selected.');
-    if (server) syncNow(true);
-    setInterval(() => {
-        renderAll();
-        if (server) syncNow(true)
-    }, 2000)
+    /* Online badge first (health only), then full sync in background — no long wait for badge */
+    if (server) {
+        quickHealthOnline().then(function(ok) {
+            if (ok) return syncNow(true);
+        }).catch(function() {});
+    }
+    bindPollVisibility();
+    startPollTimerIfNeeded(); // default 20s smart poll when tab visible
 }
 
 function renderReceptionQueue() {
     const b = $('#receptionPatients');
     if (!b) return;
     const q = ($('#queueSearch')?.value || '').toLowerCase();
-    let arr = caseRows().filter(isTodayCase).filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile}`.toLowerCase().includes(q));
-    const totalPages = Math.max(1, Math.ceil(arr.length / queuePageSize));
-    if (queuePage > totalPages) queuePage = totalPages;
-    if (queuePage < 1) queuePage = 1;
-    const slice = arr.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
-    set('queueCountHint', `${arr.length} patient${arr.length === 1 ? '' : 's'} today`);
-    b.innerHTML = slice.map((p, i) => {
-        const pending = pendingFor(p);
+    let arr = caseRows().filter(isTodayCase).filter(p => p.caseType === 'new' || p.caseType === 'old').filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile}`.toLowerCase().includes(q));
+    const { active, done } = splitTodayQueue(arr);
+    set('queueCountHint', `${active.length} active · ${done.length} completed today`);
+
+    const rowHtml = (p, i, section) => {
         const withDoc = !!p.withDoctor;
         const stPay = paymentStatusInfo(p);
-        const fullyReceived = stPay.kind === 'received';
+        const fullyReceived = stPay.kind === 'received' || queueStatus(p) === 'received';
         const pulse = fullyReceived && p.completedAt && (Date.now() - new Date(p.completedAt).getTime() < 8000);
         const renewHighlight = renewalDue(p) && !hasRenewalPayment(p);
         let rowClass = stPay.kind === 'foc' ? 'focRow' : (fullyReceived ? 'receivedRow' : withDoc ? 'doctorRow' : 'pendingRow');
         if (stPay.kind === 'partial') rowClass += ' partialPendingRow';
         if (renewHighlight) rowClass += ' renewDueRow';
-        let payLabel = paymentStatusHtml(p);
+        const cons = Number(p.consultation || 0);
+        const med = Number(p.medicine || 0);
+        const ren = Number(p.renewal || 0);
+        const pendAmt = Math.max(0, Number(p.partialPending || 0));
+        const totalCol = cons + med + ren; // partial pending is NOT part of total collection
+        const statusLab = receptionPayStatusLabel(p);
+        const payBreak = `<div class="payBreakup"><div>Consultation: <b>${money(cons)}</b></div><div>Medicine: <b>${money(med)}</b></div><div>Renewal: <b>${money(ren)}</b></div>${pendAmt > 0 ? `<div class="partialPendLine">Partial pending: <b>${money(pendAmt)}</b></div>` : ''}</div>`;
         const locked = fullyReceived;
         const dis = locked ? ' disabled' : '';
         const lockCls = locked ? ' actLocked' : '';
-        const sr = (queuePage - 1) * queuePageSize + i + 1;
-        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="amount">${money(feeTotal(p))}</td><td class="totalPayCell">${payLabel}</td><td><div class="actions embossedActions compactActions queueActions">
-    <button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>
-    <button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>Doctor</button>
-    <button class="btn embossed ${fullyReceived?'actReceived':'actNeutral'}${lockCls}" onclick="receiveP('${p.id}')"${fullyReceived?' disabled':''}>Receive</button>
-    <button class="btn embossed actNeutral${lockCls}" onclick="pendingP('${p.id}')"${dis}>Pend</button>
-    <button class="btn embossed deleteBox" onclick="delP('${p.id}')">Del</button>
-    </div></td></tr>`;
-    const mobR = $('#queueMobileCards');
-    if (mobR) {
-        try {
-            const q = ($('#queueSearch')?.value || '').toLowerCase();
-            let arr = caseRows().filter(isTodayCase).filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile}`.toLowerCase().includes(q));
-            const slice = arr.slice((queuePage - 1) * queuePageSize, queuePage * queuePageSize);
-            mobR.innerHTML = slice.map(p => {
-                const st = typeof queueStatus === 'function' ? queueStatus(p) : (p.withDoctor ? 'doctor' : 'pending');
-                const stLabel = st==='doctor'?'With Doctor':(st==='received'?'Completed':'Waiting');
-                return `<div class="patientMobileCard"><div class="pmTitle">#${permanentCaseNo(p)} · ${esc(p.title)} ${esc(p.name)}</div>
-                <div class="pmMeta">${fmtDate(p.date)} · ${esc(p.mobile||'')} · ${stLabel}</div>
-                <div class="pmActions">
-                  <button class="btn embossed patientMiniBtn" onclick="openPatientProfile('${p.id}')">Profile</button>
-                  <button class="btn embossed patientMiniBtn" onclick="editP('${p.id}')">Edit</button>
-                  <button class="btn embossed patientMiniBtn" onclick="receiveP('${p.id}')">Receive</button>
-                </div></div>`;
-            }).join('') || '<div class="mini">No patients today</div>';
-        } catch(e) {}
-    }
+        const sr = i + 1;
+        const action = section === 'done'
+            ? `<span class="mini">Completed</span>`
+            : `<div class="actions embossedActions compactActions queueActions"><button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>With Doctor</button></div>`;
+        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b></td><td class="statusCell">${statusLab}</td><td>${action}</td></tr>`;
+    };
 
-    }).join('') || '<tr><td colspan="8">No today\'s patients in the queue</td></tr>';
-    const pag = $('#queuePagination');
-    if (pag) {
-        if (arr.length <= queuePageSize) {
-            pag.innerHTML = arr.length ? `<span class="mini">Showing all ${arr.length}</span>` : '';
-        } else {
-            let html = `<button type="button" class="btn embossed" data-qpg="prev" ${queuePage<=1?'disabled':''}>‹ Prev</button>`;
-            for (let i = 1; i <= totalPages; i++) {
-                html += `<button type="button" class="btn embossed ${i===queuePage?'active':''}" data-qpg="${i}">${i}</button>`;
-            }
-            html += `<button type="button" class="btn embossed" data-qpg="next" ${queuePage>=totalPages?'disabled':''}>Next ›</button>`;
-            html += `<span class="mini" style="margin-left:8px">Page ${queuePage}/${totalPages}</span>`;
-            pag.innerHTML = html;
-            pag.querySelectorAll('[data-qpg]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const v = btn.getAttribute('data-qpg');
-                    if (v === 'prev') queuePage = Math.max(1, queuePage - 1);
-                    else if (v === 'next') queuePage = Math.min(totalPages, queuePage + 1);
-                    else queuePage = Number(v) || 1;
-                    renderReceptionQueue();
-                });
-            });
-        }
+    const waiting = active.filter(p => queueStatus(p) !== 'doctor').sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    const doctor = active.filter(p => queueStatus(p) === 'doctor').sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
+    done.sort((a,b)=>patientCompletedTime(b).localeCompare(patientCompletedTime(a)));
+    let html = '';
+    if (waiting.length) { html += `<tr class="queueSectionBreak"><td colspan="8">Waiting Today</td></tr>`; waiting.forEach((p,i)=>{ html += rowHtml(p,i,'active'); }); }
+    if (doctor.length) { html += `<tr class="queueSectionBreak"><td colspan="8">With Doctor Today</td></tr>`; doctor.forEach((p,i)=>{ html += rowHtml(p,i,'active'); }); }
+    if (done.length) {
+        html += `<tr class="queueSectionBreak"><td colspan="9">Completed today</td></tr>`;
+        done.forEach((p, i) => { html += rowHtml(p, i, 'done'); });
     }
+    if (!waiting.length && !doctor.length && !done.length) html = '<tr><td colspan="8">No new or old case entries today</td></tr>';
+    b.innerHTML = html;
+
+    // Keep the reception queue as the same single scrollable table; do not
+    // render a second card/pagination list below it.
+    const mobR = $('#queueMobileCards');
+    if (mobR) mobR.innerHTML = '';
+    const pag = $('#queuePagination');
+    if (pag) pag.innerHTML = `<span class="mini">${active.length} waiting/with doctor · ${done.length} completed</span>`;
 }
 
 
-/* ===== Bill / Receipt + Email backup (v47) ===== */
 function emailCloudBackup() {
     try {
         const data = buildBackupPayload(role === 'office');
@@ -4760,54 +5810,71 @@ function emailCloudBackup() {
 }
 
 
+function setupKpiCollapse() {
+    // Disabled: all KPI boxes always open (user request)
+    const body = $('#kpiMoreBody');
+    if (body) {
+        body.classList.remove('hidden', 'kpi-collapsed');
+        body.classList.add('kpi-open');
+        body.style.display = '';
+    }
+    const wrap = $('#kpiMoreWrap');
+    if (wrap) wrap.classList.add('hidden');
+    const btn = $('#kpiMoreToggle');
+    if (btn) btn.style.display = 'none';
+}
+window.setupKpiCollapse = setupKpiCollapse;
+
 function setupBillPage(refresh) {
     if ($('#billDate') && !$('#billDate').value) $('#billDate').value = isoToday();
     const sel = $('#billPatientSelect');
+    const uniqueRows = () => (typeof billUniquePatients === 'function' ? billUniquePatients() : caseRows());
     if (sel && (refresh || sel.options.length <= 1)) {
-        const rows = caseRows().slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-        sel.innerHTML = '<option value="">— Select patient —</option>' + rows.slice(0, 800).map(p =>
-            `<option value="${p.id}">#${permanentCaseNo(p)} — ${esc(p.title)} ${esc(p.name)} (${esc(p.mobile || '')})</option>`
+        const rows = uniqueRows().slice(0, 1000);
+        sel.innerHTML = '<option value="">— Select patient —</option>' + rows.map((p, i) =>
+            `<option value="${p.id}">${i + 1}. #${permanentCaseNo(p)} — ${esc(p.title)} ${esc(p.name)} (${esc(p.mobile || '')})</option>`
         ).join('');
     }
     const billSearchEl = $('#billPatientSearch');
     const results = $('#billPatientResults');
     if (billSearchEl && !billSearchEl._billBound) {
         billSearchEl._billBound = true;
+        const pickPatient = (id) => {
+            if (sel) sel.value = id;
+            fillBillFromPatient(id);
+            const p = active(DB.patients).find(x => x.id === id);
+            if (p) billSearchEl.value = `${p.title || ''} ${p.name || ''}`.trim();
+            results?.classList.add('hidden');
+        };
         const runSearch = () => {
-            const q = (billSearchEl.value || '').trim().toLowerCase();
             if (!results) return;
-            if (!q) {
-                results.classList.add('hidden');
-                results.innerHTML = '';
-                return;
+            const q = (billSearchEl.value || '').trim().toLowerCase();
+            let rows = uniqueRows();
+            if (q) {
+                rows = rows.filter(p => {
+                    const blob = `${permanentCaseNo(p)} ${p.caseNo || ''} ${p.title || ''} ${p.name || ''} ${p.mobile || ''}`.toLowerCase();
+                    return blob.includes(q);
+                });
             }
-            const rows = caseRows().filter(p => {
-                const blob = `${permanentCaseNo(p)} ${p.caseNo || ''} ${p.title || ''} ${p.name || ''} ${p.mobile || ''}`.toLowerCase();
-                return blob.includes(q);
-            }).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).slice(0, 25);
+            rows = rows.slice(0, 40);
             if (!rows.length) {
                 results.innerHTML = `<div class="billSearchEmpty">No patient match</div>`;
                 results.classList.remove('hidden');
                 return;
             }
-            results.innerHTML = rows.map(p =>
+            results.innerHTML = rows.map((p, i) =>
                 `<button type="button" class="billSearchItem" data-pid="${p.id}">
+                   <span class="billSrNum">${i + 1}</span>
                    <b>#${permanentCaseNo(p)}</b> ${esc(p.title)} ${esc(p.name)}
                    <span class="mini">${esc(p.mobile || '')}</span>
                  </button>`
             ).join('');
             results.classList.remove('hidden');
             results.querySelectorAll('[data-pid]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const id = btn.getAttribute('data-pid');
-                    if (sel) sel.value = id;
-                    fillBillFromPatient(id);
-                    const p = active(DB.patients).find(x => x.id === id);
-                    if (p) billSearchEl.value = `${p.title || ''} ${p.name || ''}`.trim();
-                    results.classList.add('hidden');
-                });
+                btn.addEventListener('click', () => pickPatient(btn.getAttribute('data-pid')));
             });
         };
+        billSearchEl.placeholder = 'Search name / mobile / case — last case on top…';
         billSearchEl.addEventListener('input', runSearch);
         billSearchEl.addEventListener('focus', runSearch);
         document.addEventListener('click', (e) => {
@@ -4815,7 +5882,7 @@ function setupBillPage(refresh) {
             if (!billSearchEl.contains(e.target) && !results.contains(e.target)) results.classList.add('hidden');
         });
         sel?.addEventListener('change', () => fillBillFromPatient(sel.value));
-        const refreshIds = ['billIncConsult','billIncMedicine','billIncRenewal','billIncCourier','billIncMedNames','billConsultAmt','billMedicineAmt','billRenewalAmt','billCourierAmt','billPatientName','billDate','billMedNames'];
+        const refreshIds = ['billIncConsult','billIncMedicine','billIncRenewal','billIncCourier','billIncMedNames','billConsultAmt','billMedicineAmt','billRenewalAmt','billCourierAmt','billPatientName','billDate','billMedNames','billSkipHeader'];
         refreshIds.forEach(id => {
             const el = $('#' + id);
             if (!el) return;
@@ -4839,12 +5906,14 @@ function setupBillPage(refresh) {
 function fillBillFromPatient(id) {
     const p = active(DB.patients).find(x => x.id === id);
     if (!p) return;
+    const family = (typeof caseFamily === 'function' ? caseFamily(p) : [p]);
+    const latest = family.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0] || p;
     if ($('#billPatientName')) $('#billPatientName').value = `${p.title || ''} ${p.name || ''}`.trim();
     if ($('#billCaseNo')) $('#billCaseNo').value = permanentCaseNo(p);
-    if ($('#billConsultAmt')) $('#billConsultAmt').value = Number(p.consultation || 0);
-    if ($('#billMedicineAmt')) $('#billMedicineAmt').value = Number(p.medicine || 0);
-    if ($('#billRenewalAmt')) $('#billRenewalAmt').value = Number(p.renewal || 0);
-    if ($('#billDate') && p.date) $('#billDate').value = p.date;
+    if ($('#billConsultAmt')) $('#billConsultAmt').value = Number(latest.consultation || 0);
+    if ($('#billMedicineAmt')) $('#billMedicineAmt').value = Number(latest.medicine || 0);
+    if ($('#billRenewalAmt')) $('#billRenewalAmt').value = Number(latest.renewal || 0);
+    if ($('#billDate')) $('#billDate').value = latest.date || p.date || isoToday();
     renderBillPreview();
 }
 
@@ -4858,13 +5927,14 @@ function billLineItems() {
 }
 
 function buildBillHtml(mode) {
-    const name = ($('#billPatientName')?.value || '').trim() || '—';
-    const caseNo = ($('#billCaseNo')?.value || '').trim() || '—';
+    const name = ($('#billPatientName')?.value || '').trim() || '';
+    const caseNo = ($('#billCaseNo')?.value || '').trim() || '';
     const dateStr = fmtDate($('#billDate')?.value || isoToday());
     const items = billLineItems();
     const total = items.reduce((a, x) => a + Number(x.amount || 0), 0);
     const showMedNames = !!$('#billIncMedNames')?.checked;
     const medNames = ($('#billMedNames')?.value || '').trim();
+    const skipHeader = !!$('#billSkipHeader')?.checked || mode === 'letterhead';
     let sr = 0;
     const lines = items.map((x) => {
         sr += 1;
@@ -4874,28 +5944,47 @@ function buildBillHtml(mode) {
         }
         return row;
     }).join('') || `<tr><td colspan="3" class="mini">No fee lines selected</td></tr>`;
-    const medNamesHtml = '';
-    const header = mode === 'letterhead' ? '' : `
-      <div class="billHeader">
-        <div class="billLogoWrap"><img src="clinic-logo-mark.png" alt="" class="billLogo" onerror="this.style.display='none'"></div>
-        <div class="billClinicBlock">
-          <div class="billClinicName">ANAND HOMOEOPATHY</div>
-          <div class="billClinicSub">MULTISPECIALITY CLINIC</div>
+
+    // High-Speed Text-Based Header (Zero Bandwidth — no image files)
+    const header = skipHeader ? '' : `
+      <div class="billPremHeader">
+        <div class="billPremLogoWrap" style="text-align:center; padding:8px 8px 4px;">
+          <img src="clinic-logo.png" alt="ANAND Homoeopathy Multi Speciality Clinic" class="billPremLogo" width="280" height="84" style="max-width:100%;height:auto;">
         </div>
+        <div class="billTextHeader" style="text-align:center; padding:4px 16px 12px; border-bottom:3px solid #1a4f8b; margin-bottom:15px; font-family:Arial, sans-serif;">
+          <div style="font-size:12px; color:#64748b; margin-top:2px;">
+            FF-01, Rameshwar Residency, Near Ghuma Bus Stand, Ghuma, Ahmedabad, Gujarat
+          </div>
+        </div>
+        <div class="billPremDocs">
+          <div class="billPremDoc">
+            <div class="billPremDocName">DR. ANAND MAKADIYA <span class="billPremDeg">(MD. BHMS)</span></div>
+            <div class="billPremDocRole">(HOMOEOPATHIC CONSULTANT)</div>
+            <div class="billPremDocReg">Registration No. G-12659</div>
+            <div class="billPremMob">Appointment mob: 9687879790</div>
+          </div>
+          <div class="billPremDoc billPremDocRight">
+            <div class="billPremDocName">DR. SUNITA MAKADIYA <span class="billPremDeg">(MD. BHMS)</span></div>
+            <div class="billPremDocRole">(HOMOEOPATHIC CONSULTANT)</div>
+            <div class="billPremDocReg">Registration No. G-12661</div>
+          </div>
+        </div>
+        <div class="billPremRule"></div>
       </div>`;
+
     return `
-    <div class="billPrintRoot ${mode === 'letterhead' ? 'billLetterheadMode' : 'billFullMode'}">
+    <div class="billPrintRoot ${skipHeader ? 'billLetterheadMode' : 'billFullMode'}">
       ${header}
-      <div class="billMeta">
-        <div><span class="billMetaL">Name:</span> <b>${esc(name)}</b></div>
-        <div><span class="billMetaL">Case No.:</span> <b>${esc(caseNo)}</b></div>
-        <div><span class="billMetaL">Date:</span> <b>${dateStr}</b></div>
+      <div class="billMeta billMetaOnPad">
+        <div class="billMetaName"><span class="billMetaL">Name :</span> <b>${esc(name || '—')}</b></div>
+        <div class="billMetaDate"><span class="billMetaL">Date :</span> <b>${dateStr}</b></div>
       </div>
-      <table class="billLines"><colgroup><col class="colSr"><col class="colPart"><col class="colAmt"></colgroup><thead><tr><th class="billSr">Sr</th><th class="billLabel">Particulars</th><th class="billAmtCell">Amount</th></tr></thead>
+      ${caseNo ? `<div class="billCaseLine"><span class="billMetaL">Case No.:</span> <b>${esc(caseNo)}</b></div>` : ''}
+      <table class="billLines"><colgroup><col class="colSr"><col class="colPart"><col class="colAmt"></colgroup>
+        <thead><tr><th class="billSr">Sr</th><th class="billLabel">Particulars</th><th class="billAmtCell">Amount</th></tr></thead>
         <tbody>${lines}</tbody>
         <tfoot><tr><td class="billSr"></td><td class="billLabel">Total</td><td class="billAmtCell">${money(total)}</td></tr></tfoot>
       </table>
-      ${medNamesHtml}
       <div class="billStamp">
         <div class="stampRing">
           <div class="stampName">Dr. Anand Makadiya</div>
@@ -4903,9 +5992,15 @@ function buildBillHtml(mode) {
           <div class="stampReg">Reg No. G-12659</div>
         </div>
       </div>
-      <div class="billFooter">
-        <div class="billFooterAddr">Address: FF-01, Rameshwar Residency, Near Ghuma bus stand, Bopal-Ghuma road. Ghuma, Ahmedabad -380058</div>
-        <div class="billFooterAppt">Appointment no: 9687879790</div>
+      <div class="billPremFooter">
+        <div class="billFooterTime">Time : 10 am to 1 pm &nbsp;|&nbsp; 5 pm to 8:30 pm &nbsp;|&nbsp; Monday to Saturday</div>
+        <div class="billFooterAddr">FF-01, Rameshwar Residency, Nr. Ghuma Bus stand, Ghuma, Ahmedabad-380058.</div>
+        <div class="billGoogleLine">
+          <span class="billGoogleIcon" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          </span>
+          anand homoeopathy multispeciality clinic
+        </div>
       </div>
     </div>`;
 }
@@ -4942,40 +6037,55 @@ function printBill(mode) {
         }
         w.document.write(`<!doctype html><html><head><title>Bill</title>
     <style>
-      @page { margin: 12mm; }
-      body { font-family: Georgia, 'Times New Roman', serif; color: #16304d; margin: 0; padding: 12px; }
-      .billLetterheadMode .billHeader { display: none !important; }
-      .billHeader { display:flex; align-items:center; gap:14px; border-bottom:2px solid #1a5f4a; padding-bottom:12px; margin-bottom:16px; }
-      .billLogo { max-height:64px; }
-      .billClinicName { font-size:22px; font-weight:800; letter-spacing:.06em; color:#1a5f4a; }
-      .billClinicSub { font-size:13px; font-weight:700; color:#2a7a62; letter-spacing:.12em; margin-top:2px; }
-      .billMeta { display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; margin:16px 0; font-size:15px; }
-      .billMetaL { color:#5a6a7a; }
-      .billLines { width:100%; border-collapse:collapse; margin-top:8px; table-layout:fixed; }
-      .billLines col.colSr { width:48px; }
-      .billLines col.colPart { width:auto; }
-      .billLines col.colAmt { width:120px; }
-      .billLines th, .billLines td { padding:10px 8px; border-bottom:1px solid #d0d8e0; vertical-align:top; }
-      .billLines th.billSr, .billLines td.billSr { width:48px; text-align:center; color:#5a6a7a; }
-      .billLines th.billLabel, .billLines td.billLabel { text-align:left; }
-      .billLines th.billAmtCell, .billLines td.billAmtCell { text-align:right; white-space:nowrap; }
-      .billLines tfoot td { font-weight:800; border-top:2px solid #16304d; font-size:16px; }
-      .billMedNames, .billMedNameRow .billMedNames { font-size:11px; color:#5a6a7a; font-style:italic; padding-top:2px!important; padding-bottom:8px!important; border-bottom:1px solid #e8eef4; }
-      .billMedNameRow td { border-bottom:1px solid #e8eef4; }
-      .billStamp { margin-top:36px; display:flex; justify-content:flex-end; }
+      @page { margin: 10mm; size: A4; }
+      * { box-sizing: border-box; }
+      body { font-family: Georgia, 'Times New Roman', serif; color: #16304d; margin: 0; padding: 8px; background: #fff; }
+      .billPrintRoot { max-width: 190mm; margin: 0 auto; }
+      .billLetterheadMode .billPremHeader { display: none !important; }
+      .billPremHeader { text-align: center; margin-bottom: 10px; }
+      .billPremLogoWrap { width: 100%; background: transparent; }
+      .billPremLogo {
+        display: block; width: 100%; max-width: 100%; height: auto;
+        max-height: 90px; object-fit: contain; object-position: center;
+        background: transparent; margin: 0 auto;
+      }
+      .billPremDocs { display: flex; justify-content: space-between; gap: 16px; margin-top: 10px; text-align: left; }
+      .billPremDoc { flex: 1; font-size: 11px; line-height: 1.4; }
+      .billPremDocRight { text-align: right; }
+      .billPremDocName { font-weight: 700; font-size: 12px; color: #2d5a3d; }
+      .billPremDeg { color: #c45c26; font-weight: 600; }
+      .billPremDocRole, .billPremDocReg, .billPremMob { font-size: 10px; color: #555; }
+      .billPremRule { height: 2px; background: linear-gradient(90deg, #2d5a3d, #c45c26, #1857b7); margin: 10px 0 6px; border-radius: 2px; }
+      .billMetaOnPad { display: flex; justify-content: space-between; gap: 16px; margin: 12px 0; font-size: 15px; }
+      .billCaseLine { margin-bottom: 10px; font-size: 14px; }
+      .billMetaL { color: #5a6a7a; }
+      .billLines { width: 100%; border-collapse: collapse; margin-top: 6px; table-layout: fixed; }
+      .billLines col.colSr { width: 48px; }
+      .billLines col.colPart { width: auto; }
+      .billLines col.colAmt { width: 120px; }
+      .billLines th, .billLines td { padding: 9px 8px; border-bottom: 1px solid #d0d8e0; vertical-align: top; }
+      .billLines th.billSr, .billLines td.billSr { text-align: center; color: #5a6a7a; }
+      .billLines th.billLabel, .billLines td.billLabel { text-align: left; }
+      .billLines th.billAmtCell, .billLines td.billAmtCell { text-align: right; white-space: nowrap; }
+      .billLines tfoot td { font-weight: 800; border-top: 2px solid #16304d; font-size: 16px; }
+      .billMedNames { font-size: 11px; color: #5a6a7a; font-style: italic; }
+      .billStamp { margin-top: 28px; display: flex; justify-content: flex-end; }
       .stampRing {
-        width:150px; height:150px; border-radius:50%;
-        border:3px double #1a4a9a; color:#1a4a9a;
-        display:flex; flex-direction:column; align-items:center; justify-content:center;
-        text-align:center; transform:rotate(-8deg);
-        box-shadow: inset 0 0 0 1px #1a4a9a; background:rgba(26,74,154,.04);
+        width: 140px; height: 140px; border-radius: 50%;
+        border: 3px double #1a4a9a; color: #1a4a9a;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        text-align: center; transform: rotate(-8deg);
+        box-shadow: inset 0 0 0 1px #1a4a9a; background: #fff;
         font-family: 'Segoe UI', system-ui, sans-serif;
       }
-      .stampName { font-weight:800; font-size:13px; }
-      .stampDeg { font-size:11px; margin-top:4px; }
-      .stampReg { font-size:11px; margin-top:4px; font-weight:700; }
-      .billFooter { margin-top:28px; padding-top:14px; border-top:1px solid #c5d4e0; text-align:center; font-size:12px; color:#3a4a5a; line-height:1.55; }
-      .billFooterAppt { margin-top:6px; font-weight:700; color:#1a5f4a; }
+      .stampName { font-weight: 800; font-size: 12px; }
+      .stampDeg, .stampReg { font-size: 11px; margin-top: 3px; }
+      .stampReg { font-weight: 700; }
+      .billPremFooter { margin-top: 22px; text-align: center; padding-top: 10px; border-top: 1px solid #c5d4e0; }
+      .billFooterTime { font-weight: 700; color: #c45c26; font-size: 12px; }
+      .billFooterAddr { margin-top: 4px; font-size: 11px; color: #3a4a5a; }
+      .billGoogleLine { margin-top: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; color: #3a4a5a; }
+      .billGoogleIcon { display: inline-flex; }
     </style></head><body>${html}<script>
       window.onload=function(){
         try { window.print(); }
@@ -5009,3 +6119,549 @@ window.openReport = openReport;
 window.closeModal = closeModal;
 window.forceRefresh = forceRefresh;
 window.addEventListener('DOMContentLoaded', setup);
+
+/** Mobile: sidebar open state for dim overlay (UI only). */
+function syncSideOpenClass() {
+    try {
+        const side = document.getElementById('side');
+        if (!side) return;
+        document.body.classList.toggle('side-open', side.classList.contains('open'));
+    } catch (e) {}
+}
+(function enhanceMobileNav() {
+    const side = document.getElementById('side');
+    const btn = document.getElementById('toggleSide');
+    if (!side) return;
+    const obs = new MutationObserver(syncSideOpenClass);
+    try { obs.observe(side, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth >= 900) return;
+        if (!side.classList.contains('open')) return;
+        if (side.contains(e.target)) return;
+        if (btn && (btn === e.target || btn.contains(e.target))) return;
+        side.classList.remove('open');
+        document.body.classList.remove('side-open');
+        syncSideOpenClass();
+    });
+    // Resize: clean mobile/desktop classes
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 900) {
+            side.classList.remove('open');
+            document.body.classList.remove('side-open');
+        } else {
+            side.classList.remove('collapsed');
+            document.querySelector('.main')?.classList.remove('sidebar-collapsed');
+        }
+        syncSideOpenClass();
+    });
+    syncSideOpenClass();
+})();
+// Instant sync trigger on page load
+window.addEventListener('DOMContentLoaded', () => {
+    if (typeof syncWithServer === 'function') {
+        syncWithServer();
+    } else if (typeof doSync === 'function') {
+        doSync();
+    }
+});
+// Exact Original Brand Image, Search Bar & Shortcut Restoration
+try {
+  function applyOriginalTheme() {
+    // 1. Sidebar: Direct image jisme Logo aur Clinic Name sath me he
+    var bBox = document.querySelector('.sidebar-header') || document.querySelector('.sidebar-brand') || document.querySelector('aside > div:first-child');
+    if (bBox) {
+      bBox.removeAttribute('style');
+      bBox.style.cssText = "display: flex !important; align-items: center !important; padding: 12px 14px !important; background: transparent !important; width: 100% !important; box-sizing: border-box !important;";
+      bBox.innerHTML = '<img src="clinic-logo-light.png" alt="ANAND Homoeopathy Multi Speciality Clinic" style="max-height: 52px; width: auto; max-width: 100%; object-fit: contain; background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important;">';
+    }
+
+    // 2. Search Bar Icon
+    var sInput = document.querySelector('input[placeholder*="Search patient"]');
+    if (sInput && sInput.parentElement) {
+      var p = sInput.parentElement;
+      p.style.position = 'relative';
+      sInput.style.paddingLeft = '36px';
+      if (!p.querySelector('.orig-search-ic')) {
+        var ic = document.createElement('span');
+        ic.className = 'orig-search-ic';
+        ic.style.cssText = 'position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9ca3af; font-size: 13px; display: flex; align-items: center;';
+        ic.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>';
+        p.insertBefore(ic, sInput);
+      }
+    }
+
+    // 3. Desktop / Mobile App Shortcut & Favicon
+    if (!document.querySelector('link[rel="manifest"]')) {
+      var mf = document.createElement('link');
+      mf.rel = 'manifest';
+      mf.href = 'office-manifest.json';
+      document.head.appendChild(mf);
+    }
+    if (!document.querySelector('link[rel="icon"]')) {
+      var fav = document.createElement('link');
+      fav.rel = 'icon';
+      fav.type = 'image/png';
+      fav.href = 'clinic-logo.png';
+      document.head.appendChild(fav);
+    }
+  }
+
+  window.addEventListener('load', applyOriginalTheme);
+  applyOriginalTheme();
+  setTimeout(applyOriginalTheme, 400);
+} catch (e) {
+  console.error(e);
+}
+// Mobile Topbar Action Icons (Reconnect & Refresh) Direct Display
+(function showActionButtons() {
+  function renderButtons() {
+    var rec = document.getElementById('reconnectBtn');
+    var ref = document.getElementById('refreshBtn');
+    var topActions = document.querySelector('.topbarActions');
+
+    if (!rec || !ref) return;
+
+    // Parent container ko screen par lana
+    if (topActions) {
+      topActions.style.setProperty('display', 'flex', 'important');
+      topActions.style.setProperty('visibility', 'visible', 'important');
+      topActions.style.setProperty('justify-content', 'flex-end', 'important');
+      topActions.style.setProperty('align-items', 'center', 'important');
+      topActions.style.setProperty('gap', '8px', 'important');
+      topActions.style.setProperty('margin', '6px 14px 6px auto', 'important');
+      topActions.style.setProperty('width', 'auto', 'important');
+      topActions.style.setProperty('height', 'auto', 'important');
+      topActions.style.setProperty('opacity', '1', 'important');
+    }
+
+    // Reconnect Button styling
+    rec.style.setProperty('display', 'inline-flex', 'important');
+    rec.style.setProperty('visibility', 'visible', 'important');
+    rec.style.setProperty('opacity', '1', 'important');
+    rec.style.setProperty('height', '26px', 'important');
+    rec.style.setProperty('padding', '0 10px', 'important');
+    rec.style.setProperty('font-size', '11px', 'important');
+    rec.style.setProperty('font-weight', 'bold', 'important');
+    rec.style.setProperty('border-radius', '13px', 'important');
+    rec.style.setProperty('background', '#3b2219', 'important');
+    rec.style.setProperty('color', '#ffffff', 'important');
+    rec.style.setProperty('border', '1px solid rgba(255,255,255,0.2)', 'important');
+    rec.innerText = "⚡ Reconnect";
+
+    // Refresh Button styling
+    ref.style.setProperty('display', 'inline-flex', 'important');
+    ref.style.setProperty('visibility', 'visible', 'important');
+    ref.style.setProperty('opacity', '1', 'important');
+    ref.style.setProperty('height', '26px', 'important');
+    ref.style.setProperty('padding', '0 10px', 'important');
+    ref.style.setProperty('font-size', '11px', 'important');
+    ref.style.setProperty('font-weight', 'bold', 'important');
+    ref.style.setProperty('border-radius', '13px', 'important');
+    ref.style.setProperty('background', '#3b2219', 'important');
+    ref.style.setProperty('color', '#ffffff', 'important');
+    ref.style.setProperty('border', '1px solid rgba(255,255,255,0.2)', 'important');
+    ref.innerText = "⟳ Refresh";
+  }
+
+  document.addEventListener('DOMContentLoaded', renderButtons);
+  window.addEventListener('load', renderButtons);
+  setInterval(renderButtons, 1000);
+})();
+
+/* ==========================================================
+   ANNUAL MULTI-YEAR GROWTH & YEARLY PAYMENT GROWTH (FIXED)
+   ========================================================== */
+
+function yoyPctLabel(curr, prev) {
+    curr = Number(curr) || 0;
+    prev = Number(prev) || 0;
+    if (prev === 0) return curr > 0 ? '<span class="ygPct ygNew">New</span>' : '<span class="ygPct">—</span>';
+    const p = ((curr - prev) / prev) * 100;
+    const cls = p > 0 ? 'ygUp' : (p < 0 ? 'ygDown' : 'ygFlat');
+    const sign = p > 0 ? '+' : '';
+    return '<span class="ygPct ' + cls + '">' + sign + p.toFixed(1) + '%</span>';
+}
+
+function countCasesByYear(year) {
+    const y = String(year);
+    let n = 0, f = 0, r = 0;
+    try {
+        active(DB.patients).forEach(p => {
+            if (!p) return;
+            const d = String(p.date || '');
+            if (d.slice(0, 4) !== y) return;
+            const ct = String(p.caseType || '').toLowerCase();
+            const renAmt = Number(p.renewal || 0);
+            if (ct === 'new') n++;
+            else if (renAmt > 0 || ct === 'renewal') r++;
+            else f++;
+        });
+    } catch (e) {}
+    return { newC: n, follow: f, renewal: r, total: n + f + r };
+}
+
+function getGrowthYearsDesc() {
+    const years = new Set();
+    try {
+        active(DB.payments).forEach(x => {
+            const yy = String(x.date || '').slice(0, 4);
+            if (/^\d{4}$/.test(yy)) years.add(yy);
+        });
+        active(DB.patients).forEach(p => {
+            const yy = String(p.date || '').slice(0, 4);
+            if (/^\d{4}$/.test(yy)) years.add(yy);
+        });
+    } catch (e) {}
+    const cy = new Date().getFullYear();
+    for (let y = 2019; y <= cy; y++) years.add(String(y));
+    return Array.from(years).filter(y => /^\d{4}$/.test(y)).sort((a, b) => Number(b) - Number(a));
+}
+
+function ygBarGroup(items, maxVal) {
+    maxVal = Math.max(maxVal, 1);
+    const h = 120;
+    return '<div style="display:flex;align-items:flex-end;gap:3px;height:' + h + 'px">' + items.map(it => {
+        const pct = Math.max(2, Math.round((Number(it.v) || 0) / maxVal * h));
+        return '<div title="' + (it.title || '') + '" style="width:12px;height:' + pct + 'px;background:' + it.color + ';border-radius:4px 4px 0 0;min-height:2px"></div>';
+    }).join('') + '</div>';
+}
+
+function renderYearlyGrowth() {
+    const caseBody = document.getElementById('ygCaseTableBody');
+    const incBody = document.getElementById('ygIncomeTableBody');
+    const caseChart = document.getElementById('ygCaseChart');
+    const incChart = document.getElementById('ygIncomeChart');
+    if (!caseBody && !incBody) return;
+
+    let years = [];
+    try { years = getGrowthYearsDesc(); } catch (e) { years = []; }
+    years = years.filter(yy => {
+        const c = countCasesByYear(yy);
+        let t = 0, med = 0;
+        try {
+            t = paymentAmountBy(yy, null, null, 'total') || 0;
+            med = feeCategoryAmountBy(yy, null, null, 'medicine') || 0;
+        } catch (e2) {}
+        return (c.total > 0) || (t > 0) || (med > 0);
+    });
+
+    const rows = years.map(yy => {
+        const c = countCasesByYear(yy);
+        let nRs = 0, rRs = 0, med = 0, tot = 0;
+        try {
+            nRs = paymentAmountBy(yy, null, null, 'new');
+            rRs = paymentAmountBy(yy, null, null, 'renewal');
+            med = feeCategoryAmountBy(yy, null, null, 'medicine');
+            tot = paymentAmountBy(yy, null, null, 'total');
+        } catch (e) {}
+        return { yy, c, nRs, rRs, med, tot };
+    });
+    const byY = {};
+    rows.forEach(r => { byY[r.yy] = r; });
+    function prevOf(yy) { return byY[String(Number(yy) - 1)] || null; }
+
+    if (caseBody) {
+        caseBody.innerHTML = rows.map(r => {
+            const p = prevOf(r.yy);
+            return '<tr><td><b>' + r.yy + '</b></td>' +
+                '<td>' + r.c.newC + '</td><td>' + yoyPctLabel(r.c.newC, p ? p.c.newC : 0) + '</td>' +
+                '<td>' + r.c.follow + '</td><td>' + yoyPctLabel(r.c.follow, p ? p.c.follow : 0) + '</td>' +
+                '<td>' + r.c.renewal + '</td><td>' + yoyPctLabel(r.c.renewal, p ? p.c.renewal : 0) + '</td>' +
+                '<td><b>' + r.c.total + '</b></td><td>' + yoyPctLabel(r.c.total, p ? p.c.total : 0) + '</td></tr>';
+        }).join('') || '<tr><td colspan="9">No case data</td></tr>';
+    }
+    if (incBody) {
+        incBody.innerHTML = rows.map(r => {
+            const p = prevOf(r.yy);
+            return '<tr><td><b>' + r.yy + '</b></td>' +
+                '<td>' + money(r.nRs) + '</td><td>' + yoyPctLabel(r.nRs, p ? p.nRs : 0) + '</td>' +
+                '<td>' + money(r.med) + '</td><td>' + yoyPctLabel(r.med, p ? p.med : 0) + '</td>' +
+                '<td>' + money(r.rRs) + '</td><td>' + yoyPctLabel(r.rRs, p ? p.rRs : 0) + '</td>' +
+                '<td><b>' + money(r.tot) + '</b></td><td>' + yoyPctLabel(r.tot, p ? p.tot : 0) + '</td></tr>';
+        }).join('') || '<tr><td colspan="9">No income data</td></tr>';
+    }
+    const asc = rows.slice().reverse();
+    if (caseChart) {
+        let maxC = 1;
+        asc.forEach(r => { maxC = Math.max(maxC, r.c.newC, r.c.follow, r.c.renewal); });
+        caseChart.innerHTML = asc.map(r => {
+            const g = ygBarGroup([
+                { v: r.c.newC, color: '#10b981', title: r.yy + ' New: ' + r.c.newC },
+                { v: r.c.follow, color: '#3b82f6', title: r.yy + ' Follow-up: ' + r.c.follow },
+                { v: r.c.renewal, color: '#f59e0b', title: r.yy + ' Renewal: ' + r.c.renewal }
+            ], maxC);
+            return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:44px;flex-shrink:0">' + g +
+                '<span style="font-size:10px;color:#64748b">' + r.yy + '</span></div>';
+        }).join('') || '<span class="mini">No data</span>';
+    }
+    if (incChart) {
+        let maxI = 1;
+        asc.forEach(r => { maxI = Math.max(maxI, r.nRs, r.med, r.rRs); });
+        incChart.innerHTML = asc.map(r => {
+            const g = ygBarGroup([
+                { v: r.nRs, color: '#6366f1', title: r.yy + ' New' },
+                { v: r.med, color: '#0ea5e9', title: r.yy + ' Medicine' },
+                { v: r.rRs, color: '#f97316', title: r.yy + ' Renewal' }
+            ], maxI);
+            return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:44px;flex-shrink:0">' + g +
+                '<span style="font-size:10px;color:#64748b">' + r.yy + '</span></div>';
+        }).join('') || '<span class="mini">No data</span>';
+    }
+}
+
+function getMultiYearDataSafe() {
+  const getFYKey = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(String(dateStr).slice(0, 10) + 'T12:00:00');
+    if (isNaN(d.getTime())) return null;
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    return m >= 4 ? (y + '-' + String(y + 1).slice(-2)) : ((y - 1) + '-' + String(y).slice(-2));
+  };
+
+  const fyMap = {};
+  const ensureFY = (fy) => {
+    if (!fy) return null;
+    if (!fyMap[fy]) {
+      fyMap[fy] = {
+        fy: fy,
+        label: 'FY ' + fy,
+        cases: { new: 0, followup: 0, renewal: 0, total: 0 },
+        income: { new: 0, renewal: 0, medicine: 0, total: 0 }
+      };
+    }
+    return fyMap[fy];
+  };
+
+  try {
+    const pats = (typeof active === 'function' ? active(DB.patients) : (DB.patients || [])) || [];
+    pats.forEach(p => {
+      if (!p || p._deleted) return;
+      const d = p.date || p.createdAt || p.createdDate || '';
+      const target = ensureFY(getFYKey(d));
+      if (!target) return;
+      const t = String(p.caseType || '').toLowerCase();
+      const renAmt = Number(p.renewal || 0);
+      if (t === 'new') target.cases.new++;
+      else if (renAmt > 0 || t === 'renewal') target.cases.renewal++;
+      else target.cases.followup++;
+      target.cases.total++;
+    });
+
+    const pays = (typeof active === 'function' ? active(DB.payments) : (DB.payments || [])) || [];
+    pays.forEach(pay => {
+      if (!pay || pay._deleted) return;
+      const d = pay.date || pay.createdAt || '';
+      const target = ensureFY(getFYKey(d));
+      if (!target) return;
+      const amt = Number(pay.amount || 0);
+      if (!(amt > 0)) return;
+      const cat = String(pay.feeCategory || pay.caseType || '').toLowerCase();
+      if (cat.indexOf('renew') >= 0) target.income.renewal += amt;
+      else if (cat.indexOf('med') >= 0 || cat.indexOf('dispense') >= 0) target.income.medicine += amt;
+      else if (cat.indexOf('new') >= 0) target.income.new += amt;
+      else target.income.new += amt;
+      target.income.total += amt;
+    });
+  } catch (err) {
+    console.error('Error aggregating multi-year data:', err);
+  }
+
+  const sortedKeys = Object.keys(fyMap).sort();
+  return sortedKeys.map(k => fyMap[k]);
+}
+
+window.closeAnnualGrowthModal = function() {
+  const m1 = document.getElementById('annualGrowthModal');
+  if (m1) m1.style.display = 'none';
+  const m2 = document.getElementById('multiYearGrowthModal');
+  if (m2) try { m2.remove(); } catch (e) {}
+};
+
+window.openMultiYearGrowthModal = function() {
+  let modal = document.getElementById('multiYearGrowthModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'multiYearGrowthModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.75);display:flex;justify-content:center;align-items:center;padding:8px;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    document.body.appendChild(modal);
+  }
+
+  const data = getMultiYearDataSafe();
+  if (!data.length) {
+    modal.innerHTML = '<div style="background:#fff;padding:24px;border-radius:12px;max-width:320px;text-align:center"><p>No historical data available yet.</p><button type="button" onclick="closeAnnualGrowthModal()" style="padding:8px 16px;border-radius:6px;background:#0284c7;color:#fff;border:none;font-weight:bold;cursor:pointer">Close</button></div>';
+    return;
+  }
+
+  const maxCases = Math.max.apply(null, data.map(d => Math.max(d.cases.new, d.cases.followup, d.cases.renewal, 1)));
+  const maxIncome = Math.max.apply(null, data.map(d => Math.max(d.income.total, 1)));
+
+  let caseBars = data.map(d => {
+    return '<div style="flex:1;min-width:60px;text-align:center"><div style="display:flex;justify-content:center;align-items:flex-end;height:100px;gap:4px">' +
+      '<div title="New: ' + d.cases.new + '" style="background:#10b981;width:12px;height:' + Math.max((d.cases.new / maxCases) * 100, 4) + '%;border-radius:3px 3px 0 0"></div>' +
+      '<div title="Follow-up: ' + d.cases.followup + '" style="background:#3b82f6;width:12px;height:' + Math.max((d.cases.followup / maxCases) * 100, 4) + '%;border-radius:3px 3px 0 0"></div>' +
+      '<div title="Renewal: ' + d.cases.renewal + '" style="background:#f59e0b;width:12px;height:' + Math.max((d.cases.renewal / maxCases) * 100, 4) + '%;border-radius:3px 3px 0 0"></div>' +
+      '</div><div style="font-size:11px;font-weight:700;margin-top:6px;color:#1e293b">' + d.fy + '</div></div>';
+  }).join('');
+
+  let incomeBars = data.map(d => {
+    const h = (d.income.total / maxIncome) * 100;
+    const pNew = d.income.total ? (d.income.new / d.income.total) * 100 : 0;
+    const pRen = d.income.total ? (d.income.renewal / d.income.total) * 100 : 0;
+    const pMed = d.income.total ? (d.income.medicine / d.income.total) * 100 : 0;
+    return '<div style="flex:1;min-width:60px;text-align:center"><div style="display:flex;justify-content:center;align-items:flex-end;height:100px">' +
+      '<div style="width:24px;height:' + Math.max(h, 6) + 'px;display:flex;flex-direction:column-reverse;border-radius:4px 4px 0 0;overflow:hidden">' +
+      '<div title="New: ' + d.income.new + '" style="background:#059669;height:' + pNew + '%"></div>' +
+      '<div title="Renewal: ' + d.income.renewal + '" style="background:#d97706;height:' + pRen + '%"></div>' +
+      '<div title="Medicine: ' + d.income.medicine + '" style="background:#0284c7;height:' + pMed + '%"></div>' +
+      '</div></div><div style="font-size:11px;font-weight:700;margin-top:6px;color:#1e293b">' + d.fy + '</div>' +
+      '<div style="font-size:10px;color:#64748b">₹' + Math.round(d.income.total / 1000) + 'k</div></div>';
+  }).join('');
+
+  let tableRows = data.map((row, idx) => {
+    const prev = idx > 0 ? data[idx - 1] : null;
+    let growthBadge = '<span style="color:#94a3b8">—</span>';
+    if (prev && prev.income.total > 0) {
+      const diff = ((row.income.total - prev.income.total) / prev.income.total) * 100;
+      const isPos = diff >= 0;
+      growthBadge = '<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-weight:700;font-size:10px;background:' +
+        (isPos ? '#dcfce7' : '#fee2e2') + ';color:' + (isPos ? '#15803d' : '#b91c1c') + '">' +
+        (isPos ? '▲ +' : '▼ ') + diff.toFixed(1) + '%</span>';
+    }
+    return '<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 10px;font-weight:700">' + row.label + '</td>' +
+      '<td style="padding:8px 6px">' + row.cases.new + '</td>' +
+      '<td style="padding:8px 6px">' + row.cases.followup + '</td>' +
+      '<td style="padding:8px 6px">' + row.cases.renewal + '</td>' +
+      '<td style="padding:8px 8px;color:#0284c7">₹' + Number(row.income.medicine).toLocaleString('en-IN') + '</td>' +
+      '<td style="padding:8px 10px;font-weight:700">₹' + Number(row.income.total).toLocaleString('en-IN') + '</td>' +
+      '<td style="padding:8px 10px">' + growthBadge + '</td></tr>';
+  }).join('');
+
+  modal.innerHTML = '<div style="background:#f8fafc;border-radius:14px;width:100%;max-width:850px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 25px -5px rgba(0,0,0,0.3);font-family:system-ui,sans-serif">' +
+    '<div style="padding:14px 16px;background:#0f172a;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+    '<div><h3 style="margin:0;font-size:16px;font-weight:700">Annual Growth & Comparison</h3>' +
+    '<span style="font-size:11px;opacity:0.8">Patient footfall & revenue by Financial Year</span></div>' +
+    '<button type="button" onclick="closeAnnualGrowthModal()" style="background:#334155;border:none;color:#fff;font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer">×</button></div>' +
+    '<div style="padding:12px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:14px">' +
+    '<div style="background:#fff;padding:14px;border-radius:10px;border:1px solid #e2e8f0">' +
+    '<div style="font-weight:700;font-size:13px;color:#334155;margin-bottom:12px">Patient Footfall Growth</div>' +
+    '<div style="display:flex;justify-content:space-around;align-items:flex-end;min-height:130px;border-bottom:2px solid #e2e8f0;padding-bottom:6px;overflow-x:auto">' + caseBars + '</div>' +
+    '<div style="display:flex;gap:12px;font-size:11px;margin-top:8px;justify-content:center">' +
+    '<span><b style="color:#10b981">■</b> New</span><span><b style="color:#3b82f6">■</b> Follow-up</span><span><b style="color:#f59e0b">■</b> Renewal</span></div></div>' +
+    '<div style="background:#fff;padding:14px;border-radius:10px;border:1px solid #e2e8f0">' +
+    '<div style="font-weight:700;font-size:13px;color:#334155;margin-bottom:12px">Income share (stacked)</div>' +
+    '<div style="display:flex;justify-content:space-around;align-items:flex-end;min-height:130px;border-bottom:2px solid #e2e8f0;padding-bottom:6px;overflow-x:auto">' + incomeBars + '</div>' +
+    '<div style="display:flex;gap:12px;font-size:11px;margin-top:8px;justify-content:center">' +
+    '<span><b style="color:#059669">■</b> New</span><span><b style="color:#d97706">■</b> Renewal</span><span><b style="color:#0284c7">■</b> Medicine</span></div></div>' +
+    '<div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;overflow-x:auto">' +
+    '<table style="width:100%;border-collapse:collapse;font-size:12px;text-align:left;min-width:480px">' +
+    '<thead><tr style="background:#f1f5f9;color:#475569;border-bottom:1px solid #cbd5e1">' +
+    '<th style="padding:8px 10px">FY</th><th style="padding:8px 6px">New</th><th style="padding:8px 6px">Follow</th><th style="padding:8px 6px">Renew</th>' +
+    '<th style="padding:8px 8px">Medicine</th><th style="padding:8px 10px">Total Income</th><th style="padding:8px 10px">YoY Growth</th></tr></thead>' +
+    '<tbody>' + tableRows + '</tbody></table></div></div></div>';
+};
+
+(function attachGrowthButton() {
+  function tryAttach() {
+    if (document.getElementById('btnMultiYearGrowth')) return;
+    const reports = document.getElementById('reports');
+    const hero = reports ? reports.querySelector('.reportHero .actions') || reports.querySelector('.hero .actions') || reports.querySelector('.reportHero') : null;
+    const target = hero || document.querySelector('#reportFyBtnBar') || reports;
+    if (!target) return;
+    const btn = document.createElement('button');
+    btn.id = 'btnMultiYearGrowth';
+    btn.type = 'button';
+    btn.className = 'btn embossed primary';
+    btn.textContent = 'Annual Growth Report';
+    btn.style.margin = '6px 0';
+    btn.onclick = function() { try { openMultiYearGrowthModal(); } catch (e) { console.error(e); } };
+    target.appendChild(btn);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tryAttach);
+  else tryAttach();
+  setTimeout(tryAttach, 1500);
+})();
+
+
+(function wireYearlyGrowthPage() {
+  function showYearlyGrowth() {
+    try {
+      document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+      var pg = document.getElementById('yearlyGrowth');
+      if (pg) pg.classList.add('active');
+      document.querySelectorAll('.navBtn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('[data-page="yearlyGrowth"]').forEach(function(b) { b.classList.add('active'); });
+      try { renderYearlyGrowth(); } catch (e) { console.error(e); }
+      try { if (window.innerWidth < 900) { var side = document.getElementById('side'); if (side) { side.classList.remove('open'); document.body.classList.remove('side-open'); } } } catch (e2) {}
+    } catch (e) { console.error(e); }
+  }
+  document.addEventListener('click', function(ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var btn = t.closest('[data-page="yearlyGrowth"]');
+    if (btn) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      showYearlyGrowth();
+      return;
+    }
+    if (t.id === 'btnOpenFyGrowthPage' || (t.closest && t.closest('#btnOpenFyGrowthPage'))) {
+      try { openMultiYearGrowthModal(); } catch (e) {}
+    }
+  }, true);
+})();
+
+
+(function closeSideOnNavMobile() {
+  function closeSide() {
+    try {
+      if (window.innerWidth >= 900) return;
+      var side = document.getElementById('side');
+      if (!side) return;
+      side.classList.remove('open');
+      document.body.classList.remove('side-open');
+    } catch (e) {}
+  }
+  document.addEventListener('click', function(ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    // Parent with submenu: only expand/collapse, do NOT close sidebar
+    var parent = t.closest('#side .navParent, #side #patientsNavToggle, #side #paymentNavToggle');
+    if (parent) return;
+    // Sub-items or leaf nav: navigate and close sidebar on mobile
+    var nav = t.closest('#side .navSubBtn, #side [data-page], #side [data-pay-view], #side [data-patient-view]');
+    if (!nav) return;
+    if (nav.classList && nav.classList.contains('navParent')) return;
+    setTimeout(closeSide, 40);
+  }, true);
+})();
+
+
+(function deferHeavyPageRender() {
+  document.addEventListener('click', function(ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var btn = t.closest('[data-page], [data-pay-view], [data-patient-view]');
+    if (!btn) return;
+    var page = btn.getAttribute('data-page') || '';
+    var pay = btn.getAttribute('data-pay-view') || '';
+    setTimeout(function() {
+      try {
+        if (page === 'history' || page === 'appointmentHistory' || document.getElementById('history')?.classList.contains('active')) {
+          if ($('#histBody')) renderAppointmentHistory();
+        }
+        if (page === 'medicines' || document.getElementById('medicines')?.classList.contains('active')) {
+          renderMedicines();
+        }
+        if (page === 'payments' || page === 'reports' || pay || document.getElementById('payments')?.classList.contains('active')) {
+          if ($('#payMonthBody') || $('#paymentYearSelect')) {
+            initPaymentYearSelect();
+            renderPaymentSummary();
+            renderExpenses();
+          }
+          if ($('#reportBodyPatients')) { initPatientFilterSelects(); renderPatientReport(); }
+        }
+      } catch (e) { console.warn(e); }
+    }, 50);
+  }, true);
+})();

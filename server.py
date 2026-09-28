@@ -43,17 +43,24 @@ def now() -> str:
 
 
 def merge_lists(a, b, deleted):
+    """Last-write-wins by _updated, but NEVER resurrect tombstoned ids."""
+    deleted = set(deleted or [])
     m = {}
-    for x in a or []:
-        if isinstance(x, dict) and x.get("id"):
-            m[x["id"]] = x
-    for x in b or []:
-        if not isinstance(x, dict) or not x.get("id"):
-            continue
-        old = m.get(x["id"])
-        if old is None or str(x.get("_updated", "")) > str(old.get("_updated", "")):
-            m[x["id"]] = x
-    return [x for x in m.values() if x.get("id") not in deleted]
+    for src in (a or [], b or []):
+        for x in src:
+            if not isinstance(x, dict):
+                continue
+            xid = x.get("id")
+            if not xid:
+                continue
+            if xid in deleted or x.get("_deleted") is True:
+                deleted.add(xid)
+                m.pop(xid, None)
+                continue
+            old = m.get(xid)
+            if old is None or str(x.get("_updated", "")) > str(old.get("_updated", "")):
+                m[xid] = x
+    return [x for x in m.values() if x.get("id") not in deleted and not x.get("_deleted")]
 
 
 def merge_state(local, incoming):
@@ -66,10 +73,15 @@ def merge_state(local, incoming):
     out.setdefault("clinic", {})
     out.setdefault("meta", {})
     deleted = set(out["meta"].get("deleted", []) or []) | set((incoming.get("meta") or {}).get("deleted", []) or [])
+    for src in (out, incoming or {}):
+        for k in ("patients", "payments", "medicines", "expenses"):
+            for x in (src.get(k) or []):
+                if isinstance(x, dict) and x.get("id") and x.get("_deleted") is True:
+                    deleted.add(x["id"])
     for k in ("patients", "payments", "medicines", "expenses"):
-        out[k] = merge_lists(out.get(k, []), incoming.get(k, []), deleted)
+        out[k] = merge_lists(out.get(k, []), (incoming or {}).get(k, []), deleted)
     for k in ("settings", "clinic"):
-        iv = incoming.get(k) or {}
+        iv = (incoming or {}).get(k) or {}
         lv = out.get(k) or {}
         if str(iv.get("_updated", "")) > str(lv.get("_updated", "")):
             out[k] = iv
