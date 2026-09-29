@@ -785,6 +785,9 @@ function mergeLocalRemote(remote) {
 
 let clinicWs = null;
 let clinicWsTimer = null;
+/* MANUAL SYNC ONLY — no auto pull from WebSocket (stops hang) */
+let _syncInFlight = false;
+
 function connectClinicWebSocket() {
     try {
         if (!server || !/^https?:\/\//.test(server)) return;
@@ -796,41 +799,49 @@ function connectClinicWebSocket() {
         const ws = new WebSocket(wsBase + '/ws');
         clinicWs = ws;
         ws.onopen = () => {
-            setConn(true, 'Live WebSocket connected', 0);
+            setConn(true, 'Connected (manual refresh mode)', 0);
             try { ws.send('ping'); } catch (e) {}
         };
         ws.onmessage = (ev) => {
+            /* Ignore data_changed / sync_ok — user will press Refresh manually */
             try {
                 const msg = JSON.parse(ev.data || '{}');
-                if (msg.type === 'data_changed' || msg.type === 'sync_ok') {
-                    syncNow(true).then(() => {
-                        try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (e) {}
-                        try { if (typeof renderReceptionQueue === 'function') renderReceptionQueue(); } catch (e) {}
-                        try { if (typeof renderPatientReport === 'function') renderPatientReport(); } catch (e) {}
-                    }).catch(() => {});
+                if (msg.type === 'hello' || msg === 'pong') {
+                    setConn(true, 'Connected (manual refresh mode)', 0);
                 }
             } catch (e) {}
         };
         ws.onclose = () => {
             clinicWs = null;
             clearTimeout(clinicWsTimer);
-            clinicWsTimer = setTimeout(connectClinicWebSocket, 4000);
+            clinicWsTimer = setTimeout(connectClinicWebSocket, 20000);
         };
         ws.onerror = () => { try { ws.close(); } catch (e) {} };
     } catch (e) {}
 }
 
+/**
+ * Manual / explicit sync only.
+ * - Push local changes to server, then merge server state back.
+ * - Call from Refresh button, and after Delete / Receive (so server has latest).
+ * - Other PC sees updates only when THEY press Refresh.
+ */
 async function syncNow(silent = false) {
     if (!server) {
         setConn(false, 'Offline mode — entries are stored on this computer.', null);
         return
     }
+    if (_syncInFlight) {
+        if (!silent) toast('Sync already running…');
+        return;
+    }
+    _syncInFlight = true;
     const t0 = performance.now();
     try {
-        // PUSH FIRST so Office delete / receive / payment edits hit server before any pull
+        // 1) Push local (delete / receive / edits) to server
         const out = await api('/api/sync', 'POST', DB);
+        // 2) Apply merged server state (includes other side if they already pushed)
         mergeLocalRemote(out);
-        // Enforce tombstones after merge
         const dels = new Set(DB.meta?.deleted || []);
         if (dels.size) {
             ['patients', 'payments', 'medicines', 'expenses'].forEach(k => {
@@ -839,13 +850,19 @@ async function syncNow(silent = false) {
         }
         saveLocal();
         const lag = Math.round(performance.now() - t0);
-        setConn(true, 'Connected and synchronized.', lag);
+        setConn(true, 'Synced · lag ' + lag + ' ms', lag);
         if (!clinicWs || clinicWs.readyState > 1) connectClinicWebSocket();
         try { if (role === 'reception') renderPermissions(); } catch (e) {}
-        if (!silent) toast('Synchronized successfully')
+        try { if (typeof refreshAllPatientViews === 'function') refreshAllPatientViews(); } catch (e) {}
+        try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (e) {}
+        try { if (typeof renderQueue === 'function') renderQueue(); } catch (e) {}
+        try { if (typeof renderReceptionQueue === 'function') renderReceptionQueue(); } catch (e) {}
+        if (!silent) toast('Refresh complete — Office & Reception data merged');
     } catch (e) {
-        setConn(false, 'Offline mode. Local entries are safe and will sync when connection returns.', null);
-        if (!silent) toast('Sync unavailable — working offline', true)
+        setConn(false, 'Offline mode. Local entries are safe.', null);
+        if (!silent) toast('Sync unavailable — working offline', true);
+    } finally {
+        _syncInFlight = false;
     }
 }
 
@@ -5347,7 +5364,7 @@ function renderAll() {
 let pollTimerId = null;
 let pollVisibilityBound = false;
 
-/** Default 20s smart auto-poll. URL ?sync=30|60 overrides. ?sync=off disables auto-poll. */
+/** MANUAL ONLY: auto-poll OFF by default. Optional ?sync=30 to re-enable seconds. */
 function getSyncPollMs() {
     try {
         const q = new URLSearchParams(window.location.search || '');
@@ -5359,11 +5376,10 @@ function getSyncPollMs() {
             if (Number.isFinite(n) && n > 0) return Math.min(600, Math.max(5, n)) * 1000;
         }
     } catch (e) {}
-    return 20000; // default 20 seconds
+    return 0; // default OFF — only manual Refresh
 }
 
 function runPollTick() {
-    try { renderAll(); } catch (e) {}
     try { if (server) syncNow(true); } catch (e) {}
 }
 
@@ -5375,8 +5391,7 @@ function stopPollTimer() {
 function startPollTimerIfNeeded() {
     stopPollTimer();
     const ms = getSyncPollMs();
-    if (!ms) return; // auto-poll off (?sync=off)
-    // Smart: only while tab is visible
+    if (!ms) return; // auto-poll off
     if (typeof document !== 'undefined' && document.hidden) return;
     pollTimerId = setInterval(() => {
         if (typeof document !== 'undefined' && document.hidden) return;
@@ -5385,7 +5400,6 @@ function startPollTimerIfNeeded() {
 }
 
 function resetPollTimer() {
-    // After manual refresh: restart interval from 0 only if URL sync is on + tab visible
     startPollTimerIfNeeded();
 }
 
@@ -5393,20 +5407,21 @@ function bindPollVisibility() {
     if (pollVisibilityBound) return;
     pollVisibilityBound = true;
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            stopPollTimer(); // tab minimize / background → pause, no data waste
-        } else {
-            startPollTimerIfNeeded(); // tab active again → resume if ?sync= set
-        }
+        if (document.hidden) stopPollTimer();
+        else startPollTimerIfNeeded();
     });
 }
 
+/** Dashboard Refresh button — merge Office + Reception when both online */
 function forceRefresh() {
-    // Instant Refresh Data — always works (Office + Reception)
     try { saveLocal(); } catch (e) {}
-    runPollTick();
-    resetPollTimer();
-    try { toast('Refresh Data done'); } catch (e) {}
+    if (!server) {
+        try { renderAll(); } catch (e) {}
+        try { toast('Offline — only local data shown', true); } catch (e) {}
+        return;
+    }
+    try { toast('Refreshing…'); } catch (e) {}
+    Promise.resolve(syncNow(false)).catch(() => {});
 }
 
 

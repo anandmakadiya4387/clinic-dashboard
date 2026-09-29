@@ -277,7 +277,7 @@ def peer_sync_loop():
     import urllib.request
 
     while True:
-        time.sleep(3)
+        time.sleep(15)  # was 3s — too aggressive, caused hang under load
         state = load_state()
         for url in list(PEERS):
             try:
