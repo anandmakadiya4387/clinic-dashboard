@@ -3969,7 +3969,7 @@ function viewPatientHistory(id) {
         } else if (!isPendingVisit && isFocVisit) {
             // FOC contributes 0
         }
-        const typeTag = g.type ? `<span class="tag ${g.type}" style="margin-left:6px;font-size:10px">${String(g.type).toUpperCase()}</span>` : '';
+        const typeTag = g.type ? `<span class="tag ${String(g.type).toLowerCase()==='new'?'new':'old'}" style="margin-left:6px;font-size:10px">${String(g.type).toLowerCase()==='new'?'NEW':'OLD'}</span>` : '';
         const vid = (visitRow && visitRow.id) || g._visitId || '';
         const isOffice = (role !== 'reception');
         // Office pending: small "pending" text + Rec + FOC only (no Pend button — already pending).
@@ -5278,7 +5278,7 @@ function renderAppointmentHistory() {
         return `<tr>
           <td><b>${permanentCaseNo(p)}</b></td>
           <td>${fmtDate(p.date)}</td>
-          <td><span class="tag ${p.caseType}">${(p.caseType || 'old').toUpperCase()}</span></td>
+          <td><span class="tag ${String(p.caseType||'').toLowerCase()==='new'?'new':'old'}">${String(p.caseType||'').toLowerCase()==='new'?'NEW':'OLD'}</span></td>
           <td class="histPatientCell"><div class="patientNameOneLine">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile || '')}</div></td>
           <td class="amount">${money(total)}</td>
           <td class="amount">${money(paid)}</td>
@@ -5296,7 +5296,7 @@ function renderAppointmentHistory() {
                     if (i === 2 || i === totalPages - 1) html += `<span class="mini">…</span>`;
                     continue;
                 }
-                html += `<button type="button" class="btn embossed ${i===histPage?'active':''}" data-hpg="${i}">${i}</button>`;
+                html += `<button type="button" class="btn embossed histPageBtn ${i===histPage?'active histPageActive':''}" data-hpg="${i}"${i===histPage?' style="background:#1e293b!important;color:#fff!important;border-color:#0f172a!important;font-weight:700;box-shadow:none"':''}>${i}</button>`;
             }
             html += `<button type="button" class="btn embossed" data-hpg="next" ${histPage>=totalPages?'disabled':''}>Next ›</button>`;
             html += `<span class="mini" style="margin-left:8px">${rows.length} total · page ${histPage}/${totalPages}</span>`;
