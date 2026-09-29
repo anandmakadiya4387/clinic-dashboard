@@ -78,10 +78,26 @@ function isoToday() {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
+/** Normalize any common date string to YYYY-MM-DD for sorting (handles - and /). */
+function normalizeDateISO(v) {
+    if (!v) return '';
+    const s = String(v).trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
+    m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+    if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
+    m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+    return s;
+}
+
+/** Always display as DD/MM/YYYY */
 function fmtDate(v) {
     if (!v) return '-';
-    const [y, m, d] = String(v).split('-');
-    return `${d}/${m}/${y}`
+    const iso = normalizeDateISO(v);
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[3] + '/' + m[2] + '/' + m[1];
+    return String(v);
 }
 
 function addYear(v) {
@@ -3904,7 +3920,7 @@ function viewPatientHistory(id) {
     const byDate = {};
     // Source of truth for billed amounts = visit record fees (not summed payments which can be wrong after import)
     family.forEach(v => {
-        const d = String(v.date || '');
+        const d = normalizeDateISO(v.date) || String(v.date || '');
         if (!byDate[d]) byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: v.caseType || '' };
         byDate[d].consultation = Number(v.consultation || 0);
         byDate[d].medicine = Number(v.medicine || 0);
@@ -3913,6 +3929,7 @@ function viewPatientHistory(id) {
         byDate[d]._visitId = v.id;
         byDate[d]._visitFees = feeTotal(v);
         byDate[d]._partial = Math.max(0, Number(v.partialPending || 0));
+        byDate[d]._updated = String(v._updated || '');
         const st = paymentStatusInfo(v);
         byDate[d]._pendingVisit = st.kind === 'pending' || st.kind === 'partial' || v.forcePending === true || (v.received === false && feeTotal(v) > 0);
         byDate[d]._focVisit = st.kind === 'foc' || (feeTotal(v) <= 0 && !v.forcePending);
@@ -3920,7 +3937,7 @@ function viewPatientHistory(id) {
     });
     // If a date has payments but no visit row fees, fall back to payment sums
     famPays.forEach(x => {
-        const d = String(x.date || '');
+        const d = normalizeDateISO(x.date) || String(x.date || '');
         if (!byDate[d]) {
             byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: '' };
             const cat = x.feeCategory || 'other';
@@ -3928,14 +3945,18 @@ function viewPatientHistory(id) {
             else byDate[d].other += Number(x.amount || 0);
         }
     });
-    // Newest visit first
-    const dates = Object.keys(byDate).sort((a, b) => String(b).localeCompare(String(a)));
+    // Newest visit first (ISO date desc) — registration / oldest at bottom
+    const dates = Object.keys(byDate).sort((a, b) => {
+        const cmp = String(b).localeCompare(String(a));
+        if (cmp) return cmp;
+        return String((byDate[b] && byDate[b]._updated) || '').localeCompare(String((byDate[a] && byDate[a]._updated) || ''));
+    });
     let totalAll = 0, sumCons = 0, sumMed = 0, sumRen = 0;
     const rows = dates.map((d, i) => {
         const g = byDate[d];
         const lineTotal = g.consultation + g.medicine + g.renewal + g.other;
         const isRenew = g.renewal > 0;
-        const visitRow = family.find(v => String(v.date || '') === d) || null;
+        const visitRow = family.find(v => (normalizeDateISO(v.date) || String(v.date || '')) === d) || family.find(v => String(v.date || '') === d) || null;
         const stV = visitRow ? paymentStatusInfo(visitRow) : null;
         const isPendingVisit = stV ? (stV.kind === 'pending' || stV.kind === 'partial') : !!g._pendingVisit;
         const isFocVisit = stV ? stV.kind === 'foc' : (!!g._focVisit && !g._pendingVisit);
@@ -5201,9 +5222,17 @@ async function importBackup(e) {
 window.importBackup = importBackup;
 
 function getAppointmentHistoryRows() {
-    /* Single sort only — avoid caseRows() double-sort freeze on 2000+ patients */
+    /* Newest visit date first; same day → later entry on top (first arrival stays lower) */
     let rows = active(DB.patients).slice();
-    rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || caseNoNumericPart(b.caseNo) - caseNoNumericPart(a.caseNo));
+    rows.sort((a, b) => {
+        const da = normalizeDateISO(a.date);
+        const db = normalizeDateISO(b.date);
+        if (db !== da) return String(db).localeCompare(String(da));
+        const ua = String(a._updated || '');
+        const ub = String(b._updated || '');
+        if (ub !== ua) return ub.localeCompare(ua);
+        return caseNoNumericPart(b.caseNo) - caseNoNumericPart(a.caseNo);
+    });
     const q = String(histQuery || '').trim().toLowerCase();
     if (q) {
         const digits = q.replace(/\D/g, '');
