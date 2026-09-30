@@ -398,17 +398,15 @@ function normalizeData(d) {
         });
         out.meta.deleted = Array.from(deleted);
         out.medicines = Array.from(seen.values());
-        /* Only fill missing NO — never renumber existing (preserve user order numbers) */
-        let maxNo = 0;
-        out.medicines.forEach(function(m) {
-            const n = Number(m.no || 0);
-            if (n > maxNo) maxNo = n;
+        /* After dedupe: renumber 1..N so Total Medicines == highest NO (no gaps) */
+        out.medicines.sort(function(a, b) {
+            const na = Number(a.no || 0), nb = Number(b.no || 0);
+            if (nb !== na) return nb - na;
+            return String(a.name || '').localeCompare(String(b.name || ''));
         });
-        out.medicines.forEach(function(m) {
-            if (!(Number(m.no) > 0)) {
-                maxNo += 1;
-                m.no = maxNo;
-            }
+        const totalMed = out.medicines.length;
+        out.medicines.forEach(function(m, i) {
+            m.no = totalMed - i; /* top of list = highest number = total count */
         });
     })();
     out.expenses = Array.isArray(out.expenses) ? out.expenses.filter(x => x && x.id && Number(x.amount || 0) >= 0) : [];
@@ -3922,7 +3920,7 @@ function renderMedicines() {
     if (medPage > totalPages) medPage = totalPages;
     const slice = arr.slice((medPage - 1) * medPageSize, medPage * medPageSize);
     const body = $('#medBody');
-    if (body) body.innerHTML = slice.map(m => `<tr><td>${m.no||'-'}</td><td>${esc(m.name)}</td><td>${esc(m.drawer)}</td><td>${m.quantity}</td><td>${m.available}</td><td><button class="btn embossed" onclick="editMed('${m.id}')">Edit</button><button class="btn deleteBox embossed" onclick="delMed('${m.id}')">Delete</button></td></tr>`).join('') || '<tr><td colspan="6">No medicines</td></tr>';
+    if (body) body.innerHTML = slice.map(m => `<tr><td>${m.no||'-'}</td><td>${esc(m.name)}</td><td>${esc(m.drawer)}</td><td>${m.quantity}</td><td>${(m.available===true||m.available==="true"||String(m.available).toLowerCase()==="yes")?"Yes":(m.available===false||m.available==="false"||String(m.available).toLowerCase()==="no")?"No":esc(m.available)}</td><td><button class="btn embossed" onclick="editMed('${m.id}')">Edit</button><button class="btn deleteBox embossed" onclick="delMed('${m.id}')">Delete</button></td></tr>`).join('') || '<tr><td colspan="6">No medicines</td></tr>';
     buildPagination('medPagination', medPage, totalPages, arr.length, medPageSize, 'goMedPage');
 }
 
