@@ -370,24 +370,46 @@ function normalizeData(d) {
     (function dedupeMedicines() {
         const seen = new Map();
         const deleted = new Set((out.meta && out.meta.deleted) || []);
+        function medKey(x) {
+            return String(x.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        }
+        function prefer(a, b) {
+            /* Prefer higher quantity, then one that HAS a serial no, then higher no, then newer */
+            const qa = Number(a.quantity || 0), qb = Number(b.quantity || 0);
+            if (qa !== qb) return qa > qb ? a : b;
+            const na = Number(a.no || 0), nb = Number(b.no || 0);
+            if ((na > 0) !== (nb > 0)) return na > 0 ? a : b;
+            if (na !== nb) return na >= nb ? a : b;
+            return String(a._updated || '') >= String(b._updated || '') ? a : b;
+        }
         out.medicines.forEach(function(x) {
             if (!x || x._deleted || deleted.has(x.id)) return;
-            const key = String(x.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+            const key = medKey(x);
             if (!key) return;
             const old = seen.get(key);
             if (!old) { seen.set(key, x); return; }
-            const qx = Number(x.quantity || 0), qo = Number(old.quantity || 0);
-            const preferX = qx > qo || (qx === qo && String(x._updated || '') > String(old._updated || '')) ||
-                (qx === qo && String(x._updated || '') === String(old._updated || '') && Number(x.no || 0) >= Number(old.no || 0));
-            if (preferX) {
-                deleted.add(old.id);
-                seen.set(key, x);
-            } else {
-                deleted.add(x.id);
-            }
+            const win = prefer(x, old);
+            const lose = win === x ? old : x;
+            /* Keep serial number if winner is missing it */
+            if (!(Number(win.no) > 0) && Number(lose.no) > 0) win.no = lose.no;
+            if (!win.drawer && lose.drawer) win.drawer = lose.drawer;
+            deleted.add(lose.id);
+            seen.set(key, win);
         });
         out.meta.deleted = Array.from(deleted);
         out.medicines = Array.from(seen.values());
+        /* Only fill missing NO — never renumber existing (preserve user order numbers) */
+        let maxNo = 0;
+        out.medicines.forEach(function(m) {
+            const n = Number(m.no || 0);
+            if (n > maxNo) maxNo = n;
+        });
+        out.medicines.forEach(function(m) {
+            if (!(Number(m.no) > 0)) {
+                maxNo += 1;
+                m.no = maxNo;
+            }
+        });
     })();
     out.expenses = Array.isArray(out.expenses) ? out.expenses.filter(x => x && x.id && Number(x.amount || 0) >= 0) : [];
     out.payments = Array.isArray(out.payments) ? out.payments.filter(x => x && x.patientId && !x.demoSeed && Number(x.amount || 0) !== 1800) : [];
@@ -2439,12 +2461,12 @@ function renderPatientReport() {
         const byCase = new Map();
         active(DB.patients).filter(p => {
             const t = String(p.caseType || '').toLowerCase();
-            return t === 'new' && !p.linkedFromId;
+            return t === 'new';
         }).forEach(p => {
             const key = String(permanentCaseNo(p) || p.caseNo || p.id);
             const prev = byCase.get(key);
             // Prefer earliest registration date for that case no
-            if (!prev || String(normalizeDateISO(p.date) || p.date) < String(normalizeDateISO(prev.date) || prev.date)) {
+            if (!prev || String(normalizeDateISO(p.date) || p.date || '') < String(normalizeDateISO(prev.date) || prev.date || '')) {
                 byCase.set(key, p);
             }
         });
