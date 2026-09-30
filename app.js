@@ -366,6 +366,29 @@ function normalizeData(d) {
     out.meta = Object.assign(structuredClone(DEFAULT.meta), out.meta || {});
     out.patients = Array.isArray(out.patients) ? out.patients.filter(x => x && x.id) : [];
     out.medicines = Array.isArray(out.medicines) ? out.medicines.filter(x => x && x.id) : [];
+    /* Collapse duplicate medicine names (case/space-insensitive). Keep best qty / newest; tombstone rest. */
+    (function dedupeMedicines() {
+        const seen = new Map();
+        const deleted = new Set((out.meta && out.meta.deleted) || []);
+        out.medicines.forEach(function(x) {
+            if (!x || x._deleted || deleted.has(x.id)) return;
+            const key = String(x.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+            if (!key) return;
+            const old = seen.get(key);
+            if (!old) { seen.set(key, x); return; }
+            const qx = Number(x.quantity || 0), qo = Number(old.quantity || 0);
+            const preferX = qx > qo || (qx === qo && String(x._updated || '') > String(old._updated || '')) ||
+                (qx === qo && String(x._updated || '') === String(old._updated || '') && Number(x.no || 0) >= Number(old.no || 0));
+            if (preferX) {
+                deleted.add(old.id);
+                seen.set(key, x);
+            } else {
+                deleted.add(x.id);
+            }
+        });
+        out.meta.deleted = Array.from(deleted);
+        out.medicines = Array.from(seen.values());
+    })();
     out.expenses = Array.isArray(out.expenses) ? out.expenses.filter(x => x && x.id && Number(x.amount || 0) >= 0) : [];
     out.payments = Array.isArray(out.payments) ? out.payments.filter(x => x && x.patientId && !x.demoSeed && Number(x.amount || 0) !== 1800) : [];
     // De-duplicate accidental repeated patient registrations while preserving the newest edit.
@@ -2412,23 +2435,30 @@ function renderPatientReport() {
             .filter(p => patientDateMatch(p.date))
             .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b._updated || '').localeCompare(String(a._updated || '')));
     } else {
-        // Only NEW case registrations (original), unique by permanent case no
+        // Only NEW case registrations — unique by permanent case no (one row per case)
         const byCase = new Map();
-        active(DB.patients).filter(p => p.caseType === 'new').forEach(p => {
-            const key = String(permanentCaseNo(p));
+        active(DB.patients).filter(p => {
+            const t = String(p.caseType || '').toLowerCase();
+            return t === 'new' && !p.linkedFromId;
+        }).forEach(p => {
+            const key = String(permanentCaseNo(p) || p.caseNo || p.id);
             const prev = byCase.get(key);
-            if (!prev || String(p.date) < String(prev.date)) byCase.set(key, p);
+            // Prefer earliest registration date for that case no
+            if (!prev || String(normalizeDateISO(p.date) || p.date) < String(normalizeDateISO(prev.date) || prev.date)) {
+                byCase.set(key, p);
+            }
         });
         rows = [...byCase.values()].filter(p => patientDateMatch(p.date))
             .sort((a, b) => {
               const numA = parseInt(String(a.caseNo || permanentCaseNo(a) || '').replace(/\D/g, ''), 10) || 0;
               const numB = parseInt(String(b.caseNo || permanentCaseNo(b) || '').replace(/\D/g, ''), 10) || 0;
               return numB - numA;
-            })
+            });
     }
 
+    /* Count and list always from same rows array — no mismatch */
     set('pCountNew', rows.length);
-    set('patientFilterHint', (titleMap[view] || 'Cases') + ` · ${rows.length} record(s)`);
+    set('patientFilterHint', (titleMap[view] || 'Cases') + ' · ' + rows.length + ' record(s)');
 
     const totalPages = Math.max(1, Math.ceil(rows.length / patientReportPageSize));
     if (patientReportPage > totalPages) patientReportPage = totalPages;
@@ -3880,10 +3910,20 @@ window.goMedPage = goMedPage;
 function saveMedicine(e) {
     if (!enforceReceptionEdit('medicineEntry')) return;
     e.preventDefault();
+    const name = ($('#medName').value || '').trim();
+    if (!name) { toast('Enter medicine name', true); return; }
+    const key = name.toLowerCase().replace(/\s+/g, ' ');
+    const exists = active(DB.medicines).some(function(m) {
+        return String(m.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === key;
+    });
+    if (exists) {
+        toast('This medicine is already existing', true);
+        return;
+    }
     const d = {
         id: uid('m'),
         no: active(DB.medicines).reduce((m, x) => Math.max(m, Number(x.no) || 0), 0) + 1,
-        name: $('#medName').value.trim(),
+        name: name,
         drawer: $('#medDrawer').value.trim(),
         quantity: Number($('#medQty').value || 0),
         available: $('#medAvail').value
@@ -4472,8 +4512,18 @@ function editMed(id) {
     modal('Edit Medicine', `<form class="formgrid"><label>Medicine Name<input name="name" value="${esc(m.name)}"></label><label>Drawer<input name="drawer" value="${esc(m.drawer)}"></label><label>Quantity<input name="quantity" type="number" value="${m.quantity}"></label><label>Available<select name="available"><option ${m.available==='Yes'?'selected':''}>Yes</option><option ${m.available==='No'?'selected':''}>No</option></select></label><div class="full actions"><button class="primary">Update Medicine</button></div></form>`, e => {
         e.preventDefault();
         const d = Object.fromEntries(new FormData(e.target));
+        const newName = String(d.name || '').trim();
+        if (!newName) { toast('Enter medicine name', true); return; }
+        const key = newName.toLowerCase().replace(/\s+/g, ' ');
+        const clash = active(DB.medicines).some(function(x) {
+            return x.id !== m.id && String(x.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === key;
+        });
+        if (clash) {
+            toast('This medicine is already existing', true);
+            return;
+        }
         Object.assign(m, {
-            name: d.name,
+            name: newName,
             drawer: d.drawer,
             quantity: Number(d.quantity || 0),
             available: d.available
