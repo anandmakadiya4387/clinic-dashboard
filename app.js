@@ -784,11 +784,19 @@ function toast(t, bad = false) {
 }
 async function api(path, method = 'GET', body) {
     if (!server) return null;
-    const r = await fetch(server.replace(/\/$/, '') + path, {
+    let url = server.replace(/\/$/, '') + path;
+    /* Cache-bust GET so Refresh always gets latest server data */
+    if (String(method || 'GET').toUpperCase() === 'GET') {
+        url += (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+    }
+    const r = await fetch(url, {
         method,
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
         },
+        cache: 'no-store',
         body: body ? JSON.stringify(Object.assign({deviceId: DEVICE_ID}, body)) : undefined
     });
     if (!r.ok) throw new Error('Server error ' + r.status);
@@ -5512,15 +5520,32 @@ function bindPollVisibility() {
 }
 
 /** Dashboard Refresh button — merge Office + Reception when both online */
-function forceRefresh() {
-    try { saveLocal(); } catch (e) {}
+async function forceRefresh() {
+    /* Fast Refresh: GET /api/data only — replace local state (no full DB upload/merge). */
     if (!server) {
         try { renderAll(); } catch (e) {}
         try { toast('Offline — only local data shown', true); } catch (e) {}
         return;
     }
-    try { toast('Refreshing…'); } catch (e) {}
-    Promise.resolve(syncNow(false)).catch(() => {});
+    if (typeof _syncInFlight !== 'undefined' && _syncInFlight) {
+        try { toast('Refresh already running…'); } catch (e) {}
+        return;
+    }
+    _syncInFlight = true;
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    try {
+        try { toast('Refreshing…'); } catch (e) {}
+        await loadFreshFromServer();
+        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+        try { setConn(true, 'Refreshed · ' + lag + ' ms', lag); } catch (e) {}
+        try { toast('Data updated · ' + lag + ' ms'); } catch (e) {}
+        try { if (!clinicWs || clinicWs.readyState > 1) connectClinicWebSocket(); } catch (e) {}
+    } catch (e) {
+        try { setConn(false, 'Refresh failed — check network', null); } catch (e2) {}
+        try { toast('Refresh failed — try again', true); } catch (e2) {}
+    } finally {
+        _syncInFlight = false;
+    }
 }
 
 

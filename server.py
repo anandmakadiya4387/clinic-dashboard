@@ -370,7 +370,15 @@ def create_fastapi_app():
 
     @app.get("/api/data")
     def get_data(x_token: str | None = Header(default=None)):
-        return load_state()
+        # Always fresh payload — client Refresh must not see browser/proxy cache
+        return JSONResponse(
+            load_state(),
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
 
     @app.post("/api/sync")
     async def sync(request: Request):
