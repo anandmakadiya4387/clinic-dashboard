@@ -784,19 +784,11 @@ function toast(t, bad = false) {
 }
 async function api(path, method = 'GET', body) {
     if (!server) return null;
-    let url = server.replace(/\/$/, '') + path;
-    /* Cache-bust GET so Refresh always gets latest server data */
-    if (String(method || 'GET').toUpperCase() === 'GET') {
-        url += (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
-    }
-    const r = await fetch(url, {
+    const r = await fetch(server.replace(/\/$/, '') + path, {
         method,
         headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
+            'Content-Type': 'application/json'
         },
-        cache: 'no-store',
         body: body ? JSON.stringify(Object.assign({deviceId: DEVICE_ID}, body)) : undefined
     });
     if (!r.ok) throw new Error('Server error ' + r.status);
@@ -866,15 +858,18 @@ function connectClinicWebSocket() {
         const ws = new WebSocket(wsBase + '/ws');
         clinicWs = ws;
         ws.onopen = () => {
-            setConn(true, 'Connected (manual refresh mode)', 0);
+            setConn(true, 'Live sync on', 0);
             try { ws.send('ping'); } catch (e) {}
         };
         ws.onmessage = (ev) => {
-            /* Ignore data_changed / sync_ok — user will press Refresh manually */
             try {
-                const msg = JSON.parse(ev.data || '{}');
-                if (msg.type === 'hello' || msg === 'pong') {
-                    setConn(true, 'Connected (manual refresh mode)', 0);
+                const msg = (typeof ev.data === 'string' && ev.data.charAt(0) === '{') ? JSON.parse(ev.data) : { type: ev.data };
+                if (msg.type === 'hello' || msg.type === 'pong' || msg === 'pong') {
+                    setConn(true, 'Live sync on', 0);
+                }
+                /* Other device saved data → auto light pull (debounced) */
+                if (msg.type === 'data_changed' || msg.type === 'sync_ok') {
+                    scheduleLivePull();
                 }
             } catch (e) {}
         };
@@ -993,6 +988,150 @@ async function quickHealthOnline() {
 }
 
 /** After import/restore: pull full state from server into DB + UI (no hard refresh). */
+let _lastServerStamp = '';
+let _livePullTimer = null;
+
+/** Fast live pull: GET /api/data, skip heavy medicine renumber, background save. */
+async function lightPullFromServer(reason) {
+    reason = reason || 'manual';
+    if (!server) {
+        if (reason === 'manual') {
+            try { renderAll(); } catch (e) {}
+            try { toast('Offline — only local data shown', true); } catch (e) {}
+        }
+        return;
+    }
+    if (_syncInFlight) {
+        if (reason === 'manual') { try { toast('Refresh already running…'); } catch (e) {} }
+        return;
+    }
+    _syncInFlight = true;
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const STAMP_KEY = 'anandClinicSyncStampV1';
+    try {
+        let since = '';
+        try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) { since = ''; }
+
+        /* Quick meta: skip if server time unchanged (WS noise) */
+        try {
+            const meta = await api('/api/meta');
+            if (meta && meta.ok) {
+                const stamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
+                if (reason === 'ws' && stamp && stamp === _lastServerStamp) {
+                    return;
+                }
+            }
+        } catch (e) {}
+
+        if (reason === 'manual') { try { toast('Refreshing…'); } catch (e) {} }
+
+        /* Incremental: only records with _updated > since */
+        const path = since
+            ? ('/api/changes?since=' + encodeURIComponent(since))
+            : '/api/changes';
+        const delta = await api(path);
+        if (!delta || typeof delta !== 'object') throw new Error('Server returned empty changes');
+
+        const mergeById = function(localArr, incoming) {
+            const map = new Map();
+            (localArr || []).forEach(function(x) {
+                if (x && x.id) map.set(x.id, x);
+            });
+            (incoming || []).forEach(function(x) {
+                if (!x || !x.id) return;
+                const old = map.get(x.id);
+                if (!old || String(x._updated || '') >= String(old._updated || '')) {
+                    map.set(x.id, x);
+                }
+            });
+            return Array.from(map.values());
+        };
+
+        if (delta.full) {
+            /* First sync or no cursor — full replace (light normalize) */
+            DB = normalizeData({
+                patients: delta.patients || [],
+                payments: delta.payments || [],
+                medicines: delta.medicines || [],
+                expenses: delta.expenses || [],
+                settings: delta.settings || DB.settings,
+                clinic: delta.clinic || DB.clinic,
+                meta: delta.meta || DB.meta,
+                schemaVersion: (delta.meta && delta.meta.schemaVersion) || DB.schemaVersion
+            }, { skipMedDedupe: true });
+        } else {
+            /* Apply only changed rows into existing DB */
+            DB.patients = mergeById(DB.patients, delta.patients);
+            DB.payments = mergeById(DB.payments, delta.payments);
+            DB.medicines = mergeById(DB.medicines, delta.medicines);
+            DB.expenses = mergeById(DB.expenses, delta.expenses);
+            if (delta.settings && typeof delta.settings === 'object') {
+                DB.settings = Object.assign({}, DB.settings || {}, delta.settings);
+            }
+            if (delta.clinic && typeof delta.clinic === 'object') {
+                DB.clinic = Object.assign({}, DB.clinic || {}, delta.clinic);
+            }
+            const dels = new Set((delta.deleted || []).concat((DB.meta && DB.meta.deleted) || []));
+            DB.meta = DB.meta || { deleted: [] };
+            DB.meta.deleted = Array.from(dels);
+            if (dels.size) {
+                ['patients', 'payments', 'medicines', 'expenses'].forEach(function(k) {
+                    DB[k] = (DB[k] || []).filter(function(x) {
+                        return x && !x._deleted && !dels.has(x.id);
+                    });
+                });
+            }
+        }
+
+        const serverTime = String(delta.serverTime || '');
+        if (serverTime) {
+            try { localStorage.setItem(STAMP_KEY, serverTime); } catch (e) {}
+        }
+        const c = delta.counts || {};
+        _lastServerStamp = serverTime + '|' + (c.patients || 0) + '|' + (c.payments || 0) + '|' + (c.medicines || 0);
+
+        try { idbSet(KEY, DB).catch(function() {}); } catch (e) {}
+        try {
+            setTimeout(function() {
+                try { lsSafeSet(KEY, JSON.stringify(DB)); } catch (e2) {}
+            }, 0);
+        } catch (e) {}
+
+        try { renderAll(); } catch (e) { console.warn(e); }
+        try { if (role === 'reception') renderPermissions(); } catch (e) {}
+        try { if (typeof refreshAllPatientViews === 'function') refreshAllPatientViews(); } catch (e) {}
+
+        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+        const nPat = (delta.patients || []).length;
+        const nPay = (delta.payments || []).length;
+        const nMed = (delta.medicines || []).length;
+        const nExp = (delta.expenses || []).length;
+        const nTotal = nPat + nPay + nMed + nExp;
+        const msg = delta.full
+            ? ('Full sync · ' + lag + ' ms')
+            : ('Updated ' + nTotal + ' record(s) · ' + lag + ' ms');
+        try { setConn(true, msg, lag); } catch (e) {}
+        if (reason === 'manual') {
+            try { toast(msg); } catch (e) {}
+        }
+    } catch (e) {
+        if (reason === 'manual') {
+            try { setConn(false, 'Refresh failed — check network', null); } catch (e2) {}
+            try { toast('Refresh failed — try again', true); } catch (e2) {}
+        }
+    } finally {
+        _syncInFlight = false;
+    }
+}
+
+function scheduleLivePull() {
+    try { clearTimeout(_livePullTimer); } catch (e) {}
+    _livePullTimer = setTimeout(function() {
+        lightPullFromServer('ws');
+    }, 350);
+}
+
+/** Full pull with full normalize (import / restore). */
 async function loadFreshFromServer(statusFn) {
     const say = typeof statusFn === 'function' ? statusFn : function() {};
     say('Loading fresh data from server…');
@@ -5520,32 +5659,9 @@ function bindPollVisibility() {
 }
 
 /** Dashboard Refresh button — merge Office + Reception when both online */
-async function forceRefresh() {
-    /* Fast Refresh: GET /api/data only — replace local state (no full DB upload/merge). */
-    if (!server) {
-        try { renderAll(); } catch (e) {}
-        try { toast('Offline — only local data shown', true); } catch (e) {}
-        return;
-    }
-    if (typeof _syncInFlight !== 'undefined' && _syncInFlight) {
-        try { toast('Refresh already running…'); } catch (e) {}
-        return;
-    }
-    _syncInFlight = true;
-    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    try {
-        try { toast('Refreshing…'); } catch (e) {}
-        await loadFreshFromServer();
-        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-        try { setConn(true, 'Refreshed · ' + lag + ' ms', lag); } catch (e) {}
-        try { toast('Data updated · ' + lag + ' ms'); } catch (e) {}
-        try { if (!clinicWs || clinicWs.readyState > 1) connectClinicWebSocket(); } catch (e) {}
-    } catch (e) {
-        try { setConn(false, 'Refresh failed — check network', null); } catch (e2) {}
-        try { toast('Refresh failed — try again', true); } catch (e2) {}
-    } finally {
-        _syncInFlight = false;
-    }
+function forceRefresh() {
+    /* Live-style: fast GET pull, no full DB upload */
+    Promise.resolve(lightPullFromServer('manual')).catch(function() {});
 }
 
 
@@ -5851,7 +5967,9 @@ function setup() {
     $('#connectBtn')?.addEventListener('click', async () => {
         server = $('#serverUrl').value.trim().replace(/\/$/, '');
         localStorage.setItem(SERVER_KEY, server);
-        await syncNow();
+        /* Connect = get latest data (incremental if already synced before) */
+        try { await lightPullFromServer('manual'); } catch (e) {}
+        try { connectClinicWebSocket(); } catch (e) {}
     });
     $('#receptionPayToggle')?.addEventListener('change', () => {
         DB.settings = markUpdated({
@@ -5866,8 +5984,12 @@ function setup() {
     setConn(false, server ? 'Checking connection…' : 'Offline mode — no server selected.');
     /* Online badge first (health only), then full sync in background — no long wait for badge */
     if (server) {
+        /* First open / page load: auto pull latest (full once, then only changes). No full DB upload. */
         quickHealthOnline().then(function(ok) {
-            if (ok) return syncNow(true);
+            if (!ok) return;
+            return lightPullFromServer('boot').then(function() {
+                try { connectClinicWebSocket(); } catch (e) {}
+            });
         }).catch(function() {});
     }
     bindPollVisibility();
