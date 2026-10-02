@@ -42,6 +42,22 @@ def now() -> str:
     return datetime.now().isoformat(timespec="milliseconds")
 
 
+
+def _max_case_no(patients):
+    m = 0
+    for p in patients or []:
+        if not isinstance(p, dict):
+            continue
+        s = str(p.get("caseNo") or "")
+        digits = "".join(ch for ch in s if ch.isdigit())
+        try:
+            n = int(digits) if digits else 0
+        except Exception:
+            n = 0
+        if n > m:
+            m = n
+    return m
+
 def merge_lists(a, b, deleted):
     """Last-write-wins by _updated, but NEVER resurrect tombstoned ids."""
     deleted = set(deleted or [])
@@ -380,6 +396,7 @@ def create_fastapi_app():
                 "payments": len(st.get("payments") or []),
                 "medicines": len(st.get("medicines") or []),
                 "expenses": len(st.get("expenses") or []),
+                "maxCaseNo": _max_case_no(st.get("patients") or []),
             },
             headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"},
         )

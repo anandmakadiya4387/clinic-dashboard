@@ -5732,21 +5732,140 @@ function getSyncPollMs() {
     return 5000;
 }
 
-function runPollTick() {
-    try {
-        if (!server) return;
-        if (typeof document !== 'undefined' && document.hidden) return;
-        /* Always try — lightPull itself skips if nothing changed */
-        lightPullFromServer('ws');
-    } catch (e) {
-        try { _syncInFlight = false; } catch (e2) {}
-    }
+function localMaxCaseNo() {
+    var m = 0;
+    (DB.patients || []).forEach(function(p) {
+        if (!p || p._deleted) return;
+        var digits = String(p.caseNo || '').replace(/\D/g, '');
+        var n = parseInt(digits, 10) || 0;
+        if (n > m) m = n;
+    });
+    return m;
+}
+function localActiveCount(key) {
+    return (DB[key] || []).filter(function(x) { return x && !x._deleted; }).length;
 }
 
-function stopPollTimer() {
-    try { if (pollTimerId) clearInterval(pollTimerId); } catch (e) {}
-    pollTimerId = null;
+function runPollTick() {
+    if (!server) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (_syncInFlight) return;
+    _syncInFlight = true;
+    var STAMP_KEY = 'anandClinicSyncStampV1';
+    var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    (async function() {
+        try {
+            var meta = await api('/api/meta');
+            if (!meta || !meta.ok) return;
+
+            var localN = localActiveCount('patients');
+            var localPay = localActiveCount('payments');
+            var localMed = localActiveCount('medicines');
+            var localExp = localActiveCount('expenses');
+            var serverN = Number(meta.patients || 0);
+            var serverPay = Number(meta.payments || 0);
+            var serverMed = Number(meta.medicines || 0);
+            var serverExp = Number(meta.expenses || 0);
+            var localMax = localMaxCaseNo();
+            var serverMax = Number(meta.maxCaseNo || 0);
+
+            /* ANY of these means server has newer data we need:
+               - more patients / higher case no (new case)
+               - more payments (old case / receive)
+               - more medicines (stock add)
+               - more expenses
+            */
+            var needFull = false;
+            if (serverN > localN) needFull = true;
+            if (serverMax > localMax) needFull = true;
+            if (serverPay > localPay) needFull = true;
+            if (serverMed > localMed) needFull = true;
+            if (serverExp > localExp) needFull = true;
+
+            var since = '';
+            try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
+
+            if (needFull || !since) {
+                var remote = await api('/api/data');
+                if (!remote || typeof remote !== 'object') return;
+                var rp = (remote.patients || []).filter(function(x) { return x && !x._deleted; }).length;
+                if (rp === 0 && localN > 0) return;
+                DB = normalizeData(remote, { skipMedDedupe: true });
+                try {
+                    localStorage.setItem(STAMP_KEY, String(meta.time || (remote.meta && remote.meta.serverMergedAt) || new Date().toISOString()));
+                } catch (e) {}
+                try { idbSet(KEY, DB).catch(function() {}); } catch (e) {}
+                try { renderAll(); } catch (e) {}
+                var lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                try { setConn(true, 'Auto · synced · ' + lag + ' ms', lag); } catch (e) {}
+                try {
+                    window.__lastSyncAt = new Date();
+                    var ls = document.getElementById('lastSyncText');
+                    if (ls) ls.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString();
+                } catch (e) {}
+                return;
+            }
+
+            /* Counts same — still check last-sync time for edits (name, pending, etc.) */
+            if (String(meta.time || '') === since) {
+                try { setConn(true, 'Online · up to date', 0); } catch (e) {}
+                return;
+            }
+
+            var delta = await api('/api/changes?since=' + encodeURIComponent(since));
+            if (!delta) return;
+            if (delta.full) {
+                var rp2 = (delta.patients || []).filter(function(x) { return x && !x._deleted; }).length;
+                if (rp2 > 0) {
+                    DB = normalizeData(delta, { skipMedDedupe: true });
+                    try { localStorage.setItem(STAMP_KEY, String(delta.serverTime || meta.time)); } catch (e) {}
+                    try { renderAll(); } catch (e) {}
+                }
+                return;
+            }
+
+            var changed = 0;
+            function mergeById(arr, incoming) {
+                var map = new Map();
+                (arr || []).forEach(function(x) { if (x && x.id) map.set(x.id, x); });
+                (incoming || []).forEach(function(x) {
+                    if (!x || !x.id) return;
+                    changed++;
+                    var old = map.get(x.id);
+                    if (!old || String(x._updated || '') >= String(old._updated || '')) map.set(x.id, x);
+                });
+                return Array.from(map.values());
+            }
+            DB.patients = mergeById(DB.patients, delta.patients);
+            DB.payments = mergeById(DB.payments, delta.payments);
+            DB.medicines = mergeById(DB.medicines, delta.medicines);
+            DB.expenses = mergeById(DB.expenses, delta.expenses);
+            if (delta.settings) DB.settings = Object.assign({}, DB.settings || {}, delta.settings);
+            if (delta.clinic) DB.clinic = Object.assign({}, DB.clinic || {}, delta.clinic);
+            if (delta.serverTime || meta.time) {
+                try { localStorage.setItem(STAMP_KEY, String(delta.serverTime || meta.time)); } catch (e) {}
+            }
+            if (changed > 0) {
+                try { idbSet(KEY, DB).catch(function() {}); } catch (e) {}
+                try { renderAll(); } catch (e) {}
+                var lag2 = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                try { setConn(true, 'Auto +' + changed + ' · ' + lag2 + ' ms', lag2); } catch (e) {}
+                try {
+                    window.__lastSyncAt = new Date();
+                    var ls2 = document.getElementById('lastSyncText');
+                    if (ls2) ls2.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString();
+                } catch (e) {}
+            } else {
+                try { setConn(true, 'Online · up to date', 0); } catch (e) {}
+            }
+        } catch (e) {
+            console.warn('autoSync', e);
+        } finally {
+            _syncInFlight = false;
+        }
+    })();
 }
+
 
 function startPollTimerIfNeeded() {
     stopPollTimer();
