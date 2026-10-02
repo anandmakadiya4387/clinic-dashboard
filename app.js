@@ -78,26 +78,10 @@ function isoToday() {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
-/** Normalize any common date string to YYYY-MM-DD for sorting (handles - and /). */
-function normalizeDateISO(v) {
-    if (!v) return '';
-    const s = String(v).trim();
-    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
-    m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-    if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
-    m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-    if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
-    return s;
-}
-
-/** Always display as DD/MM/YYYY */
 function fmtDate(v) {
     if (!v) return '-';
-    const iso = normalizeDateISO(v);
-    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return m[3] + '/' + m[2] + '/' + m[1];
-    return String(v);
+    const [y, m, d] = String(v).split('-');
+    return `${d}/${m}/${y}`
 }
 
 function addYear(v) {
@@ -366,49 +350,6 @@ function normalizeData(d) {
     out.meta = Object.assign(structuredClone(DEFAULT.meta), out.meta || {});
     out.patients = Array.isArray(out.patients) ? out.patients.filter(x => x && x.id) : [];
     out.medicines = Array.isArray(out.medicines) ? out.medicines.filter(x => x && x.id) : [];
-    /* Collapse duplicate medicine names (case/space-insensitive). Keep best qty / newest; tombstone rest. */
-    (function dedupeMedicines() {
-        const seen = new Map();
-        const deleted = new Set((out.meta && out.meta.deleted) || []);
-        function medKey(x) {
-            return String(x.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        }
-        function prefer(a, b) {
-            /* Prefer higher quantity, then one that HAS a serial no, then higher no, then newer */
-            const qa = Number(a.quantity || 0), qb = Number(b.quantity || 0);
-            if (qa !== qb) return qa > qb ? a : b;
-            const na = Number(a.no || 0), nb = Number(b.no || 0);
-            if ((na > 0) !== (nb > 0)) return na > 0 ? a : b;
-            if (na !== nb) return na >= nb ? a : b;
-            return String(a._updated || '') >= String(b._updated || '') ? a : b;
-        }
-        out.medicines.forEach(function(x) {
-            if (!x || x._deleted || deleted.has(x.id)) return;
-            const key = medKey(x);
-            if (!key) return;
-            const old = seen.get(key);
-            if (!old) { seen.set(key, x); return; }
-            const win = prefer(x, old);
-            const lose = win === x ? old : x;
-            /* Keep serial number if winner is missing it */
-            if (!(Number(win.no) > 0) && Number(lose.no) > 0) win.no = lose.no;
-            if (!win.drawer && lose.drawer) win.drawer = lose.drawer;
-            deleted.add(lose.id);
-            seen.set(key, win);
-        });
-        out.meta.deleted = Array.from(deleted);
-        out.medicines = Array.from(seen.values());
-        /* After dedupe: renumber 1..N so Total Medicines == highest NO (no gaps) */
-        out.medicines.sort(function(a, b) {
-            const na = Number(a.no || 0), nb = Number(b.no || 0);
-            if (nb !== na) return nb - na;
-            return String(a.name || '').localeCompare(String(b.name || ''));
-        });
-        const totalMed = out.medicines.length;
-        out.medicines.forEach(function(m, i) {
-            m.no = totalMed - i; /* top of list = highest number = total count */
-        });
-    })();
     out.expenses = Array.isArray(out.expenses) ? out.expenses.filter(x => x && x.id && Number(x.amount || 0) >= 0) : [];
     out.payments = Array.isArray(out.payments) ? out.payments.filter(x => x && x.patientId && !x.demoSeed && Number(x.amount || 0) !== 1800) : [];
     // De-duplicate accidental repeated patient registrations while preserving the newest edit.
@@ -784,35 +725,15 @@ function toast(t, bad = false) {
 }
 async function api(path, method = 'GET', body) {
     if (!server) return null;
-    let url = server.replace(/\/$/, '') + path;
-    const m = String(method || 'GET').toUpperCase();
-    if (m === 'GET') {
-        url += (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
-    }
-    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    /* GET health/meta: 12s | full data: 45s | POST sync: 90s */
-    let ms = 20000;
-    if (m === 'POST') ms = 90000;
-    else if (path.indexOf('/api/data') >= 0) ms = 45000;
-    else if (path.indexOf('/api/health') >= 0 || path.indexOf('/api/meta') >= 0) ms = 12000;
-    const timer = ctrl ? setTimeout(function() { try { ctrl.abort(); } catch (e) {} }, ms) : null;
-    try {
-        const r = await fetch(url, {
-            method: m,
-            headers: {
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
-            },
-            cache: 'no-store',
-            signal: ctrl ? ctrl.signal : undefined,
-            body: body ? JSON.stringify(Object.assign({ deviceId: DEVICE_ID }, body)) : undefined
-        });
-        if (!r.ok) throw new Error('Server error ' + r.status);
-        return await r.json();
-    } finally {
-        if (timer) clearTimeout(timer);
-    }
+    const r = await fetch(server.replace(/\/$/, '') + path, {
+        method,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: body ? JSON.stringify(Object.assign({deviceId: DEVICE_ID}, body)) : undefined
+    });
+    if (!r.ok) throw new Error('Server error ' + r.status);
+    return r.json()
 }
 
 function mergeLocalRemote(remote) {
@@ -878,25 +799,24 @@ function connectClinicWebSocket() {
         const ws = new WebSocket(wsBase + '/ws');
         clinicWs = ws;
         ws.onopen = () => {
-            setConn(true, 'Live sync on', 0);
+            window.__lastCheckAt = new Date();
+            setConn(true, 'Connected (manual data refresh)', 0);
             try { ws.send('ping'); } catch (e) {}
         };
         ws.onmessage = (ev) => {
+            /* data_changed ignored for full pull — use Refresh for data merge */
             try {
-                const msg = (typeof ev.data === 'string' && ev.data.charAt(0) === '{') ? JSON.parse(ev.data) : { type: ev.data };
-                if (msg.type === 'hello' || msg.type === 'pong' || msg === 'pong') {
-                    setConn(true, 'Live sync on', 0);
-                }
-                /* Other device saved data → auto light pull (debounced) */
-                if (msg.type === 'data_changed' || msg.type === 'sync_ok') {
-                    scheduleLivePull();
+                const msg = JSON.parse(ev.data || '{}');
+                if (msg.type === 'hello' || msg === 'pong' || msg.type === 'pong') {
+                    window.__lastCheckAt = new Date();
+                    setConn(true, 'Connected (manual data refresh)', 0);
                 }
             } catch (e) {}
         };
         ws.onclose = () => {
             clinicWs = null;
             clearTimeout(clinicWsTimer);
-            clinicWsTimer = setTimeout(connectClinicWebSocket, 3000);
+            clinicWsTimer = setTimeout(connectClinicWebSocket, 20000);
         };
         ws.onerror = () => { try { ws.close(); } catch (e) {} };
     } catch (e) {}
@@ -932,6 +852,8 @@ async function syncNow(silent = false) {
         }
         saveLocal();
         const lag = Math.round(performance.now() - t0);
+        window.__lastSyncAt = new Date();
+        window.__lastCheckAt = window.__lastSyncAt;
         setConn(true, 'Synced · lag ' + lag + ' ms', lag);
         if (!clinicWs || clinicWs.readyState > 1) connectClinicWebSocket();
         try { if (role === 'reception') renderPermissions(); } catch (e) {}
@@ -978,11 +900,20 @@ function setConn(ok, msg, lagMs) {
     }
     const ls = $('#lastSyncText');
     if (ls) {
+        // Always refresh "check" time when online so UI clock keeps moving
         if (ok) {
-            window.__lastSyncAt = new Date();
-            ls.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString();
-        } else if (window.__lastSyncAt) {
-            ls.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString() + ' (stale)';
+            window.__lastCheckAt = new Date();
+        }
+        const checkStr = window.__lastCheckAt
+            ? window.__lastCheckAt.toLocaleTimeString()
+            : '—';
+        const syncStr = window.__lastSyncAt
+            ? window.__lastSyncAt.toLocaleTimeString()
+            : '—';
+        if (ok) {
+            ls.textContent = 'Last check: ' + checkStr + ' · Last sync: ' + syncStr;
+        } else if (window.__lastSyncAt || window.__lastCheckAt) {
+            ls.textContent = 'Last check: ' + checkStr + ' · Last sync: ' + syncStr + ' (stale)';
         } else {
             ls.textContent = '';
         }
@@ -1008,202 +939,6 @@ async function quickHealthOnline() {
 }
 
 /** After import/restore: pull full state from server into DB + UI (no hard refresh). */
-let _lastServerStamp = '';
-let _livePullTimer = null;
-
-/** Fast live pull: GET /api/data, skip heavy medicine renumber, background save. */
-async function lightPullFromServer(reason) {
-    reason = reason || 'manual';
-    if (!server) {
-        if (reason === 'manual') {
-            try { renderAll(); } catch (e) {}
-            try { toast('Offline — only local data shown', true); } catch (e) {}
-        }
-        return;
-    }
-    if (_syncInFlight) {
-        if (reason === 'manual') { try { toast('Refresh already running…'); } catch (e) {} }
-        return;
-    }
-    _syncInFlight = true;
-    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    const STAMP_KEY = 'anandClinicSyncStampV1';
-    let safety = null;
-    try {
-        safety = setTimeout(function() { _syncInFlight = false; }, 45000);
-    } catch (e) {}
-
-    function localPatientCount() {
-        return (DB.patients || []).filter(function(x) { return x && !x._deleted; }).length;
-    }
-    function countActive(arr) {
-        return (arr || []).filter(function(x) { return x && !x._deleted; }).length;
-    }
-    function persistBg() {
-        try { idbSet(KEY, DB).catch(function() {}); } catch (e) {}
-        try {
-            setTimeout(function() {
-                try { lsSafeSet(KEY, JSON.stringify(DB)); } catch (e2) {}
-            }, 0);
-        } catch (e) {}
-    }
-    function applyFullRemote(remote, skipMed) {
-        if (!remote || typeof remote !== 'object') return false;
-        const rp = countActive(remote.patients);
-        const lp = localPatientCount();
-        if (rp === 0 && lp > 0) return false;
-        DB = normalizeData(remote, { skipMedDedupe: !!skipMed });
-        return true;
-    }
-    function setStamp(serverTime, meta) {
-        const t = String(serverTime || (meta && meta.time) || '') || new Date().toISOString();
-        try { localStorage.setItem(STAMP_KEY, t); } catch (e) {}
-        _lastServerStamp = t + '|' + localPatientCount() + '|' + countActive(DB.payments) + '|' + countActive(DB.medicines);
-        try {
-            window.__lastSyncAt = new Date();
-            const ls = document.getElementById('lastSyncText');
-            if (ls) ls.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString();
-        } catch (e) {}
-    }
-    function mergeById(localArr, incoming) {
-        const map = new Map();
-        (localArr || []).forEach(function(x) { if (x && x.id) map.set(x.id, x); });
-        (incoming || []).forEach(function(x) {
-            if (!x || !x.id) return;
-            const old = map.get(x.id);
-            if (!old || String(x._updated || '') >= String(old._updated || '')) map.set(x.id, x);
-        });
-        return Array.from(map.values());
-    }
-    function applyDelta(delta) {
-        if (!delta || typeof delta !== 'object') return 0;
-        let n = 0;
-        n += (delta.patients || []).length;
-        n += (delta.payments || []).length;
-        n += (delta.medicines || []).length;
-        n += (delta.expenses || []).length;
-        if (n === 0 && !delta.settings && !delta.clinic) return 0;
-        DB.patients = mergeById(DB.patients, delta.patients);
-        DB.payments = mergeById(DB.payments, delta.payments);
-        DB.medicines = mergeById(DB.medicines, delta.medicines);
-        DB.expenses = mergeById(DB.expenses, delta.expenses);
-        if (delta.settings) DB.settings = Object.assign({}, DB.settings || {}, delta.settings);
-        if (delta.clinic) DB.clinic = Object.assign({}, DB.clinic || {}, delta.clinic);
-        const dels = new Set((delta.deleted || []).concat((DB.meta && DB.meta.deleted) || []));
-        DB.meta = DB.meta || { deleted: [] };
-        DB.meta.deleted = Array.from(dels);
-        if (dels.size) {
-            ['patients', 'payments', 'medicines', 'expenses'].forEach(function(k) {
-                DB[k] = (DB[k] || []).filter(function(x) {
-                    return x && !x._deleted && !dels.has(x.id);
-                });
-            });
-        }
-        return n;
-    }
-
-    try {
-        if (reason === 'manual') { try { toast('Syncing new changes…'); } catch (e) {} }
-
-        let since = '';
-        try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
-        const localCount = localPatientCount();
-
-        /* ---- First time / empty local: one full load, then always delta ---- */
-        if (!since || localCount === 0) {
-            let meta = null;
-            try { meta = await api('/api/meta'); } catch (e) {}
-            const remote = await api('/api/data');
-            if (remote && typeof remote === 'object') {
-                if (!(countActive(remote.patients) === 0 && localCount > 0)) {
-                    applyFullRemote(remote, true);
-                }
-                setStamp((remote.meta && remote.meta.serverMergedAt) || (meta && meta.time), meta);
-                persistBg();
-                try { renderAll(); } catch (e) {}
-                try { if (role === 'reception') renderPermissions(); } catch (e) {}
-                const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                const msg = 'Synced · ' + localPatientCount() + ' · ' + lag + ' ms';
-                try { setConn(true, msg, lag); } catch (e) {}
-                if (reason === 'manual') { try { toast(msg); } catch (e) {} }
-            }
-            return;
-        }
-
-        /* ---- Every 5s + Refresh: ONLY changes after Last sync time ---- */
-        let meta = null;
-        try { meta = await api('/api/meta'); } catch (e) {}
-
-        if (meta && meta.ok) {
-            const stamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
-            /* Nothing changed on server since last check */
-            if (reason === 'ws' && stamp && stamp === _lastServerStamp) {
-                try { setConn(true, 'Online · up to date', 0); } catch (e) {}
-                return;
-            }
-        }
-
-        const delta = await api('/api/changes?since=' + encodeURIComponent(since));
-        if (!delta || typeof delta !== 'object') throw new Error('empty changes');
-
-        if (delta.full) {
-            applyFullRemote(delta, true);
-            setStamp(delta.serverTime, meta);
-            persistBg();
-            try { renderAll(); } catch (e) {}
-            const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-            const msg = 'Synced · ' + localPatientCount() + ' · ' + lag + ' ms';
-            try { setConn(true, msg, lag); } catch (e) {}
-            if (reason === 'manual') { try { toast(msg); } catch (e) {} }
-            return;
-        }
-
-        const n = applyDelta(delta);
-        setStamp(delta.serverTime || (meta && meta.time), meta);
-
-        /* Safety: server still has more patients than us → one full pull */
-        const serverCount = (meta && meta.ok) ? Number(meta.patients || 0) : -1;
-        if (serverCount > localPatientCount() && serverCount > 0) {
-            try {
-                const remote = await api('/api/data');
-                if (remote && countActive(remote.patients) > localPatientCount()) {
-                    applyFullRemote(remote, true);
-                    setStamp((remote.meta && remote.meta.serverMergedAt) || (meta && meta.time), meta);
-                }
-            } catch (e) {}
-        }
-
-        persistBg();
-        if (n > 0 || reason === 'manual') {
-            try { renderAll(); } catch (e) {}
-            try { if (role === 'reception') renderPermissions(); } catch (e) {}
-        }
-        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-        const msg = n > 0
-            ? ('+' + n + ' new · ' + lag + ' ms')
-            : ('Up to date · ' + lag + ' ms');
-        try { setConn(true, 'Online · ' + msg, lag); } catch (e) {}
-        if (reason === 'manual') { try { toast(msg); } catch (e) {} }
-    } catch (e) {
-        console.warn('lightPull', e);
-        if (reason === 'manual') {
-            try { setConn(false, 'Sync failed — local data safe', null); } catch (e2) {}
-            try { toast('Sync failed — try again', true); } catch (e2) {}
-        }
-    } finally {
-        _syncInFlight = false;
-        try { if (safety) clearTimeout(safety); } catch (e) {}
-    }
-}
-
-function scheduleLivePull() {
-    try { clearTimeout(_livePullTimer); } catch (e) {}
-    _livePullTimer = setTimeout(function() {
-        lightPullFromServer('ws');
-    }, 250);
-}
-
-/** Full pull with full normalize (import / restore). */
 async function loadFreshFromServer(statusFn) {
     const say = typeof statusFn === 'function' ? statusFn : function() {};
     say('Loading fresh data from server…');
@@ -1805,23 +1540,7 @@ function renderPage(id) {
     }
     if (id === 'medicines') renderMedicines();
     if (id === 'clinic') renderClinic();
-    if (id === 'connection') {
-        if (!server) {
-            setConn(false, 'Offline — no server URL set.');
-        } else {
-            setConn(true, 'Checking connection…', null);
-            (async function() {
-                try {
-                    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-                    await api('/api/health');
-                    const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                    setConn(true, 'Connected · lag ' + lag + ' ms', lag);
-                } catch (e) {
-                    setConn(false, 'Not connected — check URL / internet, then Connect & Sync.', null);
-                }
-            })();
-        }
-    }
+    if (id === 'connection') setConn(!!server, server ? 'Checking connection…' : 'Offline mode — no server selected.');
     if (id === 'medicines' && role === 'reception') renderReceptionMedicines();
     if (id === 'appointmentHistory') renderAppointmentHistory();
     if (id === 'bill') setupBillPage(true);
@@ -2501,25 +2220,7 @@ function registerCase(e) {
     closeForm();
     refreshAllPatientViews();
     toast(id ? 'Case updated' : 'Case registered');
-    /* Push this patient to server immediately (small payload) */
-    try {
-        api('/api/upsert', 'POST', { patients: [p] }).then(function(res) {
-            try {
-                if (res && res.serverTime) {
-                    localStorage.setItem('anandClinicSyncStampV1', String(res.serverTime));
-                }
-            } catch (e) {}
-            try { connectClinicWebSocket(); } catch (e) {}
-            /* Nudge other devices via full soft sync only if upsert did not confirm counts */
-            try {
-                if (!res || !res.ok) syncNow(true);
-            } catch (e) {}
-        }).catch(function() {
-            try { syncNow(true); } catch (e) {}
-        });
-    } catch (e) {
-        try { syncNow(true); } catch (e2) {}
-    }
+    try { syncNow(true); } catch (e) {}
 }
 
 function closeForm() {
@@ -2708,30 +2409,23 @@ function renderPatientReport() {
             .filter(p => patientDateMatch(p.date))
             .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b._updated || '').localeCompare(String(a._updated || '')));
     } else {
-        // Only NEW case registrations — unique by permanent case no (one row per case)
+        // Only NEW case registrations (original), unique by permanent case no
         const byCase = new Map();
-        active(DB.patients).filter(p => {
-            const t = String(p.caseType || '').toLowerCase();
-            return t === 'new';
-        }).forEach(p => {
-            const key = String(permanentCaseNo(p) || p.caseNo || p.id);
+        active(DB.patients).filter(p => p.caseType === 'new').forEach(p => {
+            const key = String(permanentCaseNo(p));
             const prev = byCase.get(key);
-            // Prefer earliest registration date for that case no
-            if (!prev || String(normalizeDateISO(p.date) || p.date || '') < String(normalizeDateISO(prev.date) || prev.date || '')) {
-                byCase.set(key, p);
-            }
+            if (!prev || String(p.date) < String(prev.date)) byCase.set(key, p);
         });
         rows = [...byCase.values()].filter(p => patientDateMatch(p.date))
             .sort((a, b) => {
               const numA = parseInt(String(a.caseNo || permanentCaseNo(a) || '').replace(/\D/g, ''), 10) || 0;
               const numB = parseInt(String(b.caseNo || permanentCaseNo(b) || '').replace(/\D/g, ''), 10) || 0;
               return numB - numA;
-            });
+            })
     }
 
-    /* Count and list always from same rows array — no mismatch */
     set('pCountNew', rows.length);
-    set('patientFilterHint', (titleMap[view] || 'Cases') + ' · ' + rows.length + ' record(s)');
+    set('patientFilterHint', (titleMap[view] || 'Cases') + ` · ${rows.length} record(s)`);
 
     const totalPages = Math.max(1, Math.ceil(rows.length / patientReportPageSize));
     if (patientReportPage > totalPages) patientReportPage = totalPages;
@@ -4173,7 +3867,7 @@ function renderMedicines() {
     if (medPage > totalPages) medPage = totalPages;
     const slice = arr.slice((medPage - 1) * medPageSize, medPage * medPageSize);
     const body = $('#medBody');
-    if (body) body.innerHTML = slice.map(m => `<tr><td>${m.no||'-'}</td><td>${esc(m.name)}</td><td>${esc(m.drawer)}</td><td>${m.quantity}</td><td>${(m.available===true||m.available==="true"||String(m.available).toLowerCase()==="yes")?"Yes":(m.available===false||m.available==="false"||String(m.available).toLowerCase()==="no")?"No":esc(m.available)}</td><td><button class="btn embossed" onclick="editMed('${m.id}')">Edit</button><button class="btn deleteBox embossed" onclick="delMed('${m.id}')">Delete</button></td></tr>`).join('') || '<tr><td colspan="6">No medicines</td></tr>';
+    if (body) body.innerHTML = slice.map(m => `<tr><td>${m.no||'-'}</td><td>${esc(m.name)}</td><td>${esc(m.drawer)}</td><td>${m.quantity}</td><td>${m.available}</td><td><button class="btn embossed" onclick="editMed('${m.id}')">Edit</button><button class="btn deleteBox embossed" onclick="delMed('${m.id}')">Delete</button></td></tr>`).join('') || '<tr><td colspan="6">No medicines</td></tr>';
     buildPagination('medPagination', medPage, totalPages, arr.length, medPageSize, 'goMedPage');
 }
 
@@ -4183,20 +3877,10 @@ window.goMedPage = goMedPage;
 function saveMedicine(e) {
     if (!enforceReceptionEdit('medicineEntry')) return;
     e.preventDefault();
-    const name = ($('#medName').value || '').trim();
-    if (!name) { toast('Enter medicine name', true); return; }
-    const key = name.toLowerCase().replace(/\s+/g, ' ');
-    const exists = active(DB.medicines).some(function(m) {
-        return String(m.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === key;
-    });
-    if (exists) {
-        toast('This medicine is already existing', true);
-        return;
-    }
     const d = {
         id: uid('m'),
         no: active(DB.medicines).reduce((m, x) => Math.max(m, Number(x.no) || 0), 0) + 1,
-        name: name,
+        name: $('#medName').value.trim(),
         drawer: $('#medDrawer').value.trim(),
         quantity: Number($('#medQty').value || 0),
         available: $('#medAvail').value
@@ -4233,7 +3917,7 @@ function viewPatientHistory(id) {
     const byDate = {};
     // Source of truth for billed amounts = visit record fees (not summed payments which can be wrong after import)
     family.forEach(v => {
-        const d = normalizeDateISO(v.date) || String(v.date || '');
+        const d = String(v.date || '');
         if (!byDate[d]) byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: v.caseType || '' };
         byDate[d].consultation = Number(v.consultation || 0);
         byDate[d].medicine = Number(v.medicine || 0);
@@ -4242,7 +3926,6 @@ function viewPatientHistory(id) {
         byDate[d]._visitId = v.id;
         byDate[d]._visitFees = feeTotal(v);
         byDate[d]._partial = Math.max(0, Number(v.partialPending || 0));
-        byDate[d]._updated = String(v._updated || '');
         const st = paymentStatusInfo(v);
         byDate[d]._pendingVisit = st.kind === 'pending' || st.kind === 'partial' || v.forcePending === true || (v.received === false && feeTotal(v) > 0);
         byDate[d]._focVisit = st.kind === 'foc' || (feeTotal(v) <= 0 && !v.forcePending);
@@ -4250,7 +3933,7 @@ function viewPatientHistory(id) {
     });
     // If a date has payments but no visit row fees, fall back to payment sums
     famPays.forEach(x => {
-        const d = normalizeDateISO(x.date) || String(x.date || '');
+        const d = String(x.date || '');
         if (!byDate[d]) {
             byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: '' };
             const cat = x.feeCategory || 'other';
@@ -4258,18 +3941,14 @@ function viewPatientHistory(id) {
             else byDate[d].other += Number(x.amount || 0);
         }
     });
-    // Newest visit first (ISO date desc) — registration / oldest at bottom
-    const dates = Object.keys(byDate).sort((a, b) => {
-        const cmp = String(b).localeCompare(String(a));
-        if (cmp) return cmp;
-        return String((byDate[b] && byDate[b]._updated) || '').localeCompare(String((byDate[a] && byDate[a]._updated) || ''));
-    });
+    // Newest visit first
+    const dates = Object.keys(byDate).sort((a, b) => String(b).localeCompare(String(a)));
     let totalAll = 0, sumCons = 0, sumMed = 0, sumRen = 0;
     const rows = dates.map((d, i) => {
         const g = byDate[d];
         const lineTotal = g.consultation + g.medicine + g.renewal + g.other;
         const isRenew = g.renewal > 0;
-        const visitRow = family.find(v => (normalizeDateISO(v.date) || String(v.date || '')) === d) || family.find(v => String(v.date || '') === d) || null;
+        const visitRow = family.find(v => String(v.date || '') === d) || null;
         const stV = visitRow ? paymentStatusInfo(visitRow) : null;
         const isPendingVisit = stV ? (stV.kind === 'pending' || stV.kind === 'partial') : !!g._pendingVisit;
         const isFocVisit = stV ? stV.kind === 'foc' : (!!g._focVisit && !g._pendingVisit);
@@ -4282,7 +3961,7 @@ function viewPatientHistory(id) {
         } else if (!isPendingVisit && isFocVisit) {
             // FOC contributes 0
         }
-        const typeTag = g.type ? `<span class="tag ${String(g.type).toLowerCase()==='new'?'new':'old'}" style="margin-left:6px;font-size:10px">${String(g.type).toLowerCase()==='new'?'NEW':'OLD'}</span>` : '';
+        const typeTag = g.type ? `<span class="tag ${g.type}" style="margin-left:6px;font-size:10px">${String(g.type).toUpperCase()}</span>` : '';
         const vid = (visitRow && visitRow.id) || g._visitId || '';
         const isOffice = (role !== 'reception');
         // Office pending: small "pending" text + Rec + FOC only (no Pend button — already pending).
@@ -4785,18 +4464,8 @@ function editMed(id) {
     modal('Edit Medicine', `<form class="formgrid"><label>Medicine Name<input name="name" value="${esc(m.name)}"></label><label>Drawer<input name="drawer" value="${esc(m.drawer)}"></label><label>Quantity<input name="quantity" type="number" value="${m.quantity}"></label><label>Available<select name="available"><option ${m.available==='Yes'?'selected':''}>Yes</option><option ${m.available==='No'?'selected':''}>No</option></select></label><div class="full actions"><button class="primary">Update Medicine</button></div></form>`, e => {
         e.preventDefault();
         const d = Object.fromEntries(new FormData(e.target));
-        const newName = String(d.name || '').trim();
-        if (!newName) { toast('Enter medicine name', true); return; }
-        const key = newName.toLowerCase().replace(/\s+/g, ' ');
-        const clash = active(DB.medicines).some(function(x) {
-            return x.id !== m.id && String(x.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === key;
-        });
-        if (clash) {
-            toast('This medicine is already existing', true);
-            return;
-        }
         Object.assign(m, {
-            name: newName,
+            name: d.name,
             drawer: d.drawer,
             quantity: Number(d.quantity || 0),
             available: d.available
@@ -5545,17 +5214,9 @@ async function importBackup(e) {
 window.importBackup = importBackup;
 
 function getAppointmentHistoryRows() {
-    /* Newest visit date first; same day → later entry on top (first arrival stays lower) */
+    /* Single sort only — avoid caseRows() double-sort freeze on 2000+ patients */
     let rows = active(DB.patients).slice();
-    rows.sort((a, b) => {
-        const da = normalizeDateISO(a.date);
-        const db = normalizeDateISO(b.date);
-        if (db !== da) return String(db).localeCompare(String(da));
-        const ua = String(a._updated || '');
-        const ub = String(b._updated || '');
-        if (ub !== ua) return ub.localeCompare(ua);
-        return caseNoNumericPart(b.caseNo) - caseNoNumericPart(a.caseNo);
-    });
+    rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || caseNoNumericPart(b.caseNo) - caseNoNumericPart(a.caseNo));
     const q = String(histQuery || '').trim().toLowerCase();
     if (q) {
         const digits = q.replace(/\D/g, '');
@@ -5601,7 +5262,7 @@ function renderAppointmentHistory() {
         return `<tr>
           <td><b>${permanentCaseNo(p)}</b></td>
           <td>${fmtDate(p.date)}</td>
-          <td><span class="tag ${String(p.caseType||'').toLowerCase()==='new'?'new':'old'}">${String(p.caseType||'').toLowerCase()==='new'?'NEW':'OLD'}</span></td>
+          <td><span class="tag ${p.caseType}">${(p.caseType || 'old').toUpperCase()}</span></td>
           <td class="histPatientCell"><div class="patientNameOneLine">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile || '')}</div></td>
           <td class="amount">${money(total)}</td>
           <td class="amount">${money(paid)}</td>
@@ -5619,7 +5280,7 @@ function renderAppointmentHistory() {
                     if (i === 2 || i === totalPages - 1) html += `<span class="mini">…</span>`;
                     continue;
                 }
-                html += `<button type="button" class="btn embossed histPageBtn ${i===histPage?'active histPageActive':''}" data-hpg="${i}"${i===histPage?' style="background:#1e293b!important;color:#fff!important;border-color:#0f172a!important;font-weight:700;box-shadow:none"':''}>${i}</button>`;
+                html += `<button type="button" class="btn embossed ${i===histPage?'active':''}" data-hpg="${i}">${i}</button>`;
             }
             html += `<button type="button" class="btn embossed" data-hpg="next" ${histPage>=totalPages?'disabled':''}>Next ›</button>`;
             html += `<span class="mini" style="margin-left:8px">${rows.length} total · page ${histPage}/${totalPages}</span>`;
@@ -5716,7 +5377,12 @@ function renderAll() {
 let pollTimerId = null;
 let pollVisibilityBound = false;
 
-/** MANUAL ONLY: auto-poll OFF by default. Optional ?sync=30 to re-enable seconds. */
+/**
+ * Heartbeat (status only) every 5s by default — keeps Online / lag / Last check alive.
+ * Full data merge remains MANUAL (Refresh button) to avoid hang.
+ * Optional: ?sync=15  → also do full data sync every 15s
+ *           ?sync=off → disable even the light heartbeat
+ */
 function getSyncPollMs() {
     try {
         const q = new URLSearchParams(window.location.search || '');
@@ -5728,159 +5394,64 @@ function getSyncPollMs() {
             if (Number.isFinite(n) && n > 0) return Math.min(600, Math.max(5, n)) * 1000;
         }
     } catch (e) {}
-    /* Default every 5 seconds — only changes after Last sync time */
-    return 5000;
+    return 5000; // light heartbeat every 5 seconds
 }
 
-function localMaxCaseNo() {
-    var m = 0;
-    (DB.patients || []).forEach(function(p) {
-        if (!p || p._deleted) return;
-        var digits = String(p.caseNo || '').replace(/\D/g, '');
-        var n = parseInt(digits, 10) || 0;
-        if (n > m) m = n;
-    });
-    return m;
-}
-function localActiveCount(key) {
-    return (DB[key] || []).filter(function(x) { return x && !x._deleted; }).length;
-}
-
-function runPollTick() {
-    if (!server) return;
-    if (typeof document !== 'undefined' && document.hidden) return;
-    if (_syncInFlight) return;
-    _syncInFlight = true;
-    var STAMP_KEY = 'anandClinicSyncStampV1';
-    var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    (async function() {
-        try {
-            var meta = await api('/api/meta');
-            if (!meta || !meta.ok) return;
-
-            var localN = localActiveCount('patients');
-            var localPay = localActiveCount('payments');
-            var localMed = localActiveCount('medicines');
-            var localExp = localActiveCount('expenses');
-            var serverN = Number(meta.patients || 0);
-            var serverPay = Number(meta.payments || 0);
-            var serverMed = Number(meta.medicines || 0);
-            var serverExp = Number(meta.expenses || 0);
-            var localMax = localMaxCaseNo();
-            var serverMax = Number(meta.maxCaseNo || 0);
-
-            /* ANY of these means server has newer data we need:
-               - more patients / higher case no (new case)
-               - more payments (old case / receive)
-               - more medicines (stock add)
-               - more expenses
-            */
-            var needFull = false;
-            if (serverN > localN) needFull = true;
-            if (serverMax > localMax) needFull = true;
-            if (serverPay > localPay) needFull = true;
-            if (serverMed > localMed) needFull = true;
-            if (serverExp > localExp) needFull = true;
-
-            var since = '';
-            try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
-
-            if (needFull || !since) {
-                var remote = await api('/api/data');
-                if (!remote || typeof remote !== 'object') return;
-                var rp = (remote.patients || []).filter(function(x) { return x && !x._deleted; }).length;
-                if (rp === 0 && localN > 0) return;
-                DB = normalizeData(remote, { skipMedDedupe: true });
-                try {
-                    localStorage.setItem(STAMP_KEY, String(meta.time || (remote.meta && remote.meta.serverMergedAt) || new Date().toISOString()));
-                } catch (e) {}
-                try { idbSet(KEY, DB).catch(function() {}); } catch (e) {}
-                try { renderAll(); } catch (e) {}
-                var lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                try { setConn(true, 'Auto · synced · ' + lag + ' ms', lag); } catch (e) {}
-                try {
-                    window.__lastSyncAt = new Date();
-                    var ls = document.getElementById('lastSyncText');
-                    if (ls) ls.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString();
-                } catch (e) {}
-                return;
-            }
-
-            /* Counts same — still check last-sync time for edits (name, pending, etc.) */
-            if (String(meta.time || '') === since) {
-                try { setConn(true, 'Online · up to date', 0); } catch (e) {}
-                return;
-            }
-
-            var delta = await api('/api/changes?since=' + encodeURIComponent(since));
-            if (!delta) return;
-            if (delta.full) {
-                var rp2 = (delta.patients || []).filter(function(x) { return x && !x._deleted; }).length;
-                if (rp2 > 0) {
-                    DB = normalizeData(delta, { skipMedDedupe: true });
-                    try { localStorage.setItem(STAMP_KEY, String(delta.serverTime || meta.time)); } catch (e) {}
-                    try { renderAll(); } catch (e) {}
-                }
-                return;
-            }
-
-            var changed = 0;
-            function mergeById(arr, incoming) {
-                var map = new Map();
-                (arr || []).forEach(function(x) { if (x && x.id) map.set(x.id, x); });
-                (incoming || []).forEach(function(x) {
-                    if (!x || !x.id) return;
-                    changed++;
-                    var old = map.get(x.id);
-                    if (!old || String(x._updated || '') >= String(old._updated || '')) map.set(x.id, x);
-                });
-                return Array.from(map.values());
-            }
-            DB.patients = mergeById(DB.patients, delta.patients);
-            DB.payments = mergeById(DB.payments, delta.payments);
-            DB.medicines = mergeById(DB.medicines, delta.medicines);
-            DB.expenses = mergeById(DB.expenses, delta.expenses);
-            if (delta.settings) DB.settings = Object.assign({}, DB.settings || {}, delta.settings);
-            if (delta.clinic) DB.clinic = Object.assign({}, DB.clinic || {}, delta.clinic);
-            if (delta.serverTime || meta.time) {
-                try { localStorage.setItem(STAMP_KEY, String(delta.serverTime || meta.time)); } catch (e) {}
-            }
-            if (changed > 0) {
-                try { idbSet(KEY, DB).catch(function() {}); } catch (e) {}
-                try { renderAll(); } catch (e) {}
-                var lag2 = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                try { setConn(true, 'Auto +' + changed + ' · ' + lag2 + ' ms', lag2); } catch (e) {}
-                try {
-                    window.__lastSyncAt = new Date();
-                    var ls2 = document.getElementById('lastSyncText');
-                    if (ls2) ls2.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString();
-                } catch (e) {}
-            } else {
-                try { setConn(true, 'Online · up to date', 0); } catch (e) {}
-            }
-        } catch (e) {
-            console.warn('autoSync', e);
-        } finally {
-            _syncInFlight = false;
+function getFullAutoSyncMs() {
+    // Only when URL has ?sync=N (N>0). Default = no full auto data merge.
+    try {
+        const q = new URLSearchParams(window.location.search || '');
+        let v = q.get('sync');
+        if (v != null && String(v).trim() !== '') {
+            v = String(v).trim().toLowerCase();
+            if (v === '0' || v === 'off' || v === 'false' || v === 'no') return 0;
+            const n = parseInt(v, 10);
+            if (Number.isFinite(n) && n > 0) return Math.min(600, Math.max(5, n)) * 1000;
         }
-    })();
+    } catch (e) {}
+    return 0;
 }
 
+let _heartbeatInFlight = false;
+async function runPollTick() {
+    if (!server) return;
+    if (_heartbeatInFlight) return;
+    _heartbeatInFlight = true
+    try {
+        const fullMs = getFullAutoSyncMs();
+        if (fullMs > 0) {
+            // User explicitly enabled full auto with ?sync=N
+            await syncNow(true);
+        } else {
+            // Light heartbeat only — health + UI clock
+            const t0 = performance.now();
+            await api('/api/health');
+            const lag = Math.round(performance.now() - t0);
+            setConn(true, 'Connected · lag ' + lag + ' ms', lag);
+        }
+    } catch (e) {
+        try { setConn(false, 'Offline / not reachable', null); } catch (e2) {}
+    } finally {
+        _heartbeatInFlight = false;
+    }
+}
+
+function stopPollTimer() {
+    try { if (pollTimerId) clearInterval(pollTimerId); } catch (e) {}
+    pollTimerId = null;
+}
 
 function startPollTimerIfNeeded() {
     stopPollTimer();
-    if (!server) return;
     const ms = getSyncPollMs();
-    if (!ms) return; // ?sync=0
+    if (!ms) return;
     if (typeof document !== 'undefined' && document.hidden) return;
-    pollTimerId = setInterval(function() {
+    pollTimerId = setInterval(() => {
         if (typeof document !== 'undefined' && document.hidden) return;
         runPollTick();
     }, ms);
-    /* First tick soon after start so we don't wait full 5s */
-    try {
-        setTimeout(function() { runPollTick(); }, 1500);
-    } catch (e) {}
+    // Immediate first tick so clock starts moving right away
+    try { runPollTick(); } catch (e) {}
 }
 
 function resetPollTimer() {
@@ -5896,10 +5467,26 @@ function bindPollVisibility() {
     });
 }
 
-/** Dashboard Refresh button — merge Office + Reception when both online */
+/** Dashboard Refresh button — full data merge Office ↔ Reception */
 function forceRefresh() {
-    /* Live-style: fast GET pull, no full DB upload */
-    Promise.resolve(lightPullFromServer('manual')).catch(function() {});
+    try { saveLocal(); } catch (e) {}
+    if (!server) {
+        try { renderAll(); } catch (e) {}
+        try { toast('Offline — only local data shown', true); } catch (e) {}
+        return;
+    }
+    try {
+        const live = $('#syncLiveBadge');
+        if (live) { live.textContent = 'Syncing…'; live.className = 'syncLiveBadge syncing'; }
+    } catch (e) {}
+    try { toast('Refreshing data…'); } catch (e) {}
+    Promise.resolve(syncNow(false)).then(() => {
+        try {
+            if (typeof renderAll === 'function') renderAll();
+        } catch (e) {}
+    }).catch(() => {
+        try { toast('Refresh failed — check connection', true); } catch (e) {}
+    });
 }
 
 
@@ -6205,15 +5792,7 @@ function setup() {
     $('#connectBtn')?.addEventListener('click', async () => {
         server = $('#serverUrl').value.trim().replace(/\/$/, '');
         localStorage.setItem(SERVER_KEY, server);
-        setConn(true, 'Syncing with server…', null);
-        try {
-            /* Full two-way: push local + pull merged — forces PC and mobile to match */
-            await syncNow(false);
-        } catch (e) {
-            try { toast('Sync failed — try again', true); } catch (e2) {}
-        }
-        try { connectClinicWebSocket(); } catch (e) {}
-        try { startPollTimerIfNeeded(); } catch (e) {}
+        await syncNow();
     });
     $('#receptionPayToggle')?.addEventListener('change', () => {
         DB.settings = markUpdated({
@@ -6228,21 +5807,12 @@ function setup() {
     setConn(false, server ? 'Checking connection…' : 'Offline mode — no server selected.');
     /* Online badge first (health only), then full sync in background — no long wait for badge */
     if (server) {
-        /* Open any device: 1) push local if any 2) pull latest so all devices see same online data */
-        quickHealthOnline().then(async function(ok) {
-            if (!ok) return;
-            try {
-                const localN = (DB.patients || []).filter(function(x) { return x && !x._deleted; }).length;
-                if (localN > 0) {
-                    try { await syncNow(true); } catch (e) { console.warn('boot push', e); }
-                }
-                await lightPullFromServer('boot');
-            } catch (e) { console.warn('boot sync', e); }
-            try { connectClinicWebSocket(); } catch (e) {}
+        quickHealthOnline().then(function(ok) {
+            if (ok) return syncNow(true);
         }).catch(function() {});
     }
     bindPollVisibility();
-    startPollTimerIfNeeded(); // default 20s smart poll when tab visible
+    startPollTimerIfNeeded(); // light heartbeat 5s (status only); full sync = Refresh button
 }
 
 function renderReceptionQueue() {

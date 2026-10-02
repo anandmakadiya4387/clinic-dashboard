@@ -42,22 +42,6 @@ def now() -> str:
     return datetime.now().isoformat(timespec="milliseconds")
 
 
-
-def _max_case_no(patients):
-    m = 0
-    for p in patients or []:
-        if not isinstance(p, dict):
-            continue
-        s = str(p.get("caseNo") or "")
-        digits = "".join(ch for ch in s if ch.isdigit())
-        try:
-            n = int(digits) if digits else 0
-        except Exception:
-            n = 0
-        if n > m:
-            m = n
-    return m
-
 def merge_lists(a, b, deleted):
     """Last-write-wins by _updated, but NEVER resurrect tombstoned ids."""
     deleted = set(deleted or [])
@@ -384,139 +368,9 @@ def create_fastapi_app():
         tok = issue_token(role)
         return {"ok": True, "token": tok, "role": role}
 
-    @app.get("/api/meta")
-    def get_meta(x_token: str | None = Header(default=None)):
-        st = load_state()
-        meta = st.get("meta") or {}
-        return JSONResponse(
-            {
-                "ok": True,
-                "time": meta.get("serverMergedAt") or now(),
-                "patients": len(st.get("patients") or []),
-                "payments": len(st.get("payments") or []),
-                "medicines": len(st.get("medicines") or []),
-                "expenses": len(st.get("expenses") or []),
-                "maxCaseNo": _max_case_no(st.get("patients") or []),
-            },
-            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"},
-        )
-
-    @app.get("/api/changes")
-    def get_changes(since: str = "", x_token: str | None = Header(default=None)):
-        """Return only records newer than `since` (_updated / serverMergedAt). Empty since = full snapshot flag."""
-        st = load_state()
-        meta = st.get("meta") or {}
-        server_time = meta.get("serverMergedAt") or now()
-        since = (since or "").strip()
-
-        def newer(items):
-            out = []
-            for x in items or []:
-                if not isinstance(x, dict) or not x.get("id"):
-                    continue
-                u = str(x.get("_updated") or "")
-                if not since or u > since:
-                    out.append(x)
-            return out
-
-        # First sync / no cursor → client should full-pull
-        if not since:
-            return JSONResponse(
-                {
-                    "ok": True,
-                    "full": True,
-                    "serverTime": server_time,
-                    "patients": st.get("patients") or [],
-                    "payments": st.get("payments") or [],
-                    "medicines": st.get("medicines") or [],
-                    "expenses": st.get("expenses") or [],
-                    "settings": st.get("settings") or {},
-                    "clinic": st.get("clinic") or {},
-                    "meta": meta,
-                    "deleted": meta.get("deleted") or [],
-                    "counts": {
-                        "patients": len(st.get("patients") or []),
-                        "payments": len(st.get("payments") or []),
-                        "medicines": len(st.get("medicines") or []),
-                        "expenses": len(st.get("expenses") or []),
-                    },
-                },
-                headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"},
-            )
-
-        patients = newer(st.get("patients"))
-        payments = newer(st.get("payments"))
-        medicines = newer(st.get("medicines"))
-        expenses = newer(st.get("expenses"))
-        settings = st.get("settings") or {}
-        clinic = st.get("clinic") or {}
-        settings_out = settings if str(settings.get("_updated") or "") > since else None
-        clinic_out = clinic if str(clinic.get("_updated") or "") > since else None
-
-        return JSONResponse(
-            {
-                "ok": True,
-                "full": False,
-                "serverTime": server_time,
-                "patients": patients,
-                "payments": payments,
-                "medicines": medicines,
-                "expenses": expenses,
-                "settings": settings_out,
-                "clinic": clinic_out,
-                "deleted": meta.get("deleted") or [],
-                "counts": {
-                    "patients": len(patients),
-                    "payments": len(payments),
-                    "medicines": len(medicines),
-                    "expenses": len(expenses),
-                },
-            },
-            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"},
-        )
-
-    @app.post("/api/upsert")
-    async def upsert_records(request: Request, x_token: str | None = Header(default=None)):
-        """Merge only the provided records (patients/payments/medicines/expenses) — small payload for new entries."""
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-        if not isinstance(body, dict):
-            body = {}
-        device_id = body.get("deviceId") or "unknown"
-        current = load_state()
-        deleted = list((current.get("meta") or {}).get("deleted") or [])
-        for key in ("patients", "payments", "medicines", "expenses"):
-            if key in body and isinstance(body[key], list) and body[key]:
-                current[key] = merge_lists(current.get(key) or [], body[key], deleted)
-        if isinstance(body.get("settings"), dict):
-            current["settings"] = merge_dicts(current.get("settings") or {}, body["settings"])
-        if isinstance(body.get("clinic"), dict):
-            current["clinic"] = merge_dicts(current.get("clinic") or {}, body["clinic"])
-        if isinstance(body.get("meta"), dict) and isinstance(body["meta"].get("deleted"), list):
-            cur_del = set((current.get("meta") or {}).get("deleted") or [])
-            cur_del |= set(body["meta"]["deleted"])
-            current.setdefault("meta", {})["deleted"] = list(cur_del)
-        current.setdefault("meta", {})["serverMergedAt"] = now()
-        save_state(current, device=device_id)
-        return JSONResponse(
-            {"ok": True, "serverTime": current["meta"]["serverMergedAt"],
-             "patients": len(current.get("patients") or []),
-             "payments": len(current.get("payments") or [])},
-            headers={"Cache-Control": "no-store"},
-        )
-
     @app.get("/api/data")
     def get_data(x_token: str | None = Header(default=None)):
-        return JSONResponse(
-            load_state(),
-            headers={
-                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
+        return load_state()
 
     @app.post("/api/sync")
     async def sync(request: Request):
@@ -717,55 +571,6 @@ def main_legacy():
                         "framework": "stdlib",
                     }
                 )
-            if p == "/api/meta":
-                st = load_state()
-                meta = st.get("meta") or {}
-                return self._json({
-                    "ok": True,
-                    "time": meta.get("serverMergedAt") or now(),
-                    "patients": len(st.get("patients") or []),
-                    "payments": len(st.get("payments") or []),
-                    "medicines": len(st.get("medicines") or []),
-                    "expenses": len(st.get("expenses") or []),
-                })
-            if p.startswith("/api/changes"):
-                from urllib.parse import urlparse, parse_qs
-                qs = parse_qs(urlparse(self.path).query)
-                since = (qs.get("since") or [""])[0].strip()
-                st = load_state()
-                meta = st.get("meta") or {}
-                server_time = meta.get("serverMergedAt") or now()
-                def newer(items):
-                    out = []
-                    for x in items or []:
-                        if not isinstance(x, dict) or not x.get("id"):
-                            continue
-                        u = str(x.get("_updated") or "")
-                        if not since or u > since:
-                            out.append(x)
-                    return out
-                if not since:
-                    return self._json({
-                        "ok": True, "full": True, "serverTime": server_time,
-                        "patients": st.get("patients") or [], "payments": st.get("payments") or [],
-                        "medicines": st.get("medicines") or [], "expenses": st.get("expenses") or [],
-                        "settings": st.get("settings") or {}, "clinic": st.get("clinic") or {},
-                        "meta": meta, "deleted": meta.get("deleted") or [],
-                        "counts": {"patients": len(st.get("patients") or []), "payments": len(st.get("payments") or []),
-                                   "medicines": len(st.get("medicines") or []), "expenses": len(st.get("expenses") or [])},
-                    })
-                patients, payments = newer(st.get("patients")), newer(st.get("payments"))
-                medicines, expenses = newer(st.get("medicines")), newer(st.get("expenses"))
-                settings, clinic = st.get("settings") or {}, st.get("clinic") or {}
-                return self._json({
-                    "ok": True, "full": False, "serverTime": server_time,
-                    "patients": patients, "payments": payments, "medicines": medicines, "expenses": expenses,
-                    "settings": settings if str(settings.get("_updated") or "") > since else None,
-                    "clinic": clinic if str(clinic.get("_updated") or "") > since else None,
-                    "deleted": meta.get("deleted") or [],
-                    "counts": {"patients": len(patients), "payments": len(payments),
-                               "medicines": len(medicines), "expenses": len(expenses)},
-                })
             if p == "/api/data":
                 return self._json(load_state())
             if p == "/api/backups":
