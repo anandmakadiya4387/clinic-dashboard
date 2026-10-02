@@ -469,9 +469,10 @@ def create_fastapi_app():
             body = {}
         device_id = body.get("deviceId") or "unknown"
         current = load_state()
+        deleted = list((current.get("meta") or {}).get("deleted") or [])
         for key in ("patients", "payments", "medicines", "expenses"):
             if key in body and isinstance(body[key], list) and body[key]:
-                current[key] = merge_lists(current.get(key) or [], body[key])
+                current[key] = merge_lists(current.get(key) or [], body[key], deleted)
         if isinstance(body.get("settings"), dict):
             current["settings"] = merge_dicts(current.get("settings") or {}, body["settings"])
         if isinstance(body.get("clinic"), dict):
@@ -481,7 +482,7 @@ def create_fastapi_app():
             cur_del |= set(body["meta"]["deleted"])
             current.setdefault("meta", {})["deleted"] = list(cur_del)
         current.setdefault("meta", {})["serverMergedAt"] = now()
-        save_state(current, device_id=device_id, summary="upsert")
+        save_state(current, device=device_id)
         return JSONResponse(
             {"ok": True, "serverTime": current["meta"]["serverMergedAt"],
              "patients": len(current.get("patients") or []),

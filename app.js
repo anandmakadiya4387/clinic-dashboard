@@ -2552,10 +2552,19 @@ function registerCase(e) {
     closeForm();
     refreshAllPatientViews();
     toast(id ? 'Case updated' : 'Case registered');
-    /* Push only this patient quickly, then soft full sync in background */
+    /* Push this patient to server immediately (small payload) */
     try {
-        api('/api/upsert', 'POST', { patients: [p] }).then(function() {
+        api('/api/upsert', 'POST', { patients: [p] }).then(function(res) {
+            try {
+                if (res && res.serverTime) {
+                    localStorage.setItem('anandClinicSyncStampV1', String(res.serverTime));
+                }
+            } catch (e) {}
             try { connectClinicWebSocket(); } catch (e) {}
+            /* Nudge other devices via full soft sync only if upsert did not confirm counts */
+            try {
+                if (!res || !res.ok) syncNow(true);
+            } catch (e) {}
         }).catch(function() {
             try { syncNow(true); } catch (e) {}
         });
