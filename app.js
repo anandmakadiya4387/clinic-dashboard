@@ -1028,6 +1028,10 @@ async function lightPullFromServer(reason) {
     _syncInFlight = true;
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const STAMP_KEY = 'anandClinicSyncStampV1';
+    let safety = null;
+    try {
+        safety = setTimeout(function() { _syncInFlight = false; }, 45000);
+    } catch (e) {}
 
     function localPatientCount() {
         return (DB.patients || []).filter(function(x) { return x && !x._deleted; }).length;
@@ -1051,10 +1055,15 @@ async function lightPullFromServer(reason) {
         DB = normalizeData(remote, { skipMedDedupe: !!skipMed });
         return true;
     }
-    function setStampFromRemote(remote, metaTime) {
-        const serverTime = String(metaTime || (remote && remote.meta && remote.meta.serverMergedAt) || '') || new Date().toISOString();
-        try { localStorage.setItem(STAMP_KEY, serverTime); } catch (e) {}
-        _lastServerStamp = serverTime + '|' + localPatientCount() + '|' + countActive(DB.payments) + '|' + countActive(DB.medicines);
+    function setStamp(serverTime, meta) {
+        const t = String(serverTime || (meta && meta.time) || '') || new Date().toISOString();
+        try { localStorage.setItem(STAMP_KEY, t); } catch (e) {}
+        _lastServerStamp = t + '|' + localPatientCount() + '|' + countActive(DB.payments) + '|' + countActive(DB.medicines);
+        try {
+            window.__lastSyncAt = new Date();
+            const ls = document.getElementById('lastSyncText');
+            if (ls) ls.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString();
+        } catch (e) {}
     }
     function mergeById(localArr, incoming) {
         const map = new Map();
@@ -1094,153 +1103,96 @@ async function lightPullFromServer(reason) {
     }
 
     try {
-        if (reason === 'manual') { try { toast('Syncing…'); } catch (e) {} }
+        if (reason === 'manual') { try { toast('Syncing new changes…'); } catch (e) {} }
 
-        let meta = null;
-        try { meta = await api('/api/meta'); } catch (e) { meta = null; }
+        let since = '';
+        try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
         const localCount = localPatientCount();
-        const serverCount = (meta && meta.ok) ? Number(meta.patients || 0) : -1;
 
-        /* ========== WS / 5s auto: if server has more patients → pull; else delta only ========== */
-        if (reason === 'ws') {
-            try {
-                /* Unlock stuck flag after max 45s */
-                if (!_syncSafety) {
-                    _syncSafety = setTimeout(function() { _syncInFlight = false; _syncSafety = null; }, 45000);
+        /* ---- First time / empty local: one full load, then always delta ---- */
+        if (!since || localCount === 0) {
+            let meta = null;
+            try { meta = await api('/api/meta'); } catch (e) {}
+            const remote = await api('/api/data');
+            if (remote && typeof remote === 'object') {
+                if (!(countActive(remote.patients) === 0 && localCount > 0)) {
+                    applyFullRemote(remote, true);
                 }
-            } catch (e) {}
-
-            /* KEY: server has entries we don't → full pull (this is what Refresh does successfully) */
-            if (serverCount > localCount && serverCount > 0) {
-                try {
-                    const remote = await api('/api/data');
-                    if (remote && countActive(remote.patients) > 0) {
-                        applyFullRemote(remote, true);
-                        setStampFromRemote(remote, meta && meta.time);
-                        persistBg();
-                        try { renderAll(); } catch (e) {}
-                        try { if (role === 'reception') renderPermissions(); } catch (e) {}
-                        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                        try { setConn(true, 'Auto · ' + localPatientCount() + ' · ' + lag + ' ms', lag); } catch (e) {}
-                    }
-                } catch (e) {
-                    console.warn('auto pull', e);
-                }
-                return;
-            }
-
-            /* Same count: only fetch changes since last stamp */
-            if (meta && meta.ok) {
-                const stamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
-                if (stamp && stamp === _lastServerStamp) {
-                    try { setConn(true, 'Online · up to date', 0); } catch (e) {}
-                    return;
-                }
-            }
-
-            let since = '';
-            try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
-            if (since) {
-                try {
-                    const delta = await api('/api/changes?since=' + encodeURIComponent(since));
-                    if (delta && !delta.full) {
-                        const n = applyDelta(delta);
-                        if (delta.serverTime) {
-                            try { localStorage.setItem(STAMP_KEY, String(delta.serverTime)); } catch (e) {}
-                            _lastServerStamp = String(delta.serverTime) + '|' + localPatientCount() + '|' + countActive(DB.payments) + '|' + countActive(DB.medicines);
-                        }
-                        if (n > 0) {
-                            persistBg();
-                            try { renderAll(); } catch (e) {}
-                            const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                            try { setConn(true, 'Online +' + n + ' · ' + lag + ' ms', lag); } catch (e) {}
-                        } else if (meta && meta.ok) {
-                            _lastServerStamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
-                        }
-                    } else if (delta && delta.full && countActive(delta.patients) > localCount) {
-                        applyFullRemote(delta, true);
-                        setStampFromRemote(delta, delta.serverTime);
-                        persistBg();
-                        try { renderAll(); } catch (e) {}
-                    }
-                } catch (e) { console.warn('delta', e); }
+                setStamp((remote.meta && remote.meta.serverMergedAt) || (meta && meta.time), meta);
+                persistBg();
+                try { renderAll(); } catch (e) {}
+                try { if (role === 'reception') renderPermissions(); } catch (e) {}
+                const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                const msg = 'Synced · ' + localPatientCount() + ' · ' + lag + ' ms';
+                try { setConn(true, msg, lag); } catch (e) {}
+                if (reason === 'manual') { try { toast(msg); } catch (e) {} }
             }
             return;
         }
 
-        /* ========== boot / manual Refresh: two-way so all devices match ========== */
-        if (serverCount >= 0 && localCount > serverCount) {
-            try {
-                const merged = await api('/api/sync', 'POST', DB);
-                if (merged && typeof merged === 'object') {
-                    applyFullRemote(merged, true);
-                    setStampFromRemote(merged, meta && meta.time);
-                    persistBg();
-                    try { renderAll(); } catch (e) {}
-                    try { if (role === 'reception') renderPermissions(); } catch (e) {}
-                    const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                    const msg = 'Synced · ' + localPatientCount() + ' patients · ' + lag + ' ms';
-                    try { setConn(true, msg, lag); } catch (e) {}
-                    if (reason === 'manual') { try { toast(msg); } catch (e) {} }
-                    return;
-                }
-            } catch (e) { console.warn('push-merge', e); }
-        }
+        /* ---- Every 5s + Refresh: ONLY changes after Last sync time ---- */
+        let meta = null;
+        try { meta = await api('/api/meta'); } catch (e) {}
 
-        try {
-            const remote = await api('/api/data');
-            if (remote && typeof remote === 'object') {
-                const rp = countActive(remote.patients);
-                if (rp === 0 && localCount > 0) {
-                    try {
-                        const merged = await api('/api/sync', 'POST', DB);
-                        if (merged) applyFullRemote(merged, true);
-                    } catch (e2) {}
-                } else if (rp > 0) {
-                    if (rp >= localCount) {
-                        applyFullRemote(remote, true);
-                    } else {
-                        try {
-                            const merged = await api('/api/sync', 'POST', DB);
-                            if (merged) applyFullRemote(merged, true);
-                            else applyFullRemote(remote, true);
-                        } catch (e3) {
-                            applyFullRemote(remote, true);
-                        }
-                    }
-                }
-                setStampFromRemote(DB, (meta && meta.time) || (remote.meta && remote.meta.serverMergedAt));
-                persistBg();
-                try { renderAll(); } catch (e) {}
-                try { if (role === 'reception') renderPermissions(); } catch (e) {}
-                try { if (typeof refreshAllPatientViews === 'function') refreshAllPatientViews(); } catch (e) {}
-                const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                const msg = 'Synced · ' + localPatientCount() + ' patients · ' + lag + ' ms';
-                try { setConn(true, msg, lag); } catch (e) {}
-                if (reason === 'manual') { try { toast(msg); } catch (e) {} }
+        if (meta && meta.ok) {
+            const stamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
+            /* Nothing changed on server since last check */
+            if (reason === 'ws' && stamp && stamp === _lastServerStamp) {
+                try { setConn(true, 'Online · up to date', 0); } catch (e) {}
                 return;
             }
-        } catch (e) {
-            console.warn('full pull', e);
         }
 
-        if (reason === 'manual' || reason === 'boot') {
-            try { setConn(false, 'Sync failed — local data safe', null); } catch (e2) {}
-            if (reason === 'manual') {
-                try { toast('Refresh failed — local data still safe', true); } catch (e2) {}
-            }
+        const delta = await api('/api/changes?since=' + encodeURIComponent(since));
+        if (!delta || typeof delta !== 'object') throw new Error('empty changes');
+
+        if (delta.full) {
+            applyFullRemote(delta, true);
+            setStamp(delta.serverTime, meta);
+            persistBg();
+            try { renderAll(); } catch (e) {}
+            const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+            const msg = 'Synced · ' + localPatientCount() + ' · ' + lag + ' ms';
+            try { setConn(true, msg, lag); } catch (e) {}
+            if (reason === 'manual') { try { toast(msg); } catch (e) {} }
+            return;
         }
+
+        const n = applyDelta(delta);
+        setStamp(delta.serverTime || (meta && meta.time), meta);
+
+        /* Safety: server still has more patients than us → one full pull */
+        const serverCount = (meta && meta.ok) ? Number(meta.patients || 0) : -1;
+        if (serverCount > localPatientCount() && serverCount > 0) {
+            try {
+                const remote = await api('/api/data');
+                if (remote && countActive(remote.patients) > localPatientCount()) {
+                    applyFullRemote(remote, true);
+                    setStamp((remote.meta && remote.meta.serverMergedAt) || (meta && meta.time), meta);
+                }
+            } catch (e) {}
+        }
+
+        persistBg();
+        if (n > 0 || reason === 'manual') {
+            try { renderAll(); } catch (e) {}
+            try { if (role === 'reception') renderPermissions(); } catch (e) {}
+        }
+        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+        const msg = n > 0
+            ? ('+' + n + ' new · ' + lag + ' ms')
+            : ('Up to date · ' + lag + ' ms');
+        try { setConn(true, 'Online · ' + msg, lag); } catch (e) {}
+        if (reason === 'manual') { try { toast(msg); } catch (e) {} }
     } catch (e) {
         console.warn('lightPull', e);
-        if (reason === 'manual' || reason === 'boot') {
+        if (reason === 'manual') {
             try { setConn(false, 'Sync failed — local data safe', null); } catch (e2) {}
-            if (reason === 'manual') {
-                try { toast('Refresh failed — local data still safe', true); } catch (e2) {}
-            }
+            try { toast('Sync failed — try again', true); } catch (e2) {}
         }
     } finally {
         _syncInFlight = false;
-        try { if (_syncSafety) { clearTimeout(_syncSafety); _syncSafety = null; } } catch (e) {}
+        try { if (safety) clearTimeout(safety); } catch (e) {}
     }
 }
 
@@ -5776,8 +5728,7 @@ function getSyncPollMs() {
             if (Number.isFinite(n) && n > 0) return Math.min(600, Math.max(5, n)) * 1000;
         }
     } catch (e) {}
-    /* Default 5s smart poll when tab visible — only new changes (delta), not full data.
-       URL: ?sync=0 to turn off, ?sync=10 for 10 seconds. */
+    /* Default every 5 seconds — only changes after Last sync time */
     return 5000;
 }
 
