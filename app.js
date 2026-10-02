@@ -5414,20 +5414,81 @@ function getFullAutoSyncMs() {
 
 let _heartbeatInFlight = false;
 async function runPollTick() {
+    /* Every 5s: auto fetch if server has new case / old case / medicine / payment.
+       Previously only health ping — that forced manual Refresh. Logo/logic unchanged. */
     if (!server) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
     if (_heartbeatInFlight) return;
-    _heartbeatInFlight = true
+    if (typeof _syncInFlight !== 'undefined' && _syncInFlight) return;
+    _heartbeatInFlight = true;
+    const STAMP_KEY = 'anandClinicSyncStampV1';
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    function activeCount(arr) {
+        return (arr || []).filter(function(x) { return x && !x._deleted; }).length;
+    }
+    function maxCaseNo(arr) {
+        var m = 0;
+        (arr || []).forEach(function(p) {
+            if (!p || p._deleted) return;
+            var n = parseInt(String(p.caseNo || '').replace(/\D/g, ''), 10) || 0;
+            if (n > m) m = n;
+        });
+        return m;
+    }
     try {
-        const fullMs = getFullAutoSyncMs();
-        if (fullMs > 0) {
-            // User explicitly enabled full auto with ?sync=N
-            await syncNow(true);
+        var meta = null;
+        try { meta = await api('/api/meta'); } catch (e) { meta = null; }
+
+        var needSync = false;
+        if (meta && meta.ok) {
+            if (Number(meta.patients || 0) > activeCount(DB.patients)) needSync = true;
+            if (Number(meta.payments || 0) > activeCount(DB.payments)) needSync = true;
+            if (Number(meta.medicines || 0) > activeCount(DB.medicines)) needSync = true;
+            if (Number(meta.maxCaseNo || 0) > maxCaseNo(DB.patients)) needSync = true;
+            var since = '';
+            try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
+            if (!since || String(meta.time || '') !== since) needSync = true;
         } else {
-            // Light heartbeat only — health + UI clock
-            const t0 = performance.now();
-            await api('/api/health');
-            const lag = Math.round(performance.now() - t0);
-            setConn(true, 'Connected · lag ' + lag + ' ms', lag);
+            /* Fallback if meta not on server yet: full syncNow once when ?sync not needed */
+            try {
+                var remote = await api('/api/data');
+                if (remote && typeof remote === 'object') {
+                    if (activeCount(remote.patients) > activeCount(DB.patients)) needSync = true;
+                    if (activeCount(remote.payments) > activeCount(DB.payments)) needSync = true;
+                    if (activeCount(remote.medicines) > activeCount(DB.medicines)) needSync = true;
+                    if (maxCaseNo(remote.patients) > maxCaseNo(DB.patients)) needSync = true;
+                }
+            } catch (e) {
+                try {
+                    await api('/api/health');
+                    var lagH = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                    setConn(true, 'Online · lag ' + lagH + ' ms', lagH);
+                } catch (e2) {
+                    setConn(false, 'Offline / not reachable', null);
+                }
+                return;
+            }
+        }
+
+        if (needSync) {
+            await syncNow(true);
+            if (meta && meta.time) {
+                try { localStorage.setItem(STAMP_KEY, String(meta.time)); } catch (e) {}
+            } else {
+                try { localStorage.setItem(STAMP_KEY, new Date().toISOString()); } catch (e) {}
+            }
+            try {
+                window.__lastSyncAt = new Date();
+                var ls = document.getElementById('lastSyncText');
+                if (ls) ls.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString();
+            } catch (e) {}
+            return;
+        }
+
+        var lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+        try { setConn(true, 'Online · up to date · ' + lag + ' ms', lag); } catch (e) {}
+        if (meta && meta.time) {
+            try { localStorage.setItem(STAMP_KEY, String(meta.time)); } catch (e) {}
         }
     } catch (e) {
         try { setConn(false, 'Offline / not reachable', null); } catch (e2) {}

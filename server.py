@@ -133,6 +133,10 @@ def load_state():
 
 
 def save_state(state, device="server"):
+    try:
+        state.setdefault("meta", {})["serverMergedAt"] = now()
+    except Exception:
+        pass
     payload = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
     with LOCK, connect_db() as c:
         c.execute("UPDATE state SET payload=?,updated=? WHERE id=1", (payload, now()))
@@ -356,6 +360,32 @@ def create_fastapi_app():
             "wal": True,
             "framework": "fastapi",
             "ws": "/ws",
+        }
+
+    @app.get("/api/meta")
+    def get_meta():
+        st = load_state()
+        pts = st.get("patients") or []
+        max_case = 0
+        for p in pts:
+            if not isinstance(p, dict):
+                continue
+            digits = "".join(ch for ch in str(p.get("caseNo") or "") if ch.isdigit())
+            try:
+                n = int(digits) if digits else 0
+            except Exception:
+                n = 0
+            if n > max_case:
+                max_case = n
+        meta = st.get("meta") or {}
+        return {
+            "ok": True,
+            "time": meta.get("serverMergedAt") or now(),
+            "patients": len(pts),
+            "payments": len(st.get("payments") or []),
+            "medicines": len(st.get("medicines") or []),
+            "expenses": len(st.get("expenses") or []),
+            "maxCaseNo": max_case,
         }
 
     @app.post("/api/auth/login")
