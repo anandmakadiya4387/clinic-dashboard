@@ -458,6 +458,37 @@ def create_fastapi_app():
             headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"},
         )
 
+    @app.post("/api/upsert")
+    async def upsert_records(request: Request, x_token: str | None = Header(default=None)):
+        """Merge only the provided records (patients/payments/medicines/expenses) — small payload for new entries."""
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        device_id = body.get("deviceId") or "unknown"
+        current = load_state()
+        for key in ("patients", "payments", "medicines", "expenses"):
+            if key in body and isinstance(body[key], list) and body[key]:
+                current[key] = merge_lists(current.get(key) or [], body[key])
+        if isinstance(body.get("settings"), dict):
+            current["settings"] = merge_dicts(current.get("settings") or {}, body["settings"])
+        if isinstance(body.get("clinic"), dict):
+            current["clinic"] = merge_dicts(current.get("clinic") or {}, body["clinic"])
+        if isinstance(body.get("meta"), dict) and isinstance(body["meta"].get("deleted"), list):
+            cur_del = set((current.get("meta") or {}).get("deleted") or [])
+            cur_del |= set(body["meta"]["deleted"])
+            current.setdefault("meta", {})["deleted"] = list(cur_del)
+        current.setdefault("meta", {})["serverMergedAt"] = now()
+        save_state(current, device_id=device_id, summary="upsert")
+        return JSONResponse(
+            {"ok": True, "serverTime": current["meta"]["serverMergedAt"],
+             "patients": len(current.get("patients") or []),
+             "payments": len(current.get("payments") or [])},
+            headers={"Cache-Control": "no-store"},
+        )
+
     @app.get("/api/data")
     def get_data(x_token: str | None = Header(default=None)):
         return JSONResponse(

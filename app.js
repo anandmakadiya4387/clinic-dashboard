@@ -784,15 +784,35 @@ function toast(t, bad = false) {
 }
 async function api(path, method = 'GET', body) {
     if (!server) return null;
-    const r = await fetch(server.replace(/\/$/, '') + path, {
-        method,
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: body ? JSON.stringify(Object.assign({deviceId: DEVICE_ID}, body)) : undefined
-    });
-    if (!r.ok) throw new Error('Server error ' + r.status);
-    return r.json()
+    let url = server.replace(/\/$/, '') + path;
+    const m = String(method || 'GET').toUpperCase();
+    if (m === 'GET') {
+        url += (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+    }
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    /* GET health/meta: 12s | full data: 45s | POST sync: 90s */
+    let ms = 20000;
+    if (m === 'POST') ms = 90000;
+    else if (path.indexOf('/api/data') >= 0) ms = 45000;
+    else if (path.indexOf('/api/health') >= 0 || path.indexOf('/api/meta') >= 0) ms = 12000;
+    const timer = ctrl ? setTimeout(function() { try { ctrl.abort(); } catch (e) {} }, ms) : null;
+    try {
+        const r = await fetch(url, {
+            method: m,
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            },
+            cache: 'no-store',
+            signal: ctrl ? ctrl.signal : undefined,
+            body: body ? JSON.stringify(Object.assign({ deviceId: DEVICE_ID }, body)) : undefined
+        });
+        if (!r.ok) throw new Error('Server error ' + r.status);
+        return await r.json();
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
 }
 
 function mergeLocalRemote(remote) {
@@ -1081,19 +1101,38 @@ async function lightPullFromServer(reason) {
         const localCount = localPatientCount();
         const serverCount = (meta && meta.ok) ? Number(meta.patients || 0) : -1;
 
-        /* ========== WS / auto-poll (every 5s): ONLY new changes (delta) ========== */
+        /* ========== WS / 5s poll: ONLY new changes (never full dump every tick) ========== */
         if (reason === 'ws') {
-            /* Skip if meta says nothing changed */
+            if (!server) return;
+
+            /* A) Server has new patients we don't → one full pull (rare) */
+            if (serverCount > localCount && serverCount > 0) {
+                try {
+                    const remote = await api('/api/data');
+                    if (remote && countActive(remote.patients) > 0) {
+                        applyFullRemote(remote, true);
+                        setStampFromRemote(remote, meta && meta.time);
+                        persistBg();
+                        try { renderAll(); } catch (e) {}
+                        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                        try { setConn(true, 'Online · ' + localPatientCount() + ' · ' + lag + ' ms', lag); } catch (e) {}
+                    }
+                } catch (e) { console.warn('ws pull', e); }
+                return;
+            }
+
+            /* B) Meta unchanged → skip network body */
             if (meta && meta.ok) {
                 const stamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
                 if (stamp && stamp === _lastServerStamp) {
+                    try { setConn(true, 'Online · up to date', 0); } catch (e) {}
                     return;
                 }
             }
+
+            /* C) Delta only */
             let since = '';
             try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
-
-            /* No stamp yet → one full pull to catch up, then next ticks are delta only */
             if (!since) {
                 try {
                     const remote = await api('/api/data');
@@ -1106,15 +1145,9 @@ async function lightPullFromServer(reason) {
                 } catch (e) {}
                 return;
             }
-
-            /* Delta only — only records with _updated > since */
             try {
                 const delta = await api('/api/changes?since=' + encodeURIComponent(since));
-                if (delta && delta.full) {
-                    /* Server asked for full — rare */
-                    applyFullRemote(delta, true);
-                    setStampFromRemote(delta, delta.serverTime);
-                } else if (delta) {
+                if (delta && !delta.full) {
                     const n = applyDelta(delta);
                     if (delta.serverTime) {
                         try { localStorage.setItem(STAMP_KEY, String(delta.serverTime)); } catch (e) {}
@@ -1123,16 +1156,19 @@ async function lightPullFromServer(reason) {
                     if (n > 0) {
                         persistBg();
                         try { renderAll(); } catch (e) {}
-                        try { if (role === 'reception') renderPermissions(); } catch (e) {}
                         const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                        try { setConn(true, 'Live +' + n + ' · ' + lag + ' ms', lag); } catch (e) {}
+                        try { setConn(true, 'Online +' + n + ' · ' + lag + ' ms', lag); } catch (e) {}
                     } else if (meta && meta.ok) {
                         _lastServerStamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
+                        try { setConn(true, 'Online · up to date', 0); } catch (e) {}
                     }
+                } else if (delta && delta.full) {
+                    applyFullRemote(delta, true);
+                    setStampFromRemote(delta, delta.serverTime);
+                    persistBg();
+                    try { renderAll(); } catch (e) {}
                 }
-            } catch (e) {
-                console.warn('delta poll', e);
-            }
+            } catch (e) { console.warn('delta', e); }
             return;
         }
 
@@ -1820,7 +1856,23 @@ function renderPage(id) {
     }
     if (id === 'medicines') renderMedicines();
     if (id === 'clinic') renderClinic();
-    if (id === 'connection') setConn(!!server, server ? 'Checking connection…' : 'Offline mode — no server selected.');
+    if (id === 'connection') {
+        if (!server) {
+            setConn(false, 'Offline — no server URL set.');
+        } else {
+            setConn(true, 'Checking connection…', null);
+            (async function() {
+                try {
+                    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                    await api('/api/health');
+                    const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                    setConn(true, 'Connected · lag ' + lag + ' ms', lag);
+                } catch (e) {
+                    setConn(false, 'Not connected — check URL / internet, then Connect & Sync.', null);
+                }
+            })();
+        }
+    }
     if (id === 'medicines' && role === 'reception') renderReceptionMedicines();
     if (id === 'appointmentHistory') renderAppointmentHistory();
     if (id === 'bill') setupBillPage(true);
@@ -2500,7 +2552,16 @@ function registerCase(e) {
     closeForm();
     refreshAllPatientViews();
     toast(id ? 'Case updated' : 'Case registered');
-    try { syncNow(true); } catch (e) {}
+    /* Push only this patient quickly, then soft full sync in background */
+    try {
+        api('/api/upsert', 'POST', { patients: [p] }).then(function() {
+            try { connectClinicWebSocket(); } catch (e) {}
+        }).catch(function() {
+            try { syncNow(true); } catch (e) {}
+        });
+    } catch (e) {
+        try { syncNow(true); } catch (e2) {}
+    }
 }
 
 function closeForm() {
@@ -6059,14 +6120,15 @@ function setup() {
     $('#connectBtn')?.addEventListener('click', async () => {
         server = $('#serverUrl').value.trim().replace(/\/$/, '');
         localStorage.setItem(SERVER_KEY, server);
+        setConn(true, 'Syncing with server…', null);
         try {
-            const localN = (DB.patients || []).filter(function(x) { return x && !x._deleted; }).length;
-            if (localN > 0) {
-                try { await syncNow(true); } catch (e) {}
-            }
-            await lightPullFromServer('manual');
-        } catch (e) {}
+            /* Full two-way: push local + pull merged — forces PC and mobile to match */
+            await syncNow(false);
+        } catch (e) {
+            try { toast('Sync failed — try again', true); } catch (e2) {}
+        }
         try { connectClinicWebSocket(); } catch (e) {}
+        try { startPollTimerIfNeeded(); } catch (e) {}
     });
     $('#receptionPayToggle')?.addEventListener('change', () => {
         DB.settings = markUpdated({
