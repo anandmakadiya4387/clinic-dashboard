@@ -876,7 +876,7 @@ function connectClinicWebSocket() {
         ws.onclose = () => {
             clinicWs = null;
             clearTimeout(clinicWsTimer);
-            clinicWsTimer = setTimeout(connectClinicWebSocket, 20000);
+            clinicWsTimer = setTimeout(connectClinicWebSocket, 3000);
         };
         ws.onerror = () => { try { ws.close(); } catch (e) {} };
     } catch (e) {}
@@ -1008,116 +1008,203 @@ async function lightPullFromServer(reason) {
     _syncInFlight = true;
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const STAMP_KEY = 'anandClinicSyncStampV1';
-    try {
-        let since = '';
-        try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) { since = ''; }
 
-        /* Quick meta: skip if server time unchanged (WS noise) */
-        try {
-            const meta = await api('/api/meta');
-            if (meta && meta.ok) {
-                const stamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
-                if (reason === 'ws' && stamp && stamp === _lastServerStamp) {
-                    return;
-                }
-            }
-        } catch (e) {}
-
-        if (reason === 'manual') { try { toast('Refreshing…'); } catch (e) {} }
-
-        /* Incremental: only records with _updated > since */
-        const path = since
-            ? ('/api/changes?since=' + encodeURIComponent(since))
-            : '/api/changes';
-        const delta = await api(path);
-        if (!delta || typeof delta !== 'object') throw new Error('Server returned empty changes');
-
-        const mergeById = function(localArr, incoming) {
-            const map = new Map();
-            (localArr || []).forEach(function(x) {
-                if (x && x.id) map.set(x.id, x);
-            });
-            (incoming || []).forEach(function(x) {
-                if (!x || !x.id) return;
-                const old = map.get(x.id);
-                if (!old || String(x._updated || '') >= String(old._updated || '')) {
-                    map.set(x.id, x);
-                }
-            });
-            return Array.from(map.values());
-        };
-
-        if (delta.full) {
-            /* First sync or no cursor — full replace (light normalize) */
-            DB = normalizeData({
-                patients: delta.patients || [],
-                payments: delta.payments || [],
-                medicines: delta.medicines || [],
-                expenses: delta.expenses || [],
-                settings: delta.settings || DB.settings,
-                clinic: delta.clinic || DB.clinic,
-                meta: delta.meta || DB.meta,
-                schemaVersion: (delta.meta && delta.meta.schemaVersion) || DB.schemaVersion
-            }, { skipMedDedupe: true });
-        } else {
-            /* Apply only changed rows into existing DB */
-            DB.patients = mergeById(DB.patients, delta.patients);
-            DB.payments = mergeById(DB.payments, delta.payments);
-            DB.medicines = mergeById(DB.medicines, delta.medicines);
-            DB.expenses = mergeById(DB.expenses, delta.expenses);
-            if (delta.settings && typeof delta.settings === 'object') {
-                DB.settings = Object.assign({}, DB.settings || {}, delta.settings);
-            }
-            if (delta.clinic && typeof delta.clinic === 'object') {
-                DB.clinic = Object.assign({}, DB.clinic || {}, delta.clinic);
-            }
-            const dels = new Set((delta.deleted || []).concat((DB.meta && DB.meta.deleted) || []));
-            DB.meta = DB.meta || { deleted: [] };
-            DB.meta.deleted = Array.from(dels);
-            if (dels.size) {
-                ['patients', 'payments', 'medicines', 'expenses'].forEach(function(k) {
-                    DB[k] = (DB[k] || []).filter(function(x) {
-                        return x && !x._deleted && !dels.has(x.id);
-                    });
-                });
-            }
-        }
-
-        const serverTime = String(delta.serverTime || '');
-        if (serverTime) {
-            try { localStorage.setItem(STAMP_KEY, serverTime); } catch (e) {}
-        }
-        const c = delta.counts || {};
-        _lastServerStamp = serverTime + '|' + (c.patients || 0) + '|' + (c.payments || 0) + '|' + (c.medicines || 0);
-
+    function localPatientCount() {
+        return (DB.patients || []).filter(function(x) { return x && !x._deleted; }).length;
+    }
+    function countActive(arr) {
+        return (arr || []).filter(function(x) { return x && !x._deleted; }).length;
+    }
+    function persistBg() {
         try { idbSet(KEY, DB).catch(function() {}); } catch (e) {}
         try {
             setTimeout(function() {
                 try { lsSafeSet(KEY, JSON.stringify(DB)); } catch (e2) {}
             }, 0);
         } catch (e) {}
+    }
+    function applyFullRemote(remote, skipMed) {
+        if (!remote || typeof remote !== 'object') return false;
+        const rp = countActive(remote.patients);
+        const lp = localPatientCount();
+        if (rp === 0 && lp > 0) return false;
+        DB = normalizeData(remote, { skipMedDedupe: !!skipMed });
+        return true;
+    }
+    function setStampFromRemote(remote, metaTime) {
+        const serverTime = String(metaTime || (remote && remote.meta && remote.meta.serverMergedAt) || '') || new Date().toISOString();
+        try { localStorage.setItem(STAMP_KEY, serverTime); } catch (e) {}
+        _lastServerStamp = serverTime + '|' + localPatientCount() + '|' + countActive(DB.payments) + '|' + countActive(DB.medicines);
+    }
+    function mergeById(localArr, incoming) {
+        const map = new Map();
+        (localArr || []).forEach(function(x) { if (x && x.id) map.set(x.id, x); });
+        (incoming || []).forEach(function(x) {
+            if (!x || !x.id) return;
+            const old = map.get(x.id);
+            if (!old || String(x._updated || '') >= String(old._updated || '')) map.set(x.id, x);
+        });
+        return Array.from(map.values());
+    }
+    function applyDelta(delta) {
+        if (!delta || typeof delta !== 'object') return 0;
+        let n = 0;
+        n += (delta.patients || []).length;
+        n += (delta.payments || []).length;
+        n += (delta.medicines || []).length;
+        n += (delta.expenses || []).length;
+        if (n === 0 && !delta.settings && !delta.clinic) return 0;
+        DB.patients = mergeById(DB.patients, delta.patients);
+        DB.payments = mergeById(DB.payments, delta.payments);
+        DB.medicines = mergeById(DB.medicines, delta.medicines);
+        DB.expenses = mergeById(DB.expenses, delta.expenses);
+        if (delta.settings) DB.settings = Object.assign({}, DB.settings || {}, delta.settings);
+        if (delta.clinic) DB.clinic = Object.assign({}, DB.clinic || {}, delta.clinic);
+        const dels = new Set((delta.deleted || []).concat((DB.meta && DB.meta.deleted) || []));
+        DB.meta = DB.meta || { deleted: [] };
+        DB.meta.deleted = Array.from(dels);
+        if (dels.size) {
+            ['patients', 'payments', 'medicines', 'expenses'].forEach(function(k) {
+                DB[k] = (DB[k] || []).filter(function(x) {
+                    return x && !x._deleted && !dels.has(x.id);
+                });
+            });
+        }
+        return n;
+    }
 
-        try { renderAll(); } catch (e) { console.warn(e); }
-        try { if (role === 'reception') renderPermissions(); } catch (e) {}
-        try { if (typeof refreshAllPatientViews === 'function') refreshAllPatientViews(); } catch (e) {}
+    try {
+        if (reason === 'manual') { try { toast('Syncing…'); } catch (e) {} }
 
-        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-        const nPat = (delta.patients || []).length;
-        const nPay = (delta.payments || []).length;
-        const nMed = (delta.medicines || []).length;
-        const nExp = (delta.expenses || []).length;
-        const nTotal = nPat + nPay + nMed + nExp;
-        const msg = delta.full
-            ? ('Full sync · ' + lag + ' ms')
-            : ('Updated ' + nTotal + ' record(s) · ' + lag + ' ms');
-        try { setConn(true, msg, lag); } catch (e) {}
-        if (reason === 'manual') {
-            try { toast(msg); } catch (e) {}
+        let meta = null;
+        try { meta = await api('/api/meta'); } catch (e) { meta = null; }
+        const localCount = localPatientCount();
+        const serverCount = (meta && meta.ok) ? Number(meta.patients || 0) : -1;
+
+        /* ========== WS / auto-poll (every 5s): ONLY new changes (delta) ========== */
+        if (reason === 'ws') {
+            /* Skip if meta says nothing changed */
+            if (meta && meta.ok) {
+                const stamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
+                if (stamp && stamp === _lastServerStamp) {
+                    return;
+                }
+            }
+            let since = '';
+            try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
+
+            /* No stamp yet → one full pull to catch up, then next ticks are delta only */
+            if (!since) {
+                try {
+                    const remote = await api('/api/data');
+                    if (remote) {
+                        applyFullRemote(remote, true);
+                        setStampFromRemote(remote, meta && meta.time);
+                        persistBg();
+                        try { renderAll(); } catch (e) {}
+                    }
+                } catch (e) {}
+                return;
+            }
+
+            /* Delta only — only records with _updated > since */
+            try {
+                const delta = await api('/api/changes?since=' + encodeURIComponent(since));
+                if (delta && delta.full) {
+                    /* Server asked for full — rare */
+                    applyFullRemote(delta, true);
+                    setStampFromRemote(delta, delta.serverTime);
+                } else if (delta) {
+                    const n = applyDelta(delta);
+                    if (delta.serverTime) {
+                        try { localStorage.setItem(STAMP_KEY, String(delta.serverTime)); } catch (e) {}
+                        _lastServerStamp = String(delta.serverTime) + '|' + localPatientCount() + '|' + countActive(DB.payments) + '|' + countActive(DB.medicines);
+                    }
+                    if (n > 0) {
+                        persistBg();
+                        try { renderAll(); } catch (e) {}
+                        try { if (role === 'reception') renderPermissions(); } catch (e) {}
+                        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                        try { setConn(true, 'Live +' + n + ' · ' + lag + ' ms', lag); } catch (e) {}
+                    } else if (meta && meta.ok) {
+                        _lastServerStamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
+                    }
+                }
+            } catch (e) {
+                console.warn('delta poll', e);
+            }
+            return;
+        }
+
+        /* ========== boot / manual Refresh: two-way so all devices match ========== */
+        if (serverCount >= 0 && localCount > serverCount) {
+            try {
+                const merged = await api('/api/sync', 'POST', DB);
+                if (merged && typeof merged === 'object') {
+                    applyFullRemote(merged, true);
+                    setStampFromRemote(merged, meta && meta.time);
+                    persistBg();
+                    try { renderAll(); } catch (e) {}
+                    try { if (role === 'reception') renderPermissions(); } catch (e) {}
+                    const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                    const msg = 'Synced · ' + localPatientCount() + ' patients · ' + lag + ' ms';
+                    try { setConn(true, msg, lag); } catch (e) {}
+                    if (reason === 'manual') { try { toast(msg); } catch (e) {} }
+                    return;
+                }
+            } catch (e) { console.warn('push-merge', e); }
+        }
+
+        try {
+            const remote = await api('/api/data');
+            if (remote && typeof remote === 'object') {
+                const rp = countActive(remote.patients);
+                if (rp === 0 && localCount > 0) {
+                    try {
+                        const merged = await api('/api/sync', 'POST', DB);
+                        if (merged) applyFullRemote(merged, true);
+                    } catch (e2) {}
+                } else if (rp > 0) {
+                    if (rp >= localCount) {
+                        applyFullRemote(remote, true);
+                    } else {
+                        try {
+                            const merged = await api('/api/sync', 'POST', DB);
+                            if (merged) applyFullRemote(merged, true);
+                            else applyFullRemote(remote, true);
+                        } catch (e3) {
+                            applyFullRemote(remote, true);
+                        }
+                    }
+                }
+                setStampFromRemote(DB, (meta && meta.time) || (remote.meta && remote.meta.serverMergedAt));
+                persistBg();
+                try { renderAll(); } catch (e) {}
+                try { if (role === 'reception') renderPermissions(); } catch (e) {}
+                try { if (typeof refreshAllPatientViews === 'function') refreshAllPatientViews(); } catch (e) {}
+                const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                const msg = 'Synced · ' + localPatientCount() + ' patients · ' + lag + ' ms';
+                try { setConn(true, msg, lag); } catch (e) {}
+                if (reason === 'manual') { try { toast(msg); } catch (e) {} }
+                return;
+            }
+        } catch (e) {
+            console.warn('full pull', e);
+        }
+
+        if (reason === 'manual' || reason === 'boot') {
+            try { setConn(false, 'Sync failed — local data safe', null); } catch (e2) {}
+            if (reason === 'manual') {
+                try { toast('Refresh failed — local data still safe', true); } catch (e2) {}
+            }
         }
     } catch (e) {
-        if (reason === 'manual') {
-            try { setConn(false, 'Refresh failed — check network', null); } catch (e2) {}
-            try { toast('Refresh failed — try again', true); } catch (e2) {}
+        console.warn('lightPull', e);
+        if (reason === 'manual' || reason === 'boot') {
+            try { setConn(false, 'Sync failed — local data safe', null); } catch (e2) {}
+            if (reason === 'manual') {
+                try { toast('Refresh failed — local data still safe', true); } catch (e2) {}
+            }
         }
     } finally {
         _syncInFlight = false;
@@ -1128,7 +1215,7 @@ function scheduleLivePull() {
     try { clearTimeout(_livePullTimer); } catch (e) {}
     _livePullTimer = setTimeout(function() {
         lightPullFromServer('ws');
-    }, 350);
+    }, 250);
 }
 
 /** Full pull with full normalize (import / restore). */
@@ -5622,11 +5709,16 @@ function getSyncPollMs() {
             if (Number.isFinite(n) && n > 0) return Math.min(600, Math.max(5, n)) * 1000;
         }
     } catch (e) {}
-    return 0; // default OFF — only manual Refresh
+    /* Default 5s smart poll when tab visible — only new changes (delta), not full data.
+       URL: ?sync=0 to turn off, ?sync=10 for 10 seconds. */
+    return 5000;
 }
 
 function runPollTick() {
-    try { if (server) syncNow(true); } catch (e) {}
+    /* Silent reconcile — pull new data from server (other device entries) without full page reload */
+    try {
+        if (server) lightPullFromServer('ws');
+    } catch (e) {}
 }
 
 function stopPollTimer() {
@@ -5967,8 +6059,13 @@ function setup() {
     $('#connectBtn')?.addEventListener('click', async () => {
         server = $('#serverUrl').value.trim().replace(/\/$/, '');
         localStorage.setItem(SERVER_KEY, server);
-        /* Connect = get latest data (incremental if already synced before) */
-        try { await lightPullFromServer('manual'); } catch (e) {}
+        try {
+            const localN = (DB.patients || []).filter(function(x) { return x && !x._deleted; }).length;
+            if (localN > 0) {
+                try { await syncNow(true); } catch (e) {}
+            }
+            await lightPullFromServer('manual');
+        } catch (e) {}
         try { connectClinicWebSocket(); } catch (e) {}
     });
     $('#receptionPayToggle')?.addEventListener('change', () => {
@@ -5984,12 +6081,17 @@ function setup() {
     setConn(false, server ? 'Checking connection…' : 'Offline mode — no server selected.');
     /* Online badge first (health only), then full sync in background — no long wait for badge */
     if (server) {
-        /* First open / page load: auto pull latest (full once, then only changes). No full DB upload. */
-        quickHealthOnline().then(function(ok) {
+        /* Open any device: 1) push local if any 2) pull latest so all devices see same online data */
+        quickHealthOnline().then(async function(ok) {
             if (!ok) return;
-            return lightPullFromServer('boot').then(function() {
-                try { connectClinicWebSocket(); } catch (e) {}
-            });
+            try {
+                const localN = (DB.patients || []).filter(function(x) { return x && !x._deleted; }).length;
+                if (localN > 0) {
+                    try { await syncNow(true); } catch (e) { console.warn('boot push', e); }
+                }
+                await lightPullFromServer('boot');
+            } catch (e) { console.warn('boot sync', e); }
+            try { connectClinicWebSocket(); } catch (e) {}
         }).catch(function() {});
     }
     bindPollVisibility();
