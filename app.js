@@ -1101,11 +1101,16 @@ async function lightPullFromServer(reason) {
         const localCount = localPatientCount();
         const serverCount = (meta && meta.ok) ? Number(meta.patients || 0) : -1;
 
-        /* ========== WS / 5s poll: ONLY new changes (never full dump every tick) ========== */
+        /* ========== WS / 5s auto: if server has more patients → pull; else delta only ========== */
         if (reason === 'ws') {
-            if (!server) return;
+            try {
+                /* Unlock stuck flag after max 45s */
+                if (!_syncSafety) {
+                    _syncSafety = setTimeout(function() { _syncInFlight = false; _syncSafety = null; }, 45000);
+                }
+            } catch (e) {}
 
-            /* A) Server has new patients we don't → one full pull (rare) */
+            /* KEY: server has entries we don't → full pull (this is what Refresh does successfully) */
             if (serverCount > localCount && serverCount > 0) {
                 try {
                     const remote = await api('/api/data');
@@ -1114,14 +1119,17 @@ async function lightPullFromServer(reason) {
                         setStampFromRemote(remote, meta && meta.time);
                         persistBg();
                         try { renderAll(); } catch (e) {}
+                        try { if (role === 'reception') renderPermissions(); } catch (e) {}
                         const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                        try { setConn(true, 'Online · ' + localPatientCount() + ' · ' + lag + ' ms', lag); } catch (e) {}
+                        try { setConn(true, 'Auto · ' + localPatientCount() + ' · ' + lag + ' ms', lag); } catch (e) {}
                     }
-                } catch (e) { console.warn('ws pull', e); }
+                } catch (e) {
+                    console.warn('auto pull', e);
+                }
                 return;
             }
 
-            /* B) Meta unchanged → skip network body */
+            /* Same count: only fetch changes since last stamp */
             if (meta && meta.ok) {
                 const stamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
                 if (stamp && stamp === _lastServerStamp) {
@@ -1130,45 +1138,33 @@ async function lightPullFromServer(reason) {
                 }
             }
 
-            /* C) Delta only */
             let since = '';
             try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
-            if (!since) {
+            if (since) {
                 try {
-                    const remote = await api('/api/data');
-                    if (remote) {
-                        applyFullRemote(remote, true);
-                        setStampFromRemote(remote, meta && meta.time);
+                    const delta = await api('/api/changes?since=' + encodeURIComponent(since));
+                    if (delta && !delta.full) {
+                        const n = applyDelta(delta);
+                        if (delta.serverTime) {
+                            try { localStorage.setItem(STAMP_KEY, String(delta.serverTime)); } catch (e) {}
+                            _lastServerStamp = String(delta.serverTime) + '|' + localPatientCount() + '|' + countActive(DB.payments) + '|' + countActive(DB.medicines);
+                        }
+                        if (n > 0) {
+                            persistBg();
+                            try { renderAll(); } catch (e) {}
+                            const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                            try { setConn(true, 'Online +' + n + ' · ' + lag + ' ms', lag); } catch (e) {}
+                        } else if (meta && meta.ok) {
+                            _lastServerStamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
+                        }
+                    } else if (delta && delta.full && countActive(delta.patients) > localCount) {
+                        applyFullRemote(delta, true);
+                        setStampFromRemote(delta, delta.serverTime);
                         persistBg();
                         try { renderAll(); } catch (e) {}
                     }
-                } catch (e) {}
-                return;
+                } catch (e) { console.warn('delta', e); }
             }
-            try {
-                const delta = await api('/api/changes?since=' + encodeURIComponent(since));
-                if (delta && !delta.full) {
-                    const n = applyDelta(delta);
-                    if (delta.serverTime) {
-                        try { localStorage.setItem(STAMP_KEY, String(delta.serverTime)); } catch (e) {}
-                        _lastServerStamp = String(delta.serverTime) + '|' + localPatientCount() + '|' + countActive(DB.payments) + '|' + countActive(DB.medicines);
-                    }
-                    if (n > 0) {
-                        persistBg();
-                        try { renderAll(); } catch (e) {}
-                        const lag = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                        try { setConn(true, 'Online +' + n + ' · ' + lag + ' ms', lag); } catch (e) {}
-                    } else if (meta && meta.ok) {
-                        _lastServerStamp = String(meta.time || '') + '|' + meta.patients + '|' + meta.payments + '|' + meta.medicines;
-                        try { setConn(true, 'Online · up to date', 0); } catch (e) {}
-                    }
-                } else if (delta && delta.full) {
-                    applyFullRemote(delta, true);
-                    setStampFromRemote(delta, delta.serverTime);
-                    persistBg();
-                    try { renderAll(); } catch (e) {}
-                }
-            } catch (e) { console.warn('delta', e); }
             return;
         }
 
@@ -1244,6 +1240,7 @@ async function lightPullFromServer(reason) {
         }
     } finally {
         _syncInFlight = false;
+        try { if (_syncSafety) { clearTimeout(_syncSafety); _syncSafety = null; } } catch (e) {}
     }
 }
 
@@ -5785,10 +5782,14 @@ function getSyncPollMs() {
 }
 
 function runPollTick() {
-    /* Silent reconcile — pull new data from server (other device entries) without full page reload */
     try {
-        if (server) lightPullFromServer('ws');
-    } catch (e) {}
+        if (!server) return;
+        if (typeof document !== 'undefined' && document.hidden) return;
+        /* Always try — lightPull itself skips if nothing changed */
+        lightPullFromServer('ws');
+    } catch (e) {
+        try { _syncInFlight = false; } catch (e2) {}
+    }
 }
 
 function stopPollTimer() {
@@ -5798,13 +5799,18 @@ function stopPollTimer() {
 
 function startPollTimerIfNeeded() {
     stopPollTimer();
+    if (!server) return;
     const ms = getSyncPollMs();
-    if (!ms) return; // auto-poll off
+    if (!ms) return; // ?sync=0
     if (typeof document !== 'undefined' && document.hidden) return;
-    pollTimerId = setInterval(() => {
+    pollTimerId = setInterval(function() {
         if (typeof document !== 'undefined' && document.hidden) return;
         runPollTick();
     }, ms);
+    /* First tick soon after start so we don't wait full 5s */
+    try {
+        setTimeout(function() { runPollTick(); }, 1500);
+    } catch (e) {}
 }
 
 function resetPollTimer() {
