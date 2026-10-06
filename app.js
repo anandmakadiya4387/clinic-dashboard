@@ -2999,14 +2999,38 @@ function initPaymentYearSelect() {
     }
 }
 
+/** Parse payment date year — supports YYYY-MM-DD and DD/MM/YYYY (Clinic + Yearly same). */
+function paymentYear(d) {
+    d = String(d || '').trim();
+    if (!d) return '';
+    if (/^\d{4}/.test(d)) return d.slice(0, 4);
+    const m = d.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+    if (m) return m[3];
+    return '';
+}
+function paymentMonth(d) {
+    d = String(d || '').trim();
+    if (/^\d{4}-\d{2}/.test(d)) return d.slice(5, 7);
+    const m = d.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+    if (m) return String(m[2]).padStart(2, '0');
+    return '';
+}
+function paymentDay(d) {
+    d = String(d || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(8, 10);
+    const m = d.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+    if (m) return String(m[1]).padStart(2, '0');
+    return '';
+}
+
 function paymentAmountBy(year, month, day, caseType) {
     const pays = active(DB.payments);
     return pays.filter(x => {
         const d = String(x.date || '');
         if (!d) return false;
-        if (year && year !== 'ALL' && d.slice(0, 4) !== String(year)) return false;
-        if (month && d.slice(5, 7) !== String(month).padStart(2, '0')) return false;
-        if (day && d.slice(8, 10) !== String(day).padStart(2, '0')) return false;
+        if (year && year !== 'ALL' && paymentYear(d) !== String(year)) return false;
+        if (month && paymentMonth(d) !== String(month).padStart(2, '0')) return false;
+        if (day && paymentDay(d) !== String(day).padStart(2, '0')) return false;
         if (caseType && caseType !== 'total') {
             const isRenew = x.feeCategory === 'renewal' || x.caseType === 'renewal';
             if (caseType === 'renewal') return isRenew;
@@ -3021,9 +3045,9 @@ function feeCategoryAmountBy(year, month, day, feeCategory) {
     return active(DB.payments).filter(x => {
         const d = String(x.date || '');
         if (!d) return false;
-        if (year && year !== 'ALL' && d.slice(0, 4) !== String(year)) return false;
-        if (month && d.slice(5, 7) !== String(month).padStart(2, '0')) return false;
-        if (day && d.slice(8, 10) !== String(day).padStart(2, '0')) return false;
+        if (year && year !== 'ALL' && paymentYear(d) !== String(year)) return false;
+        if (month && paymentMonth(d) !== String(month).padStart(2, '0')) return false;
+        if (day && paymentDay(d) !== String(day).padStart(2, '0')) return false;
         if (feeCategory) return (x.feeCategory || '') === feeCategory;
         return true;
     }).reduce((s, x) => s + Number(x.amount || 0), 0);
@@ -3526,7 +3550,7 @@ const outstanding = Math.max(patientOut, apptOut) > 0 ? (patientOut + apptOut) :
 function getLedgerYearsDesc() {
     const years = new Set();
     active(DB.payments).forEach(x => {
-        const yy = String(x.date || '').slice(0, 4);
+        const yy = paymentYear(x.date || '');
         if (/^\d{4}$/.test(yy)) years.add(yy);
     });
     // Always include range 2019 → current so empty years can appear when show-all
@@ -3559,13 +3583,11 @@ function renderYearComparisonTable() {
         pageRows = list.slice((yearComparePage - 1) * yearComparePageSize, yearComparePage * yearComparePageSize);
     }
     let totalN = 0, totalR = 0, totalMed = 0, totalT = 0;
-    // Grand total from full filtered list
-    list.forEach(yy => {
-        totalN += paymentAmountBy(yy, null, null, 'new');
-        totalR += paymentAmountBy(yy, null, null, 'renewal');
-        totalMed += feeCategoryAmountBy(yy, null, null, 'medicine');
-        totalT += paymentAmountBy(yy, null, null, 'total');
-    });
+    /* Grand total = same as Clinic Payment (All years) — same functions, same numbers */
+    totalN = paymentAmountBy(null, null, null, 'new');
+    totalR = paymentAmountBy(null, null, null, 'renewal');
+    totalMed = feeCategoryAmountBy(null, null, null, 'medicine');
+    totalT = paymentAmountBy(null, null, null, 'total');
     const rows = pageRows.map(yy => {
         const n = paymentAmountBy(yy, null, null, 'new');
         const r = paymentAmountBy(yy, null, null, 'renewal');
