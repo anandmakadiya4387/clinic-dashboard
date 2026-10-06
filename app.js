@@ -5394,7 +5394,7 @@ function getSyncPollMs() {
             if (Number.isFinite(n) && n > 0) return Math.min(600, Math.max(5, n)) * 1000;
         }
     } catch (e) {}
-    return 5000; // light heartbeat every 5 seconds
+    return 0; // auto OFF — only open + Refresh
 }
 
 function getFullAutoSyncMs() {
