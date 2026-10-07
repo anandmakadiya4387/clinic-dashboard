@@ -321,6 +321,7 @@ let reportKind = 'patients',
     calendarDate = isoToday();
 let dataDirty = true;
 let lastRenderedPage = '';
+let lastRenderKey = '';
 
 
 function normalizeData(d) {
@@ -1530,13 +1531,23 @@ function openPage(id) {
         b.classList.toggle('active', b.dataset.page === id);
     });
     if (window.innerWidth < 900) { $('#side')?.classList.remove('open'); document.body.classList.remove('side-open'); }
-    /* Fast nav: skip full re-paint if same page and data unchanged */
+    /* Fast nav: skip full re-paint only if same page + same sub-view + data unchanged */
     try {
-        if (id === lastRenderedPage && !dataDirty) {
+        var renderKey = id;
+        try {
+            if (id === 'patients') renderKey = 'patients|' + String(patientTypeFilter || 'new');
+            else if (id === 'payments') {
+                var pv = '';
+                try { pv = localStorage.getItem('anandPaymentViewV42') || ''; } catch (e2) {}
+                renderKey = 'payments|' + pv;
+            }
+        } catch (e3) {}
+        if (renderKey === lastRenderKey && !dataDirty) {
             return;
         }
         renderPage(id);
         lastRenderedPage = id;
+        lastRenderKey = renderKey;
         dataDirty = false;
     } catch (e) { console.warn('renderPage', e); }
 }
@@ -2818,6 +2829,8 @@ function setupPaymentView() {
             e.preventDefault();
             e.stopPropagation();
             const v = btn.getAttribute('data-pay-view') || 'clinicPayment';
+            try { localStorage.setItem('anandPaymentViewV42', v); } catch (e) {}
+            dataDirty = true; /* sub-view change needs summary panels painted once */
             openPage('payments');
             applyPaymentView(v);
             // close submenu after selection
@@ -3850,6 +3863,7 @@ function setupPatientsNav() {
             e.stopPropagation();
             patientTypeFilter = btn.getAttribute('data-patient-view') || 'new';
             patientReportPage = 1;
+            dataDirty = true; /* force paint when New / Follow-up / Renewal switches */
             openPage('patients');
             $$('.navSubBtn').forEach(b => b.classList.toggle('active', b === btn));
             // keep parent active look via sub item; do not force dashboard
@@ -5410,6 +5424,12 @@ function renderAll() {
             dataDirty = false;
             const act = document.querySelector('.page.active');
             lastRenderedPage = act ? act.id : lastRenderedPage;
+            var rk = lastRenderedPage || '';
+            if (rk === 'patients') rk = 'patients|' + String(patientTypeFilter || 'new');
+            else if (rk === 'payments') {
+                try { rk = 'payments|' + (localStorage.getItem('anandPaymentViewV42') || ''); } catch (e4) {}
+            }
+            lastRenderKey = rk;
         } catch (e) {}
     };
     if (typeof requestAnimationFrame === 'function') {
