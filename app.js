@@ -319,6 +319,9 @@ let reportKind = 'patients',
     paymentFromDate = '',
     paymentToDate = '',
     calendarDate = isoToday();
+let dataDirty = true;
+let lastRenderedPage = '';
+
 
 function normalizeData(d) {
     const out = Object.assign(structuredClone(DEFAULT), d || {});
@@ -377,6 +380,7 @@ function loadLocal() {
 
 function saveLocal() {
     DB = normalizeData(DB);
+    dataDirty = true;
     let raw = '';
     try { raw = JSON.stringify(DB); } catch (e) { console.error('stringify failed', e); return; }
     try { idbSet(KEY, DB).catch(function(err){ console.warn('idb save', err); }); } catch (e) {}
@@ -1526,7 +1530,15 @@ function openPage(id) {
         b.classList.toggle('active', b.dataset.page === id);
     });
     if (window.innerWidth < 900) { $('#side')?.classList.remove('open'); document.body.classList.remove('side-open'); }
-    try { renderPage(id); } catch (e) { console.warn('renderPage', e); }
+    /* Fast nav: skip full re-paint if same page and data unchanged */
+    try {
+        if (id === lastRenderedPage && !dataDirty) {
+            return;
+        }
+        renderPage(id);
+        lastRenderedPage = id;
+        dataDirty = false;
+    } catch (e) { console.warn('renderPage', e); }
 }
 
 
@@ -5390,10 +5402,20 @@ function renderAll() {
             if ($('#histBody') && histActive) renderAppointmentHistory();
         } catch (e) {}
     };
+    const finishPaint = function() {
+        try {
+            runHeavy();
+        } catch (e) {}
+        try {
+            dataDirty = false;
+            const act = document.querySelector('.page.active');
+            lastRenderedPage = act ? act.id : lastRenderedPage;
+        } catch (e) {}
+    };
     if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(function() { setTimeout(runHeavy, 0); });
+        requestAnimationFrame(function() { setTimeout(finishPaint, 0); });
     } else {
-        setTimeout(runHeavy, 0);
+        setTimeout(finishPaint, 0);
     }
 }
 let pollTimerId = null;
@@ -6801,30 +6823,5 @@ window.openMultiYearGrowthModal = function() {
 
 
 (function deferHeavyPageRender() {
-  document.addEventListener('click', function(ev) {
-    var t = ev.target;
-    if (!t || !t.closest) return;
-    var btn = t.closest('[data-page], [data-pay-view], [data-patient-view]');
-    if (!btn) return;
-    var page = btn.getAttribute('data-page') || '';
-    var pay = btn.getAttribute('data-pay-view') || '';
-    setTimeout(function() {
-      try {
-        if (page === 'history' || page === 'appointmentHistory' || document.getElementById('history')?.classList.contains('active')) {
-          if ($('#histBody')) renderAppointmentHistory();
-        }
-        if (page === 'medicines' || document.getElementById('medicines')?.classList.contains('active')) {
-          renderMedicines();
-        }
-        if (page === 'payments' || page === 'reports' || pay || document.getElementById('payments')?.classList.contains('active')) {
-          if ($('#payMonthBody') || $('#paymentYearSelect')) {
-            initPaymentYearSelect();
-            renderPaymentSummary();
-            renderExpenses();
-          }
-          if ($('#reportBodyPatients')) { initPatientFilterSelects(); renderPatientReport(); }
-        }
-      } catch (e) { console.warn(e); }
-    }, 50);
-  }, true);
+  /* Disabled: openPage/renderPage already paints once. Second pass caused hang on nav click. */
 })();
