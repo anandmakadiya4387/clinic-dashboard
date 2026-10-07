@@ -3367,30 +3367,34 @@ function renderExpenses() {
     set('grossExpensesLifetime', money(totalExpensesSum()));
     updateGrossIncomeLifetime();
     let expM, expY, netM, netY, netD;
+    /* Gross income = same source as Clinic / Yearly / Monthly table (paymentAmountBy) */
     if (isAll) {
+        const yy = today.slice(0, 4);
         const mm = today.slice(5, 7);
-        expM = expenseAmount('custom', today.slice(0, 4), mm, null);
+        const dd = today.slice(8, 10);
+        expM = expenseAmount('custom', yy, mm, null);
         expY = expenseAmount('total');
-        const grossAll = active(DB.payments).reduce((a, x) => a + Number(x.amount || 0), 0);
+        const grossAll = paymentAmountBy(null, null, null, 'total');
         netY = grossAll - totalExpensesSum();
-        const grossM = active(DB.payments).filter(x => String(x.date || '').slice(0, 7) === today.slice(0, 7)).reduce((a, x) => a + Number(x.amount || 0), 0);
+        const grossM = paymentAmountBy(yy, mm, null, 'total');
         netM = grossM - expM;
-        const grossD = active(DB.payments).filter(x => String(x.date || '') === today).reduce((a, x) => a + Number(x.amount || 0), 0);
-        const expD = expenseAmount('custom', today.slice(0, 4), mm, today.slice(8, 10));
+        const grossD = paymentAmountBy(yy, mm, dd, 'total');
+        const expD = expenseAmount('custom', yy, mm, dd);
         netD = grossD - expD;
         set('expenseToday', money(expD));
     } else {
         const y = selY;
         const mm = today.slice(5, 7);
+        const dd = today.slice(8, 10);
         expM = expenseAmount('custom', y, mm, null);
         expY = expenseAmount('custom', y, null, null);
-        const grossY = active(DB.payments).filter(x => String(x.date || '').slice(0, 4) === y).reduce((a, x) => a + Number(x.amount || 0), 0);
-        const grossM = active(DB.payments).filter(x => String(x.date || '').slice(0, 7) === (y + '-' + mm)).reduce((a, x) => a + Number(x.amount || 0), 0);
+        const grossY = paymentAmountBy(y, null, null, 'total');
+        const grossM = paymentAmountBy(y, mm, null, 'total');
         netY = grossY - expY;
         netM = grossM - expM;
         if (y === today.slice(0, 4)) {
-            const grossD = active(DB.payments).filter(x => String(x.date || '') === today).reduce((a, x) => a + Number(x.amount || 0), 0);
-            const expD = expenseAmount('custom', y, mm, today.slice(8, 10));
+            const grossD = paymentAmountBy(y, mm, dd, 'total');
+            const expD = expenseAmount('custom', y, mm, dd);
             netD = grossD - expD;
             set('expenseToday', money(expD));
         } else {
