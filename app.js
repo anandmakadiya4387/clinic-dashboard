@@ -1011,9 +1011,15 @@ function periodMatch(date, p) {
         return true
     }
     if (p === 'total') return true;
-    if (p === 'daily') return v === d;
-    if (p === 'monthly') return v.slice(0, 7) === d.slice(0, 7);
-    return v.slice(0, 4) === d.slice(0, 4);
+    /* Use paymentYear/Month/Day so DD/MM/YYYY and YYYY-MM-DD match Yearly/Clinic ledger */
+    if (p === 'daily') {
+        if (v === d) return true;
+        return paymentYear(v) === d.slice(0, 4) && paymentMonth(v) === d.slice(5, 7) && paymentDay(v) === d.slice(8, 10);
+    }
+    if (p === 'monthly') {
+        return paymentYear(v) === d.slice(0, 4) && paymentMonth(v) === d.slice(5, 7);
+    }
+    return paymentYear(v) === d.slice(0, 4);
 }
 
 function dateSelects(prefix) {
@@ -1249,8 +1255,8 @@ function renderDashboard() {
         if (!isNaN(h) && h >= 14) evening++; else morning++;
     });
 
-    const yearCollect = active(DB.payments || []).filter(x => String(x.date || '').slice(0, 4) === today.slice(0, 4))
-        .reduce((a, x) => a + Number(x.amount || 0), 0);
+    /* Same ledger total as Yearly Payment TOTAL for current calendar year */
+    const yearCollect = paymentAmountBy(today.slice(0, 4), null, null, 'total');
     set('topNew', s.newD);
     set('topOld', s.oldD);
     set('topTotal', s.totalD);
