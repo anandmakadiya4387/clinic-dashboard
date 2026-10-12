@@ -322,6 +322,7 @@ let reportKind = 'patients',
 let dataDirty = true;
 let lastRenderedPage = '';
 let lastRenderKey = '';
+let _navPaintSeq = 0;
 
 
 function normalizeData(d) {
@@ -809,12 +810,26 @@ function connectClinicWebSocket() {
             try { ws.send('ping'); } catch (e) {}
         };
         ws.onmessage = (ev) => {
-            /* data_changed ignored for full pull — use Refresh for data merge */
             try {
                 const msg = JSON.parse(ev.data || '{}');
                 if (msg.type === 'hello' || msg === 'pong' || msg.type === 'pong') {
                     window.__lastCheckAt = new Date();
-                    setConn(true, 'Connected (manual data refresh)', 0);
+                    setConn(true, 'Online', 0);
+                }
+                /* Soft pull when other device saved — only if tab visible */
+                if (msg.type === 'data_changed' || msg.type === 'sync_ok') {
+                    if (document.hidden) return;
+                    if (window.__wsSoftSyncTimer) clearTimeout(window.__wsSoftSyncTimer);
+                    window.__wsSoftSyncTimer = setTimeout(function() {
+                        Promise.resolve(syncNow(true)).then(function() {
+                            try { dataDirty = true; lastRenderKey = ''; } catch (e) {}
+                            try {
+                                const act = document.querySelector('.page.active');
+                                if (act && act.id) renderPage(act.id);
+                                else if (typeof renderAll === 'function') renderAll();
+                            } catch (e) {}
+                        }).catch(function(){});
+                    }, 500);
                 }
             } catch (e) {}
         };
@@ -1011,7 +1026,6 @@ function periodMatch(date, p) {
         return true
     }
     if (p === 'total') return true;
-    /* Use paymentYear/Month/Day so DD/MM/YYYY and YYYY-MM-DD match Yearly/Clinic ledger */
     if (p === 'daily') {
         if (v === d) return true;
         return paymentYear(v) === d.slice(0, 4) && paymentMonth(v) === d.slice(5, 7) && paymentDay(v) === d.slice(8, 10);
@@ -1255,7 +1269,7 @@ function renderDashboard() {
         if (!isNaN(h) && h >= 14) evening++; else morning++;
     });
 
-    /* Same ledger total as Yearly Payment TOTAL for current calendar year */
+    /* Same as Yearly Payment TOTAL for current calendar year */
     const yearCollect = paymentAmountBy(today.slice(0, 4), null, null, 'total');
     set('topNew', s.newD);
     set('topOld', s.oldD);
@@ -1537,7 +1551,7 @@ function openPage(id) {
         b.classList.toggle('active', b.dataset.page === id);
     });
     if (window.innerWidth < 900) { $('#side')?.classList.remove('open'); document.body.classList.remove('side-open'); }
-    /* Fast nav: skip full re-paint only if same page + same sub-view + data unchanged */
+    /* Fast nav: show page shell first, then paint heavy table (no hang on click) */
     try {
         var renderKey = id;
         try {
@@ -1551,10 +1565,24 @@ function openPage(id) {
         if (renderKey === lastRenderKey && !dataDirty) {
             return;
         }
-        renderPage(id);
-        lastRenderedPage = id;
-        lastRenderKey = renderKey;
-        dataDirty = false;
+        var seq = (++_navPaintSeq);
+        var paintId = id;
+        var paintKey = renderKey;
+        function doNavPaint() {
+            if (seq !== _navPaintSeq) return;
+            try {
+                renderPage(paintId);
+                lastRenderedPage = paintId;
+                lastRenderKey = paintKey;
+                dataDirty = false;
+            } catch (e) { console.warn('renderPage', e); }
+        }
+        /* Double rAF: browser paints active tab before heavy DOM work */
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(function() { requestAnimationFrame(doNavPaint); });
+        } else {
+            setTimeout(doNavPaint, 0);
+        }
     } catch (e) { console.warn('renderPage', e); }
 }
 
@@ -5605,6 +5633,7 @@ function bindPollVisibility() {
 /** Dashboard Refresh button — full data merge Office ↔ Reception */
 function forceRefresh() {
     try { saveLocal(); } catch (e) {}
+    try { dataDirty = true; lastRenderKey = ''; } catch (e) {}
     if (!server) {
         try { renderAll(); } catch (e) {}
         try { toast('Offline — only local data shown', true); } catch (e) {}
@@ -5616,6 +5645,7 @@ function forceRefresh() {
     } catch (e) {}
     try { toast('Refreshing data…'); } catch (e) {}
     Promise.resolve(syncNow(false)).then(() => {
+        try { dataDirty = true; lastRenderKey = ''; } catch (e) {}
         try {
             if (typeof renderAll === 'function') renderAll();
         } catch (e) {}
@@ -6371,13 +6401,21 @@ function syncSideOpenClass() {
     });
     syncSideOpenClass();
 })();
-// Instant sync trigger on page load
+// Instant sync on page load — latest server data without full freeze
 window.addEventListener('DOMContentLoaded', () => {
-    if (typeof syncWithServer === 'function') {
-        syncWithServer();
-    } else if (typeof doSync === 'function') {
-        doSync();
-    }
+    try {
+        setTimeout(function() {
+            if (!server) return;
+            Promise.resolve(syncNow(true)).then(function() {
+                try { dataDirty = true; lastRenderKey = ''; } catch (e) {}
+                try {
+                    const act = document.querySelector('.page.active');
+                    if (act && act.id) renderPage(act.id);
+                    else if (typeof renderAll === 'function') renderAll();
+                } catch (e) {}
+            }).catch(function(){});
+        }, 400);
+    } catch (e) {}
 });
 // Exact Original Brand Image, Search Bar & Shortcut Restoration
 try {
