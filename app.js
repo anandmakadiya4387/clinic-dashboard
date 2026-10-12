@@ -2417,7 +2417,7 @@ function renderQueue() {
    <td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
    <td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
    <td class="payBreakCell">${feeBreak}</td><td class="amount totalCollectCell"><b>${money(consF + medF + renF)}</b></td>
-   <td class="statusCell"><span class="queueStatusTag ${statusSection==='done'||status==='received'?'received':(status==='doctor'?'doctor':(p.forcePending?'pending':'waiting'))}">${statusSection==='done'||status==='received'?'Completed':(status==='doctor'?'With Doctor':(p.forcePending?'Pending':'Waiting'))}</span></td>
+   <td class="statusCell"><span class="queueStatusTag ${statusSection==='done'||status==='received'?'received':(status==='doctor'?'doctor':((stPay.kind==='pending'||stPay.kind==='partial'||p.forcePending||p.received===false)?'pending':'waiting'))}">${statusSection==='done'||status==='received'?'Completed':(status==='doctor'?'With Doctor':((stPay.kind==='partial')?'Partial pending':((stPay.kind==='pending'||p.forcePending||(p.received===false&&(pending>0||Number(p.consultation||0)+Number(p.medicine||0)+Number(p.renewal||0)>0)))?'Pending':'Waiting')))}</span></td>
    <td><div class="actions embossedActions compactActions queueActions">
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral" onclick="editP('${p.id}')">Edit</button>`:''}
     ${(role!=='reception'||receptionCanEdit('patient'))?`<button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>Doctor</button>`:''}
@@ -4058,8 +4058,13 @@ function viewPatientHistory(id) {
             else byDate[d].other += Number(x.amount || 0);
         }
     });
-    // Newest visit first (real date order — not string mix of formats)
-    const dates = Object.keys(byDate).sort((a, b) => toSortableDate(b).localeCompare(toSortableDate(a)));
+    // Newest visit first (real calendar order). Registration / oldest at bottom.
+    const dates = Object.keys(byDate).sort((a, b) => {
+        const sb = toSortableDate(b) || '';
+        const sa = toSortableDate(a) || '';
+        if (sb !== sa) return sb.localeCompare(sa);
+        return String(b).localeCompare(String(a));
+    });
     let totalAll = 0, sumCons = 0, sumMed = 0, sumRen = 0;
     const rows = dates.map((d, i) => {
         const g = byDate[d];
