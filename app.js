@@ -239,6 +239,37 @@ function esc(s) {
     } [c]))
 }
 
+/** Clean patient name: avoid "raj joshi raj joshi" / title+name duplicate */
+function displayPatientName(p) {
+    if (!p) return '';
+    let title = String(p.title || '').trim();
+    let name = String(p.name || '').trim();
+    if (title && name.toLowerCase() === title.toLowerCase()) return name;
+    if (title && name.toLowerCase().startsWith(title.toLowerCase() + ' ')) return name;
+    if (title && name.toLowerCase().startsWith(title.toLowerCase())) return name;
+    let full = (title ? title + ' ' : '') + name;
+    full = full.replace(/\s+/g, ' ').trim();
+    const parts = full.split(' ').filter(Boolean);
+    if (parts.length >= 2 && parts.length % 2 === 0) {
+        const mid = parts.length / 2;
+        const a = parts.slice(0, mid).join(' ');
+        const b = parts.slice(mid).join(' ');
+        if (a.toLowerCase() === b.toLowerCase()) return a;
+    }
+    const out = [];
+    for (let i = 0; i < parts.length; i++) {
+        if (out.length && out[out.length - 1].toLowerCase() === parts[i].toLowerCase()) continue;
+        out.push(parts[i]);
+    }
+    if (out.length >= 4 && out.length % 2 === 0) {
+        const mid = out.length / 2;
+        const a = out.slice(0, mid).join(' ');
+        const b = out.slice(mid).join(' ');
+        if (a.toLowerCase() === b.toLowerCase()) return a;
+    }
+    return out.join(' ');
+}
+
 function uid(prefix) {
     return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
 }
@@ -1494,9 +1525,9 @@ function openPatientProfile(id) {
     const payRows = famPays.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map((x, i) =>
         `<tr><td>${i + 1}</td><td>${fmtDate(x.date)}</td><td>${esc(x.feeCategory || x.caseType || '—')}</td><td>${money(x.amount)}</td><td>${x.status === 'pending' ? 'Pending' : 'Received'}</td></tr>`
     ).join('') || '<tr><td colspan="5">No payments</td></tr>';
-    modal(`Patient Profile — ${esc(p.title)} ${esc(p.name)}`, `
+    modal(`Patient Profile — ${esc(displayPatientName(p))}`, `
       <div class="profileHeader glassCard">
-        <div><h2 style="margin:0">${esc(p.title)} ${esc(p.name)}</h2>
+        <div><h2 style="margin:0">${esc(displayPatientName(p))}</h2>
         <div class="mini">Case #${permanentCaseNo(p)} · ${esc(p.gender || '—')} · Age ${p.age || '—'}</div>
         <div class="mini">📱 ${esc(p.mobile || '—')} · ${esc(p.address || '')}</div></div>
         <div class="profileStats">
@@ -1699,7 +1730,7 @@ function runOldApptSearch() {
         const pay = pend > 0 ? `Pending ${money(pend)}` : 'Cleared';
         return `<button type="button" class="oldApptHit" data-id="${p.id}">
           <span class="gsCase">#${p.caseNo}</span>
-          <span class="oldHitName">${esc(p.title)} ${esc(p.name)}</span>
+          <span class="oldHitName">${esc(displayPatientName(p))}</span>
           <span class="gsMeta">${esc(p.mobile || '—')} · ${fmtDate(p.date)} · ${p.caseType || ''} · ${pay}</span>
         </button>`;
     }).join('');
@@ -1746,7 +1777,7 @@ function selectOldApptPatient(id) {
       box.innerHTML = `
       <div class="oldApptLine embossed oldApptSelectedActive">
         <span class="oldLineCase">#${p.caseNo}</span>
-        <span class="oldLineName">${esc(p.title)} ${esc(p.name)}</span>
+        <span class="oldLineName">${esc(displayPatientName(p))}</span>
         <span class="oldLineMeta">${esc(p.mobile || '—')}</span>
         <span class="oldLineMeta">${esc(p.address || '—')}</span>
         <span class="oldLineMeta">Reg ${fmtDate(p.date)}</span>
@@ -1768,7 +1799,7 @@ function selectOldApptPatient(id) {
       box.innerHTML = `
       <div class="oldApptLine embossed oldApptSelectedActive">
         <span class="oldLineCase">#${p.caseNo}</span>
-        <span class="oldLineName">${esc(p.title)} ${esc(p.name)}</span>
+        <span class="oldLineName">${esc(displayPatientName(p))}</span>
         <span class="oldLineMeta">${esc(p.mobile || '—')}</span>
         <span class="oldLineMeta">${esc(p.address || '—')}</span>
         <span class="oldLineMeta">Reg ${fmtDate(p.date)}</span>
@@ -2185,7 +2216,7 @@ function registerCase(e) {
     if (!_editId && $('#caseType')?.value === 'new') {
         const sims = findSimilarPatients(_dupName, _dupMobile, null);
         if (sims.length && !window.__allowDupPatient) {
-            const list = sims.map(p => `<button type="button" class="btn embossed" style="width:100%;margin:4px 0;text-align:left" onclick="closeModal();openPatientProfile('${p.id}')"><b>${esc(p.title)} ${esc(p.name)}</b> — ${esc(p.mobile || '')} · Case #${permanentCaseNo(p)}</button>`).join('');
+            const list = sims.map(p => `<button type="button" class="btn embossed" style="width:100%;margin:4px 0;text-align:left" onclick="closeModal();openPatientProfile('${p.id}')"><b>${esc(displayPatientName(p))}</b> — ${esc(p.mobile || '')} · Case #${permanentCaseNo(p)}</button>`).join('');
             modal('⚠️ Similar patient already exists', `
               <p class="mini">Same name or mobile found. Use existing patient to avoid duplicate case.</p>
               ${list}
@@ -2415,7 +2446,7 @@ function renderQueue() {
         const sr = i + 1;
         return `<tr class="${rowClass}${pulse?' receivedPulse':''}">
    <td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
-   <td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
+   <td><div class="patientMain patientNameOneLine">${esc(displayPatientName(p))}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td>
    <td class="payBreakCell">${feeBreak}</td><td class="amount totalCollectCell"><b>${money(consF + medF + renF)}</b></td>
    <td class="statusCell"><span class="queueStatusTag ${statusSection==='done'||status==='received'?'received':(status==='doctor'?'doctor':((stPay.kind==='pending'||stPay.kind==='partial'||p.forcePending||p.received===false)?'pending':'waiting'))}">${statusSection==='done'||status==='received'?'Completed':(status==='doctor'?'With Doctor':((stPay.kind==='partial')?'Partial pending':((stPay.kind==='pending'||p.forcePending||(p.received===false&&(pending>0||Number(p.consultation||0)+Number(p.medicine||0)+Number(p.renewal||0)>0)))?'Pending':'Waiting')))}</span></td>
    <td><div class="actions embossedActions compactActions queueActions">
@@ -2522,7 +2553,7 @@ function renderPatientReport() {
           <td><b>${permanentCaseNo(p)}</b></td>
           <td>${fmtDate(p.date)}</td>
           <td><span class="tag ${p.caseType || 'new'}">${(p.caseType || 'new').toUpperCase()}</span></td>
-          <td>${esc(p.title)} ${esc(p.name)}${extra}<div class="mini">${esc(p.mobile || '')}</div></td>
+          <td>${esc(displayPatientName(p))}${extra}<div class="mini">${esc(p.mobile || '')}</div></td>
           <td>${p.age || '-'}</td>
           <td>${esc(p.mobile || '-')}</td>
           <td>${payLabel}</td>
@@ -3853,7 +3884,7 @@ function openRenewalDueList() {
         return `<tr>
           <td>${i + 1}</td>
           <td>${permanentCaseNo(p)}</td>
-          <td>${esc(p.title)} ${esc(p.name)}</td>
+          <td>${esc(displayPatientName(p))}</td>
           <td>${esc(p.mobile || '-')}</td>
           <td>${fmtDate(p.date)}</td>
           <td>${due ? fmtDate(due) : '-'}</td>
@@ -3878,7 +3909,7 @@ function openTodayPendingList() {
           <td>${i + 1}</td>
           <td>${permanentCaseNo(p)}</td>
           <td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td>
-          <td>${esc(p.title)} ${esc(p.name)}</td>
+          <td>${esc(displayPatientName(p))}</td>
           <td>${esc(p.mobile || '-')}</td>
           <td>${money(feeTotal(p))}</td>
           <td><span class="payPendingTag">${money(pend)}</span></td>
@@ -4083,7 +4114,11 @@ function viewPatientHistory(id) {
         } else if (!isPendingVisit && isFocVisit) {
             // FOC contributes 0
         }
-        const typeTag = g.type ? `<span class="tag ${g.type}" style="margin-left:6px;font-size:10px">${String(g.type).toUpperCase()}</span>` : '';
+        let visitLabel = 'FOLLOWUP';
+        let visitTagClass = 'old';
+        if (String(g.type || '').toLowerCase() === 'new') { visitLabel = 'NEW'; visitTagClass = 'new'; }
+        else if (Number(g.renewal || 0) > 0) { visitLabel = 'Renewed'; visitTagClass = 'renewal'; }
+        const typeTag = `<span class="tag ${visitTagClass}" style="margin-left:6px;font-size:10px">${visitLabel}</span>`;
         const vid = (visitRow && visitRow.id) || g._visitId || '';
         const isOffice = (role !== 'reception');
         // Office pending: small "pending" text + Rec + FOC only (no Pend button — already pending).
@@ -4123,7 +4158,7 @@ function viewPatientHistory(id) {
       <div class="detailGrid">
         <div class="dl"><small>Case No.</small><b>${permanentCaseNo(p)}</b></div>
         <div class="dl"><small>Case Type</small><b>${esc(p.caseType || '-')}</b></div>
-        <div class="dl full"><small>Patient</small><b>${esc(p.title)} ${esc(p.name)}</b></div>
+        <div class="dl full"><small>Patient</small><b>${esc(displayPatientName(p))}</b></div>
         <div class="dl"><small>Mobile</small><b>${esc(p.mobile || '-')}</b></div>
         <div class="dl"><small>Age / Gender</small><b>${p.age || '-'} / ${esc(p.gender || '-')}</b></div>
         <div class="dl full"><small>Address</small><b>${esc(p.address || '-')}</b></div>
@@ -4153,7 +4188,7 @@ function viewPatientHistory(id) {
         <button type="button" class="btn embossed" onclick="closeModal()">Close</button>
       </div>
     </div>`;
-    modal(`View — Case #${permanentCaseNo(p)} ${esc(p.title)} ${esc(p.name)}`, html);
+    modal(`View — Case #${permanentCaseNo(p)} ${esc(displayPatientName(p))}`, html);
 }
 
 function editP(id) {
@@ -4315,7 +4350,7 @@ function receiveP(id) {
       <label class="recvCompact pendingCompact">Partial pending<input type="number" name="partialPending" id="recvPartialPending" min="0" step="1" value="${Math.max(0, Number(p.partialPending || 0))}" placeholder="Next visit"></label>
       <div class="recvActions"><button class="primary embossed" type="submit">Confirm Receive</button></div>
     </form>`;
-    modal(`Receive payment — #${p.caseNo} ${esc(p.title)} ${esc(p.name)}`, html, e => {
+    modal(`Receive payment — #${p.caseNo} ${esc(displayPatientName(p))}`, html, e => {
         e.preventDefault();
         const fd = new FormData(e.target);
         let c = Math.max(0, Number(fd.get('consultation') || 0));
@@ -5385,7 +5420,7 @@ function renderAppointmentHistory() {
           <td><b>${permanentCaseNo(p)}</b></td>
           <td>${fmtDate(p.date)}</td>
           <td><span class="tag ${p.caseType}">${(p.caseType || 'old').toUpperCase()}</span></td>
-          <td class="histPatientCell"><div class="patientNameOneLine">${esc(p.title)} ${esc(p.name)}</div><div class="mini">${esc(p.mobile || '')}</div></td>
+          <td class="histPatientCell"><div class="patientNameOneLine">${esc(displayPatientName(p))}</div><div class="mini">${esc(p.mobile || '')}</div></td>
           <td class="amount">${money(total)}</td>
           <td class="amount">${money(paid)}</td>
           <td>${statusHtml}</td>
@@ -5750,7 +5785,7 @@ function runGlobalPatientSearch() {
         const payLabel = st.label || st.kind;
         const cn = permanentCaseNo(p) || p.caseNo;
         return `<button type="button" class="gsItem" role="option" data-id="${p.id}">
-          <span class="gsCase">#${cn}</span>${esc(p.title)} ${esc(p.name)}
+          <span class="gsCase">#${cn}</span>${esc(displayPatientName(p))}
           <span class="gsMeta">${esc(p.mobile || '—')} · ${payLabel}</span>
         </button>`;
     }).join('');
@@ -5830,7 +5865,11 @@ function showPatientDetail(id) {
         const isPendingVisit = !!g._pendingVisit && lineTotal === 0;
         const actionLabel = isPendingVisit ? 'Pending' : (lineTotal > 0 ? 'Received' : 'Pending');
         const actionClass = isPendingVisit || lineTotal === 0 ? 'histPending' : 'histReceived';
-        const typeTag = g.type ? `<span class="tag ${g.type}" style="margin-left:6px;font-size:10px">${String(g.type).toUpperCase()}</span>` : '';
+        let visitLabel = 'FOLLOWUP';
+        let visitTagClass = 'old';
+        if (String(g.type || '').toLowerCase() === 'new') { visitLabel = 'NEW'; visitTagClass = 'new'; }
+        else if (Number(g.renewal || 0) > 0) { visitLabel = 'Renewed'; visitTagClass = 'renewal'; }
+        const typeTag = `<span class="tag ${visitTagClass}" style="margin-left:6px;font-size:10px">${visitLabel}</span>`;
         const recvBtn = isPendingVisit && g._visitId
             ? ` <button type="button" class="btn embossed receiveBtn miniAction" onclick="receiveP('${g._visitId}');closeModal()">Receive</button>`
             : '';
@@ -5851,7 +5890,7 @@ function showPatientDetail(id) {
         <div class="dl"><small>This visit type</small><b>${esc(p.caseType || '-')}</b></div>
         <div class="dl"><small>This visit date</small><b>${fmtDate(p.date)}</b></div>
         <div class="dl"><small>Status (this visit)</small><b><span class="statusPill ${statusClass}">${status}</span></b></div>
-        <div class="dl full"><small>Patient</small><b>${esc(p.title)} ${esc(p.name)}</b></div>
+        <div class="dl full"><small>Patient</small><b>${esc(displayPatientName(p))}</b></div>
         <div class="dl"><small>Age / Gender</small><b>${p.age || '-'} / ${esc(p.gender || '-')}</b></div>
         <div class="dl"><small>Mobile</small><b>${esc(p.mobile || '-')}</b></div>
         <div class="dl full"><small>Address</small><b>${esc(p.address || '-')}</b></div>
@@ -5902,7 +5941,7 @@ function showPatientDetail(id) {
         <button type="button" class="btn embossed actNeutral" onclick="payP('${p.id}');">Add Payment</button>` : ''}
       </div>
     </div>`;
-    modal(`Patient #${permanentCaseNo(p)} — ${esc(p.title)} ${esc(p.name)}`, html);
+    modal(`Patient #${permanentCaseNo(p)} — ${esc(displayPatientName(p))}`, html);
 }
 
 
@@ -6047,7 +6086,7 @@ function renderReceptionQueue() {
         const action = section === 'done'
             ? `<span class="mini">Completed</span>`
             : `<div class="actions embossedActions compactActions queueActions"><button class="btn embossed actNeutral${withDoc?' withDocActive':''}${lockCls}" onclick="docP('${p.id}')"${dis}>With Doctor</button></div>`;
-        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain patientNameOneLine">${esc(p.title)} ${esc(p.name)}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b></td><td class="statusCell">${statusLab}</td><td>${action}</td></tr>`;
+        return `<tr class="${rowClass}${pulse?' receivedPulse':''}"><td>${sr}</td><td><b>${permanentCaseNo(p)}</b></td><td>${fmtDate(p.date)}</td><td><span class="tag ${p.caseType}">${p.caseType==='new'?'NEW':'OLD'}</span></td><td><div class="patientMain patientNameOneLine">${esc(displayPatientName(p))}${renewHighlight?' <span class="renewBadge">R</span>':''}${hasRenewalPaidToday(p)?' <span class="renewPaidBadge">Renewal paid</span>':''}</div><div class="mini">${esc(p.mobile || '')}</div></td><td class="payBreakCell">${payBreak}</td><td class="amount totalCollectCell"><b>${money(totalCol)}</b></td><td class="statusCell">${statusLab}</td><td>${action}</td></tr>`;
     };
 
     const waiting = active.filter(p => queueStatus(p) !== 'doctor').sort((a,b)=>patientEntryTime(a).localeCompare(patientEntryTime(b)));
@@ -6113,7 +6152,7 @@ function setupBillPage(refresh) {
     if (sel && (refresh || sel.options.length <= 1)) {
         const rows = uniqueRows().slice(0, 1000);
         sel.innerHTML = '<option value="">— Select patient —</option>' + rows.map((p, i) =>
-            `<option value="${p.id}">${i + 1}. #${permanentCaseNo(p)} — ${esc(p.title)} ${esc(p.name)} (${esc(p.mobile || '')})</option>`
+            `<option value="${p.id}">${i + 1}. #${permanentCaseNo(p)} — ${esc(displayPatientName(p))} (${esc(p.mobile || '')})</option>`
         ).join('');
     }
     const billSearchEl = $('#billPatientSearch');
@@ -6146,7 +6185,7 @@ function setupBillPage(refresh) {
             results.innerHTML = rows.map((p, i) =>
                 `<button type="button" class="billSearchItem" data-pid="${p.id}">
                    <span class="billSrNum">${i + 1}</span>
-                   <b>#${permanentCaseNo(p)}</b> ${esc(p.title)} ${esc(p.name)}
+                   <b>#${permanentCaseNo(p)}</b> ${esc(displayPatientName(p))}
                    <span class="mini">${esc(p.mobile || '')}</span>
                  </button>`
             ).join('');
