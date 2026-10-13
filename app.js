@@ -5838,6 +5838,22 @@ function runGlobalPatientSearch(gen) {
     else paint();
 }
 
+function showPatientDetail(id) {
+    try {
+        if (typeof openPatientProfile === 'function') {
+            openPatientProfile(id);
+            return;
+        }
+    } catch (e) { console.warn(e); }
+    try {
+        if (typeof viewPatientHistory === 'function') {
+            viewPatientHistory(id);
+            return;
+        }
+    } catch (e) { console.warn(e); }
+    try { toast('Patient not found', true); } catch (e) {}
+}
+
 function setupGlobalPatientSearch() {
     const input = $('#globalPatientSearch');
     const box = $('#globalSearchResults');
@@ -5895,7 +5911,7 @@ function setup() {
       forceProBadge();
       setInterval(forceProBadge, 2000);
     } catch(e) {}
-    setupGlobalPatientSearch();
+    try { setupGlobalPatientSearch(); } catch (e) { console.warn("search setup", e); }
     setupOldAppointmentPanel();
     setupAppointmentHistory();
     setupPaymentView();
