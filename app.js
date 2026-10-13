@@ -380,6 +380,10 @@ let dataDirty = true;
 let lastRenderedPage = '';
 let lastRenderKey = '';
 let _navPaintSeq = 0;
+let _searchIndex = null;
+let _searchIndexDirty = true;
+    try { scheduleSearchIndexRebuild(); } catch (e) {}
+let _searchGen = 0;
 
 
 function normalizeData(d) {
@@ -440,6 +444,7 @@ function loadLocal() {
 function saveLocal() {
     DB = normalizeData(DB);
     dataDirty = true;
+    _searchIndexDirty = true;
     let raw = '';
     try { raw = JSON.stringify(DB); } catch (e) { console.error('stringify failed', e); return; }
     try { idbSet(KEY, DB).catch(function(err){ console.warn('idb save', err); }); } catch (e) {}
@@ -5726,238 +5731,141 @@ function forceRefresh() {
 }
 
 
-function searchPatientsQuery(q) {
-    q = String(q || '').trim().toLowerCase();
-    if (!q) return [];
-    const digits = q.replace(/\D/g, '');
-    const tokens = q.split(/\s+/).filter(Boolean);
-    const hits = caseRows().filter(p => {
-        const name = `${p.title || ''} ${p.name || ''}`.toLowerCase();
-        const mobile = String(p.mobile || '');
-        const mobileDigits = mobile.replace(/\D/g, '');
-        const caseNo = String(permanentCaseNo(p) || p.caseNo || '');
-        const address = String(p.address || '').toLowerCase();
-        const pend = pendingFor(p);
-        const last = String(p.date || '');
-        const due = (typeof dueDate === 'function' ? dueDate(p) : '') || '';
-        const blob = [name, mobile, mobileDigits, caseNo, address, last, due, pend > 0 ? 'pending' : '', (typeof renewalDue === 'function' && renewalDue(p)) ? 'renewal due' : ''].join(' ').toLowerCase();
-        if (digits && (mobileDigits.includes(digits) || caseNo.replace(/\D/g, '').includes(digits))) return true;
-        if (tokens.length && tokens.every(t => blob.includes(t))) return true;
-        return false;
-    });
-    // ONE row per permanent case number — prefer NEW registration, else earliest visit
+function getPatientSearchIndex() {
+    if (!_searchIndexDirty && _searchIndex) return _searchIndex;
     const byCase = new Map();
-    hits.forEach(p => {
-        const key = String(permanentCaseNo(p) || p.caseNo || p.id);
+    const list = active(DB.patients);
+    for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        if (!p || !p.id) continue;
+        const key = String(p.linkedCaseNo || p.caseNo || p.id);
         const prev = byCase.get(key);
         if (!prev) {
             byCase.set(key, p);
-            return;
+            continue;
         }
         const pNew = (p.caseType || '') === 'new';
         const prevNew = (prev.caseType || '') === 'new';
         if (pNew && !prevNew) byCase.set(key, p);
         else if (pNew === prevNew && String(p.date || '') < String(prev.date || '')) byCase.set(key, p);
+    }
+    const arr = [];
+    byCase.forEach(function(p) {
+        arr.push({
+            p: p,
+            name: ((p.title || '') + ' ' + (p.name || '')).toLowerCase(),
+            mobile: String(p.mobile || '').replace(/\D/g, ''),
+            caseNo: String(p.linkedCaseNo || p.caseNo || '').toLowerCase(),
+            caseDigits: String(p.linkedCaseNo || p.caseNo || '').replace(/\D/g, '')
+        });
     });
-    return [...byCase.values()].slice(0, 30);
+    _searchIndex = arr;
+    _searchIndexDirty = false;
+    return _searchIndex;
 }
 
+/** Rebuild index off the typing path (does not block input) */
+function scheduleSearchIndexRebuild() {
+    setTimeout(function() {
+        try {
+            if (_searchIndexDirty) getPatientSearchIndex();
+        } catch (e) {}
+    }, 0);
+}
 
-function runGlobalPatientSearch() {
+/** Fast match: only name, case number, mobile */
+function searchPatientsQuery(q) {
+    q = String(q || '').trim().toLowerCase();
+    if (!q) return [];
+    const digits = q.replace(/\D/g, '');
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const idx = getPatientSearchIndex();
+    const out = [];
+    for (let i = 0; i < idx.length; i++) {
+        const row = idx[i];
+        let ok = false;
+        if (digits && (row.mobile.indexOf(digits) >= 0 || row.caseDigits.indexOf(digits) >= 0)) ok = true;
+        if (!ok && tokens.length) {
+            ok = tokens.every(function(t) {
+                return row.name.indexOf(t) >= 0 || row.caseNo.indexOf(t) >= 0 || row.mobile.indexOf(t) >= 0;
+            });
+        }
+        if (ok) {
+            out.push(row.p);
+            if (out.length >= 20) break;
+        }
+    }
+    return out;
+}
+
+function runGlobalPatientSearch(gen) {
     const input = $('#globalPatientSearch');
     const box = $('#globalSearchResults');
     if (!input || !box) return;
+    if (gen != null && gen !== _searchGen) return;
     const q = input.value;
     if (!String(q).trim()) {
         box.classList.add('hidden');
         box.innerHTML = '';
         return;
     }
-    const hits = searchPatientsQuery(q);
-    if (!hits.length) {
-        box.classList.remove('hidden');
-        box.innerHTML = '<div class="gsEmpty">No patient found</div>';
-        return;
-    }
-    box.classList.remove('hidden');
-    box.innerHTML = hits.map(p => {
-        const st = caseFamilyPaymentStatus(p);
-        const payLabel = st.label || st.kind;
-        const cn = permanentCaseNo(p) || p.caseNo;
-        return `<button type="button" class="gsItem" role="option" data-id="${p.id}">
-          <span class="gsCase">#${cn}</span>${esc(displayPatientName(p))}
-          <span class="gsMeta">${esc(p.mobile || '—')} · ${payLabel}</span>
-        </button>`;
-    }).join('');
-    box.querySelectorAll('.gsItem').forEach(btn => {
-        btn.addEventListener('click', () => {
-            showPatientDetail(btn.dataset.id);
-            box.classList.add('hidden');
-        });
-    });
-}
-
-function showPatientDetail(id) {
-    if (typeof openPatientProfile === 'function') {
-        openPatientProfile(id);
-        return;
-    }
-    const p = active(DB.patients).find(x => x.id === id);
-    if (!p) {
-        toast('Patient not found', true);
-        return;
-    }
-    // This visit's own fees / pending
-    const paid = paidFor(p.id);
-    const total = feeTotal(p);
-    const pend = pendingFor(p);
-    const renew = renewalDue(p);
-    // Whole case family (all visits sharing same permanent case no)
-    const family = caseFamily(p);
-    const famPays = familyPayments(p);
-    const famPaidTotal = familyPaidTotal(p);
-    let status = 'Pending';
-    let statusClass = 'pend';
-    if (p.received === true || pend <= 0) {
-        status = 'Received';
-        statusClass = 'ok';
-    } else if (p.withDoctor) {
-        status = 'With Doctor';
-        statusClass = 'doc';
-    }
-
-    // Build visit rows: one row per visit date from family patient rows + their payments
-    // Prefer grouping payments by date across family
-    const byDate = {};
-    famPays.forEach(x => {
-        const d = String(x.date || '');
-        if (!byDate[d]) byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: '' };
-        const cat = x.feeCategory || 'other';
-        if (cat === 'consultation' || cat === 'medicine' || cat === 'renewal') byDate[d][cat] += Number(x.amount || 0);
-        else byDate[d].other += Number(x.amount || 0);
-    });
-    // Also include family visit rows that have fees but maybe no payment yet (pending visits)
-    family.forEach(v => {
-        const d = String(v.date || '');
-        if (!byDate[d]) byDate[d] = { consultation: 0, medicine: 0, renewal: 0, other: 0, type: v.caseType || '' };
-        // mark type from visit
-        if (v.caseType) byDate[d].type = v.caseType;
-        // if this visit has unpaid fees, still show the visit date even if no payment rows
-        const vPaid = paidFor(v.id);
-        const vTotal = feeTotal(v);
-        if (vTotal > 0 && vPaid === 0 && !famPays.some(x => x.patientId === v.id)) {
-            // show expected amounts as 0 received for visibility
-            byDate[d]._pendingVisit = true;
-            byDate[d]._visitId = v.id;
-            byDate[d]._visitFees = vTotal;
+    let hits = [];
+    try { hits = searchPatientsQuery(q); } catch (e) { hits = []; }
+    if (gen != null && gen !== _searchGen) return;
+    const paint = function() {
+        if (gen != null && gen !== _searchGen) return;
+        if (!hits.length) {
+            box.classList.remove('hidden');
+            box.innerHTML = '<div class="gsEmpty">No patient found</div>';
+            return;
         }
-    });
-    const dates = Object.keys(byDate).sort((a, b) => String(b).localeCompare(String(a)));
-    let histTotal = 0, sumCons = 0, sumMed = 0, sumRen = 0;
-    const histRows = dates.map((d, i) => {
-        const g = byDate[d];
-        const lineTotal = g.consultation + g.medicine + g.renewal + g.other;
-        histTotal += lineTotal;
-        sumCons += Number(g.consultation || 0);
-        sumMed += Number(g.medicine || 0);
-        sumRen += Number(g.renewal || 0);
-        const isRenew = g.renewal > 0;
-        const isPendingVisit = !!g._pendingVisit && lineTotal === 0;
-        const actionLabel = isPendingVisit ? 'Pending' : (lineTotal > 0 ? 'Received' : 'Pending');
-        const actionClass = isPendingVisit || lineTotal === 0 ? 'histPending' : 'histReceived';
-        let visitLabel = 'FOLLOWUP';
-        let visitTagClass = 'old';
-        if (String(g.type || '').toLowerCase() === 'new') { visitLabel = 'NEW'; visitTagClass = 'new'; }
-        else if (Number(g.renewal || 0) > 0) { visitLabel = 'Renewed'; visitTagClass = 'renewal'; }
-        const typeTag = `<span class="tag ${visitTagClass}" style="margin-left:6px;font-size:10px">${visitLabel}</span>`;
-        const recvBtn = isPendingVisit && g._visitId
-            ? ` <button type="button" class="btn embossed receiveBtn miniAction" onclick="receiveP('${g._visitId}');closeModal()">Receive</button>`
-            : '';
-        return `<tr class="${isRenew ? 'renewRow' : ''}${isPendingVisit ? ' pendingRow' : ''}">
-          <td>${i + 1}</td>
-          <td>${fmtDate(d)}${typeTag}</td>
-          <td>${money(g.consultation)}</td>
-          <td>${money(g.medicine)}</td>
-          <td>${money(g.renewal)}</td>
-          <td><span class="histAction ${actionClass}">${actionLabel}</span>${recvBtn}</td>
-          <td><b>${isPendingVisit ? money(g._visitFees || 0) + ' due' : money(lineTotal)}</b></td>
-        </tr>`;
-    }).join('') || '<tr><td colspan="7">No payment records yet</td></tr>';
-
-    const html = `<div class="patientDetailCard">
-      <div class="detailGrid">
-        <div class="dl"><small>Case No.</small><b>${permanentCaseNo(p)}</b></div>
-        <div class="dl"><small>This visit type</small><b>${esc(p.caseType || '-')}</b></div>
-        <div class="dl"><small>This visit date</small><b>${fmtDate(p.date)}</b></div>
-        <div class="dl"><small>Status (this visit)</small><b><span class="statusPill ${statusClass}">${status}</span></b></div>
-        <div class="dl full"><small>Patient</small><b>${esc(displayPatientName(p))}</b></div>
-        <div class="dl"><small>Age / Gender</small><b>${p.age || '-'} / ${esc(p.gender || '-')}</b></div>
-        <div class="dl"><small>Mobile</small><b>${esc(p.mobile || '-')}</b></div>
-        <div class="dl full"><small>Address</small><b>${esc(p.address || '-')}</b></div>
-        <div class="dl"><small>Ref by</small><b>${esc(p.refBy || '-')}</b></div>
-        <div class="dl"><small>Last renewal date</small><b>${p.lastRenewalDate ? fmtDate(p.lastRenewalDate) : '-'}</b></div>
-        <div class="dl"><small>This visit — Consultation</small><b>${money(p.consultation)}</b></div>
-        <div class="dl"><small>This visit — Medicine</small><b>${money(p.medicine)}</b></div>
-        <div class="dl"><small>This visit — Renewal</small><b>${money(p.renewal || 0)}${renew ? ' · Due' : ''}</b></div>
-        <div class="dl"><small>This visit fees</small><b>${money(total)}</b></div>
-        <div class="dl"><small>This visit paid</small><b>${money(paid)}</b></div>
-        <div class="dl"><small>This visit pending</small><b>${pend > 0 ? money(pend) : 'Nil'}</b>
-          ${pend > 0 ? ` <button type="button" class="btn embossed receiveBtn miniAction" onclick="receiveP('${p.id}');closeModal()" style="margin-left:8px">Receive</button>` : ''}
-        </div>
-        <div class="dl full"><small>TOTAL PAYMENT TILL DATE (all visits)</small><b style="color:#137b4c;font-size:18px">${money(famPaidTotal)}</b>
-          <span class="mini"> — ${family.length} visit(s) under case #${permanentCaseNo(p)}</span>
-        </div>
-      </div>
-      <div>
-        <h3 style="margin:0 0 8px;font-size:15px">Visit / payment history (all visits of this case)</h3>
-        <p class="mini">Saari visits (new + follow-up) ek saath. Latest pehle. Renewal rows light green. Pending pe Receive button.</p>
-        <div class="tablewrap modalTableWrap"><table class="table payHistoryTable modalDataTable">
-          <thead><tr>
-            <th>Sr No.</th><th>Date</th><th>Consultation</th><th>Medicine</th><th>Renewal</th><th>Action</th><th>Total Payment</th>
-          </tr></thead>
-          <tbody>${histRows}</tbody>
-          <tfoot>
-            <tr class="summaryBreakRow"><td colspan="2"><b>Category Totals</b></td><td><b>${money(sumCons)}</b></td><td><b>${money(sumMed)}</b></td><td><b>${money(sumRen)}</b></td><td></td><td></td></tr>
-            <tr class="summaryTotalRow"><td colspan="6"><b>Grand Total (all visits)</b></td><td><b>${money(histTotal)}</b></td></tr>
-          </tfoot>
-        </table></div>
-        <div class="histTotalsBar" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px">
-          <div class="paySummaryBox" style="min-width:150px"><small>Consultation Total</small><b>${money(sumCons)}</b></div>
-          <div class="paySummaryBox med" style="min-width:150px"><small>Medicine Total</small><b>${money(sumMed)}</b></div>
-          <div class="paySummaryBox renewal" style="min-width:150px"><small>Renewal Total</small><b>${money(sumRen)}</b></div>
-          <div class="paySummaryBox total" style="min-width:150px"><small>Grand Total</small><b>${money(histTotal)}</b></div>
-        </div>
-        ${pend > 0 ? `<div style="margin-top:12px;padding:12px 14px;border-radius:12px;background:linear-gradient(165deg,#fff5f5,#fde8e8);border:1px solid #f0c2c2;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <span style="font-weight:700;color:#b91c1c">This visit pending: ${money(pend)}</span>
-          <button type="button" class="btn embossed receiveBtn" onclick="receiveP('${p.id}');closeModal()">Receive Pending Payment</button>
-        </div>` : ''}
-        <p class="mini" style="margin-top:10px">${renew ? 'Annual renewal is due for this case.' : 'No renewal due at present.'}${p.withDoctor ? ' Patient is currently with doctor.' : ''}</p>
-      </div>
-      <div class="actions" style="flex-wrap:wrap">
-        <button type="button" class="btn embossed" onclick="editP('${p.id}');closeModal()">Edit</button>
-        ${role === 'office' || role === 'reception' ? `${pend > 0 ? `<button type="button" class="btn embossed receiveBtn" onclick="receiveP('${p.id}');closeModal()">Receive</button>` : ''}
-        <button type="button" class="btn embossed actNeutral" onclick="pendingP('${p.id}');closeModal()">Pending</button>
-        <button type="button" class="btn embossed actNeutral" onclick="docP('${p.id}');closeModal()">With Doctor</button>
-        <button type="button" class="btn embossed actNeutral" onclick="payP('${p.id}');">Add Payment</button>` : ''}
-      </div>
-    </div>`;
-    modal(`Patient #${permanentCaseNo(p)} — ${esc(displayPatientName(p))}`, html);
+        box.classList.remove('hidden');
+        box.innerHTML = hits.map(function(p) {
+            const cn = (typeof permanentCaseNo === 'function' ? permanentCaseNo(p) : p.caseNo) || p.caseNo || '';
+            const nm = (typeof displayPatientName === 'function') ? displayPatientName(p) : ((p.title || '') + ' ' + (p.name || ''));
+            return '<button type="button" class="gsItem" role="option" data-id="' + p.id + '">' +
+              '<span class="gsCase">#' + esc(cn) + '</span>' + esc(nm) +
+              '<span class="gsMeta">' + esc(p.mobile || '—') + '</span></button>';
+        }).join('');
+        box.querySelectorAll('.gsItem').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                showPatientDetail(btn.dataset.id);
+                box.classList.add('hidden');
+            });
+        });
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(paint);
+    else paint();
 }
-
 
 function setupGlobalPatientSearch() {
     const input = $('#globalPatientSearch');
     const box = $('#globalSearchResults');
     if (!input) return;
     let t = null;
-    input.addEventListener('input', () => {
+    /* Warm index in background so first type is instant */
+    try { scheduleSearchIndexRebuild(); } catch (e) {}
+    input.addEventListener('input', function() {
+        /* ZERO heavy work here — typing must never stall */
         clearTimeout(t);
-        t = setTimeout(runGlobalPatientSearch, 120);
+        const gen = ++_searchGen;
+        const val = input.value;
+        if (!String(val).trim()) {
+            if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
+            return;
+        }
+        t = setTimeout(function() {
+            runGlobalPatientSearch(gen);
+        }, 180);
     });
-    input.addEventListener('focus', () => {
-        if (String(input.value).trim()) runGlobalPatientSearch();
+    input.addEventListener('focus', function() {
+        try { scheduleSearchIndexRebuild(); } catch (e) {}
+        if (String(input.value).trim()) {
+            const gen = ++_searchGen;
+            setTimeout(function() { runGlobalPatientSearch(gen); }, 50);
+        }
     });
-    input.addEventListener('keydown', e => {
+    input.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             box?.classList.add('hidden');
             input.blur();
@@ -5968,10 +5876,11 @@ function setupGlobalPatientSearch() {
             if (first) first.click();
         }
     });
-    document.addEventListener('click', e => {
+    document.addEventListener('click', function(e) {
         if (!e.target.closest('.globalSearchWrap')) box?.classList.add('hidden');
     });
 }
+
 
 function setup() {
     setupNav();
