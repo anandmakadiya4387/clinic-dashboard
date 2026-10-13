@@ -443,7 +443,10 @@ function loadLocal() {
 
 function saveLocal(opts) {
     opts = opts || {};
-    DB = normalizeData(DB);
+    /* normalize only when asked (import / repair) — every-save normalize was multi-second hang */
+    if (opts.normalize) {
+        try { DB = normalizeData(DB); } catch (e) { console.warn(e); }
+    }
     dataDirty = true;
     _searchIndexDirty = true;
     let raw = '';
@@ -469,23 +472,23 @@ function saveLocal(opts) {
 /** Update only KPIs + active page + queue — not the whole app */
 function softUIRefresh(opts) {
     opts = opts || {};
-    dataDirty = true;
-    lastRenderKey = '';
+    /* Do NOT clear lastRenderKey / force dataDirty — that made every nav re-paint all pages */
     setTimeout(function() {
         try { updateDashboardKPIsOnly(); } catch (e) {}
         try { renderQueue(); } catch (e) {}
         try { if (role === 'reception') renderReceptionQueue(); } catch (e) {}
-        try {
-            const act = document.querySelector('.page.active');
-            if (act && act.id && act.id !== 'dashboard') {
-                if (typeof renderPage === 'function') renderPage(act.id);
-            }
-        } catch (e) {}
-    }, 20);
+        /* Only re-paint active non-dashboard page if explicitly requested */
+        if (opts.repaintActive) {
+            try {
+                const act = document.querySelector('.page.active');
+                if (act && act.id && act.id !== 'dashboard' && typeof renderPage === 'function') renderPage(act.id);
+            } catch (e) {}
+        }
+    }, 10);
     if (opts.sync === false) return;
     setTimeout(function() {
         try { if (typeof syncNow === 'function') syncNow(true); } catch (e) {}
-    }, 350);
+    }, 400);
 }
 
 function softRefreshAfterPayment() {
@@ -1127,6 +1130,24 @@ function caseRows() {
     return active(DB.patients).sort((a, b) => caseNoNumericPart(a.caseNo) - caseNoNumericPart(b.caseNo) || String(a.date).localeCompare(String(b.date)))
 }
 
+/** Today queue only — NO full-list sort (was 5–6s hang on every click) */
+function todayCaseRows() {
+    const today = isoToday();
+    const out = [];
+    const list = active(DB.patients);
+    for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        if (!p) continue;
+        if (String(p.date || '') === today) out.push(p);
+        else {
+            try {
+                if (typeof isTodayCase === 'function' && isTodayCase(p)) out.push(p);
+            } catch (e) {}
+        }
+    }
+    return out;
+}
+
 /** Bill patient list: ONLY unique New Case registrations (one name once), latest case no on top */
 function billUniquePatients() {
     const map = new Map();
@@ -1378,20 +1399,35 @@ function patientQueueStatus(p) {
 }
 
 function renderDashboard() {
-    const s = stats();
     const today = isoToday();
-    const todayPatients = active(DB.patients).filter(p => String(p.date || '') === today);
-    const receivedToday = active(DB.payments).filter(x => String(x.date || '') === today)
-        .reduce((a, x) => a + Number(x.amount || 0), 0);
-    const pendingToday = todayPatients.reduce((a, p) => a + pendingFor(p), 0);
-    const withDoc = todayPatients.filter(p => patientQueueStatus(p) === 'doctor').length;
-    const waiting = todayPatients.filter(p => patientQueueStatus(p) === 'waiting').length;
-    const completed = todayPatients.filter(p => patientQueueStatus(p) === 'completed').length;
-    const renewDue = listRenewalDuePatients().length;
-    const lowStock = active(DB.medicines).filter(m => {
-        const q = Number(m.quantity || 0);
-        return q <= 0 || String(m.available || '').toLowerCase() === 'no';
-    }).length;
+    const todayPatients = todayCaseRows();
+    let receivedToday = 0;
+    active(DB.payments).forEach(function(x) {
+        if (Number(x.amount || 0) <= 0) return;
+        const d = String(x.date || '');
+        if (d === today || (paymentYear(d) === today.slice(0,4) && paymentMonth(d) === today.slice(5,7) && paymentDay(d) === today.slice(8,10))) {
+            receivedToday += Number(x.amount || 0);
+        }
+    });
+    let pendingToday = 0, withDoc = 0, waiting = 0, completed = 0, newD = 0, oldD = 0;
+    todayPatients.forEach(function(p) {
+        try { pendingToday += pendingFor(p); } catch (e) {}
+        const st = patientQueueStatus(p);
+        if (st === 'doctor') withDoc++;
+        else if (st === 'waiting') waiting++;
+        else if (st === 'completed') completed++;
+        if ((p.caseType || '') === 'new') newD++; else oldD++;
+    });
+    let renewDue = 0;
+    try { renewDue = listRenewalDuePatients().length; } catch (e) {}
+    let lowStock = 0;
+    try {
+        active(DB.medicines).forEach(function(m) {
+            const q = Number(m.quantity || 0);
+            if (q <= 0 || String(m.available || '').toLowerCase() === 'no') lowStock++;
+        });
+    } catch (e) {}
+    const s = { newD: newD, oldD: oldD, totalD: todayPatients.length, incomeM: 0, incomeY: 0, patient: { renewT: renewDue } };
     // Morning before 14:00 entry time if stored, else split by caseNo heuristic — use created hour from _updated or default all morning
     let morning = 0, evening = 0;
     todayPatients.forEach(p => {
@@ -2488,7 +2524,7 @@ function renderQueue() {
     const b = $('#queueBody');
     if (!b) return;
     const q = ($('#queueSearch')?.value || '').toLowerCase();
-    let arr = caseRows().filter(isTodayCase).filter(p => p.caseType === 'new' || p.caseType === 'old').filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile} ${p.address}`.toLowerCase().includes(q));
+    let arr = todayCaseRows().filter(p => p.caseType === 'new' || p.caseType === 'old').filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile} ${p.address}`.toLowerCase().includes(q));
     const { active, done } = splitTodayQueue(arr);
     const waiting = active.filter(p => queueStatus(p) !== 'doctor');
     const doctor = active.filter(p => queueStatus(p) === 'doctor');
@@ -6054,7 +6090,7 @@ function renderReceptionQueue() {
     const b = $('#receptionPatients');
     if (!b) return;
     const q = ($('#queueSearch')?.value || '').toLowerCase();
-    let arr = caseRows().filter(isTodayCase).filter(p => p.caseType === 'new' || p.caseType === 'old').filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile}`.toLowerCase().includes(q));
+    let arr = todayCaseRows().filter(p => p.caseType === 'new' || p.caseType === 'old').filter(p => !q || `${p.caseNo} ${p.name} ${p.mobile}`.toLowerCase().includes(q));
     const { active, done } = splitTodayQueue(arr);
     set('queueCountHint', `${active.length} active · ${done.length} completed today`);
 
