@@ -441,7 +441,8 @@ function loadLocal() {
     }
 }
 
-function saveLocal() {
+function saveLocal(opts) {
+    opts = opts || {};
     DB = normalizeData(DB);
     dataDirty = true;
     _searchIndexDirty = true;
@@ -449,7 +450,8 @@ function saveLocal() {
     try { raw = JSON.stringify(DB); } catch (e) { console.error('stringify failed', e); return; }
     try { idbSet(KEY, DB).catch(function(err){ console.warn('idb save', err); }); } catch (e) {}
     lsSafeSet(KEY, raw);
-    /* Defer render so UI thread stays free after large saves */
+    try { if (typeof scheduleSearchIndexRebuild === 'function') scheduleSearchIndexRebuild(); } catch (e) {}
+    if (opts.skipRender) return;
     try {
         if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(function() { try { renderAll(); } catch (e) {} });
@@ -457,6 +459,34 @@ function saveLocal() {
             setTimeout(function() { try { renderAll(); } catch (e) {} }, 0);
         }
     } catch (e) { console.error(e); }
+}
+
+function softRefreshAfterPayment() {
+    dataDirty = true;
+    lastRenderKey = '';
+    setTimeout(function() {
+        try {
+            const today = isoToday();
+            const ym = paymentAmountBy(today.slice(0, 4), today.slice(5, 7), null, 'total');
+            const yy = paymentAmountBy(today.slice(0, 4), null, null, 'total');
+            let td = 0;
+            active(DB.payments).forEach(function(x) {
+                const d = String(x.date || '');
+                if (d === today || (paymentYear(d) === today.slice(0, 4) && paymentMonth(d) === today.slice(5, 7) && paymentDay(d) === today.slice(8, 10))) {
+                    td += Number(x.amount || 0);
+                }
+            });
+            set('topMonth', money(ym));
+            set('topYearCollect', money(yy));
+            set('topIncome', money(td));
+            set('topReceived', money(td));
+        } catch (e) {}
+        try { renderQueue(); } catch (e) {}
+        try { if (role === 'reception') renderReceptionQueue(); } catch (e) {}
+    }, 30);
+    setTimeout(function() {
+        try { if (typeof syncNow === 'function') syncNow(true); } catch (e) {}
+    }, 400);
 }
 
 function active(a) {
@@ -1339,7 +1369,8 @@ function renderDashboard() {
     set('topIncome', money(receivedToday));
     set('topReceived', money(receivedToday));
     set('topPending', money(pendingToday));
-    set('topMonth', money(s.incomeM));
+    const monthCollect = paymentAmountBy(today.slice(0, 4), today.slice(5, 7), null, 'total');
+    set('topMonth', money(monthCollect));
     set('topYear', money(s.incomeY));
     set('topYearCollect', money(yearCollect));
     set('topWithDoctor', withDoc);
@@ -4414,15 +4445,14 @@ function receiveP(id) {
             p.completedAt = null;
         }
         markUpdated(p);
-        saveLocal();
+        saveLocal({ skipRender: true });
         closeModal();
-        refreshAllPatientViews();
+        softRefreshAfterPayment();
         if (left > 0) {
             toast(`Received ${money(result.collected)} · Pending ${money(left)} (next visit)`);
         } else {
             toast('Fully received — case completed');
         }
-        try { syncNow(true); } catch (e) {}
     });
 }
 
@@ -4459,17 +4489,17 @@ function focVisitFromHistory(id) {
         });
         DB.payments = (DB.payments || []).filter(x => x && x.patientId !== id && !x._deleted);
     } catch (e) {}
-    saveLocal();
-    try { refreshAllPatientViews(); } catch (e) {}
+    saveLocal({ skipRender: true });
     toast('Visit marked FOC');
-    try { syncNow(true); } catch (e) {}
-    try { viewPatientHistory(id); } catch (e) {
-        // reopen by permanent case primary if visit id was FOC
+    softRefreshAfterPayment();
+    setTimeout(function() {
         try {
-            const prim = primaryRegistration(permanentCaseNo(p));
-            if (prim) viewPatientHistory(prim.id);
-        } catch (e2) {}
-    }
+            const prim = primaryRegistration(permanentCaseNo(p)) || p;
+            viewPatientHistory(prim.id);
+        } catch (e) {
+            try { viewPatientHistory(id); } catch (e2) {}
+        }
+    }, 0);
 }
 
 /** Office-only: receive visit from history then refresh history. */
@@ -4479,7 +4509,7 @@ function receiveVisitFromHistory(id) {
         return;
     }
     receiveP(id);
-    setTimeout(() => {
+    setTimeout(function() {
         try {
             const p = active(DB.patients).find(x => x.id === id);
             if (p) {
@@ -4487,7 +4517,7 @@ function receiveVisitFromHistory(id) {
                 viewPatientHistory(prim.id);
             }
         } catch (e) {}
-    }, 400);
+    }, 600);
 }
 
 function pendingP(id) {
