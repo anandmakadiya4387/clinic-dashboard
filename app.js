@@ -451,42 +451,81 @@ function saveLocal(opts) {
     try { idbSet(KEY, DB).catch(function(err){ console.warn('idb save', err); }); } catch (e) {}
     lsSafeSet(KEY, raw);
     try { if (typeof scheduleSearchIndexRebuild === 'function') scheduleSearchIndexRebuild(); } catch (e) {}
+    /* Default: soft UI only — never full renderAll on every entry (hang fix) */
+    if (opts.fullRender) {
+        try {
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(function() { try { renderAll(); } catch (e) {} });
+            } else {
+                setTimeout(function() { try { renderAll(); } catch (e) {} }, 0);
+            }
+        } catch (e) { console.error(e); }
+        return;
+    }
     if (opts.skipRender) return;
-    try {
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(function() { try { renderAll(); } catch (e) {} });
-        } else {
-            setTimeout(function() { try { renderAll(); } catch (e) {} }, 0);
-        }
-    } catch (e) { console.error(e); }
+    softUIRefresh(opts);
 }
 
-function softRefreshAfterPayment() {
+/** Update only KPIs + active page + queue — not the whole app */
+function softUIRefresh(opts) {
+    opts = opts || {};
     dataDirty = true;
     lastRenderKey = '';
     setTimeout(function() {
-        try {
-            const today = isoToday();
-            const ym = paymentAmountBy(today.slice(0, 4), today.slice(5, 7), null, 'total');
-            const yy = paymentAmountBy(today.slice(0, 4), null, null, 'total');
-            let td = 0;
-            active(DB.payments).forEach(function(x) {
-                const d = String(x.date || '');
-                if (d === today || (paymentYear(d) === today.slice(0, 4) && paymentMonth(d) === today.slice(5, 7) && paymentDay(d) === today.slice(8, 10))) {
-                    td += Number(x.amount || 0);
-                }
-            });
-            set('topMonth', money(ym));
-            set('topYearCollect', money(yy));
-            set('topIncome', money(td));
-            set('topReceived', money(td));
-        } catch (e) {}
+        try { updateDashboardKPIsOnly(); } catch (e) {}
         try { renderQueue(); } catch (e) {}
         try { if (role === 'reception') renderReceptionQueue(); } catch (e) {}
-    }, 30);
+        try {
+            const act = document.querySelector('.page.active');
+            if (act && act.id && act.id !== 'dashboard') {
+                if (typeof renderPage === 'function') renderPage(act.id);
+            }
+        } catch (e) {}
+    }, 20);
+    if (opts.sync === false) return;
     setTimeout(function() {
         try { if (typeof syncNow === 'function') syncNow(true); } catch (e) {}
-    }, 400);
+    }, 350);
+}
+
+function softRefreshAfterPayment() {
+    softUIRefresh({});
+}
+
+function updateDashboardKPIsOnly() {
+    try {
+        const today = isoToday();
+        const ym = paymentAmountBy(today.slice(0, 4), today.slice(5, 7), null, 'total');
+        const yy = paymentAmountBy(today.slice(0, 4), null, null, 'total');
+        let td = 0;
+        active(DB.payments).forEach(function(x) {
+            if (Number(x.amount || 0) <= 0) return;
+            const d = String(x.date || '');
+            if (d === today || (paymentYear(d) === today.slice(0, 4) && paymentMonth(d) === today.slice(5, 7) && paymentDay(d) === today.slice(8, 10))) {
+                td += Number(x.amount || 0);
+            }
+        });
+        set('topMonth', money(ym));
+        set('topYearCollect', money(yy));
+        set('topIncome', money(td));
+        set('topReceived', money(td));
+        /* Queue counts light */
+        const todayPatients = active(DB.patients).filter(function(p) { return String(p.date || '') === today; });
+        let waiting = 0, withDoc = 0, completed = 0;
+        todayPatients.forEach(function(p) {
+            const st = patientQueueStatus(p);
+            if (st === 'waiting') waiting++;
+            else if (st === 'doctor') withDoc++;
+            else if (st === 'completed') completed++;
+        });
+        set('qWaiting', waiting);
+        set('qWithDoctor', withDoc);
+        set('qCompleted', completed);
+        set('topWithDoctor', withDoc);
+        set('topNew', todayPatients.filter(function(p) { return (p.caseType || '') === 'new'; }).length);
+        set('topOld', todayPatients.filter(function(p) { return (p.caseType || '') !== 'new'; }).length);
+        set('topTotal', todayPatients.length);
+    } catch (e) {}
 }
 
 function active(a) {
@@ -3183,6 +3222,7 @@ function paymentDay(d) {
 function paymentAmountBy(year, month, day, caseType) {
     const pays = active(DB.payments);
     return pays.filter(x => {
+        if (!x || Number(x.amount || 0) <= 0) return false;
         const d = String(x.date || '');
         if (!d) return false;
         if (year && year !== 'ALL' && paymentYear(d) !== String(year)) return false;
@@ -6447,6 +6487,26 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 400);
     } catch (e) {}
 });
+
+/* When app reopened / tab focused: pull server deltas only, soft UI (no full reload hang) */
+(function wireResumeSync() {
+  var lastVis = Date.now();
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) { lastVis = Date.now(); return; }
+    var gap = Date.now() - lastVis;
+    if (gap < 8000) return;
+    setTimeout(function() {
+      try {
+        if (typeof syncNow === 'function') {
+          Promise.resolve(syncNow(false)).then(function() {
+            try { softUIRefresh({ sync: false }); } catch (e) {}
+          }).catch(function() {});
+        }
+      } catch (e) {}
+    }, 100);
+  });
+})();
+
 // Exact Original Brand Image, Search Bar & Shortcut Restoration
 try {
   function applyOriginalTheme() {
