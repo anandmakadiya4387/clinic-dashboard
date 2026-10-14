@@ -1090,7 +1090,8 @@ async function syncNow(silent = false) {
         setConn(false, 'Offline mode. Local entries are safe.', null);
         if (!silent) toast('Sync unavailable — working offline', true);
     } finally {
-        _syncInFlight = false;
+        try { softMpaMarkSynced(); } catch(_m) {}
+    _syncInFlight = false;
     }
 }
 
@@ -6174,6 +6175,39 @@ function setupGlobalPatientSearch() {
 }
 
 
+
+
+/* Soft MPA: local-first. Full sync only on cold session / Refresh / WS new-data — NOT every page nav */
+function softMpaSessionAlreadyBooted() {
+  try {
+    return sessionStorage.getItem('anandSoftMpaBooted') === '1';
+  } catch (e) { return false; }
+}
+function softMpaMarkSessionBooted() {
+  try { sessionStorage.setItem('anandSoftMpaBooted', '1'); } catch (e) {}
+}
+function softMpaMarkSynced() {
+  try {
+    sessionStorage.setItem('anandSoftMpaLastSync', String(Date.now()));
+    sessionStorage.setItem('anandSoftMpaBooted', '1');
+  } catch (e) {}
+}
+function softMpaRenderCurrentOnly() {
+  try {
+    var page = (document.body && document.body.getAttribute('data-start-page')) || window.__SOFT_MPA_PAGE || 'dashboard';
+    page = String(page);
+    if (typeof openPage === 'function') {
+      openPage(page);
+      return;
+    }
+    document.querySelectorAll('section.page').forEach(function(s) {
+      s.classList.toggle('active', s.id === page);
+    });
+  } catch (e) {
+    try { if (typeof renderAll === 'function') renderAll(); } catch (e2) {}
+  }
+}
+
 function setup() {
     setupNav();
     try { setupKpiCollapse(); } catch(e) {}
@@ -6253,17 +6287,38 @@ function setup() {
         saveLocal();
         syncNow(true)
     });
-    if (role === 'reception') renderReceptionQueue();
-    renderAll();
+    if (role === 'reception') {
+        try { renderReceptionQueue(); } catch (e) {}
+    }
+    /* Soft MPA: paint from local DB only — do NOT full renderAll + full sync every page */
+    try {
+        if (window.__SOFT_MPA) softMpaRenderCurrentOnly();
+        else renderAll();
+    } catch (e) {
+        try { renderAll(); } catch (e2) {}
+    }
     setConn(false, server ? 'Checking connection…' : 'Offline mode — no server selected.');
-    /* Online badge first (health only), then full sync in background — no long wait for badge */
     if (server) {
+        /* Badge only — never block UI. Full sync ONLY once per browser tab session (cold open).
+           Page-to-page Soft MPA nav = local data only. New remote data = WebSocket soft pull. */
         quickHealthOnline().then(function(ok) {
-            if (ok) return syncNow(true);
+            if (!ok) return;
+            setConn(true, 'Online', null);
+            try { connectClinicWebSocket(); } catch (e) {}
+            if (window.__SOFT_MPA && softMpaSessionAlreadyBooted()) {
+                return; /* already have local DB + session sync — no full upload again */
+            }
+            return syncNow(true).then(function() {
+                try { softMpaMarkSynced(); softMpaMarkSessionBooted(); } catch (e) {}
+            });
         }).catch(function() {});
     }
     bindPollVisibility();
-    startPollTimerIfNeeded(); // light heartbeat 5s (status only); full sync = Refresh button
+    if (!window.__SOFT_MPA) {
+        startPollTimerIfNeeded();
+    } else {
+        try { connectClinicWebSocket(); } catch (e) {}
+    }
 }
 
 function renderReceptionQueue() {
