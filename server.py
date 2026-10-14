@@ -513,6 +513,75 @@ def create_fastapi_app():
     def style_css():
         return _nocache_file("style.css")
 
+    
+    
+    # Soft MPA HTML pages — each interface = separate URL (no SPA hang)
+    @app.get("/patients.html")
+    def mpa_patients():
+        return _nocache_file("patients.html")
+    @app.get("/payments.html")
+    def mpa_payments():
+        return _nocache_file("payments.html")
+    @app.get("/history.html")
+    def mpa_history():
+        return _nocache_file("history.html")
+    @app.get("/medicines.html")
+    def mpa_medicines():
+        return _nocache_file("medicines.html")
+    @app.get("/clinic.html")
+    def mpa_clinic():
+        return _nocache_file("clinic.html")
+    @app.get("/connection.html")
+    def mpa_connection():
+        return _nocache_file("connection.html")
+    @app.get("/permissions.html")
+    def mpa_permissions():
+        return _nocache_file("permissions.html")
+    @app.get("/bill.html")
+    def mpa_bill():
+        return _nocache_file("bill.html")
+    @app.get("/yearly-growth.html")
+    def mpa_yg():
+        return _nocache_file("yearly-growth.html")
+    @app.get("/reports.html")
+    def mpa_reports():
+        return _nocache_file("reports.html")
+    @app.get("/backup.html")
+    def mpa_backup():
+        return _nocache_file("backup.html")
+    @app.get("/r-history.html")
+    def mpa_r_hist():
+        return _nocache_file("r-history.html")
+    @app.get("/r-payments.html")
+    def mpa_r_pay():
+        return _nocache_file("r-payments.html")
+    @app.get("/r-medicines.html")
+    def mpa_r_med():
+        return _nocache_file("r-medicines.html")
+    @app.get("/r-connection.html")
+    def mpa_r_conn():
+        return _nocache_file("r-connection.html")
+    @app.get("/r-bill.html")
+    def mpa_r_bill():
+        return _nocache_file("r-bill.html")
+    @app.get("/r-backup.html")
+    def mpa_r_backup():
+        return _nocache_file("r-backup.html")
+
+    @app.get("/new-case.html")
+    def mpa_new_case():
+        return _nocache_file("new-case.html")
+    @app.get("/old-case.html")
+    def mpa_old_case():
+        return _nocache_file("old-case.html")
+    @app.get("/r-new-case.html")
+    def mpa_r_new_case():
+        return _nocache_file("r-new-case.html")
+    @app.get("/r-old-case.html")
+    def mpa_r_old_case():
+        return _nocache_file("r-old-case.html")
+
+
     app.mount("/", StaticFiles(directory=BASE_DIR, html=True), name="static")
     return app
 

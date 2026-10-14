@@ -1737,6 +1737,36 @@ function openPatientProfile(id) {
 }
 
 
+
+function softMpaUrlFor(pageId, extra) {
+  extra = extra || {};
+  var r = (typeof role !== 'undefined' ? role : (document.body && document.body.dataset.role)) || 'office';
+  var officeMap = {
+    dashboard: 'office.html', patients: 'patients.html', payments: 'payments.html',
+    appointmentHistory: 'history.html', medicines: 'medicines.html', clinic: 'clinic.html',
+    connection: 'connection.html', permissions: 'permissions.html', bill: 'bill.html',
+    yearlyGrowth: 'yearly-growth.html', reports: 'reports.html', backup: 'backup.html',
+    newCase: 'new-case.html', oldCase: 'old-case.html'
+  };
+  var recMap = {
+    dashboard: 'reception.html', appointmentHistory: 'r-history.html', payments: 'r-payments.html',
+    medicines: 'r-medicines.html', connection: 'r-connection.html', bill: 'r-bill.html',
+    backup: 'r-backup.html', newCase: 'r-new-case.html', oldCase: 'r-old-case.html'
+  };
+  var base = (r === 'reception' ? recMap : officeMap)[pageId] || (r === 'reception' ? 'reception.html' : 'office.html');
+  var q = [];
+  if (extra.view) q.push('view=' + encodeURIComponent(extra.view));
+  if (extra.patientView) q.push('view=' + encodeURIComponent(extra.patientView));
+  if (extra.payView) q.push('view=' + encodeURIComponent(extra.payView));
+  return base + (q.length ? ('?' + q.join('&')) : '');
+}
+function softMpaNavigate(pageId, extra) {
+  try {
+    window.location.href = softMpaUrlFor(pageId, extra || {});
+    return true;
+  } catch (e) { return false; }
+}
+
 function openPage(id) {
     if (!id || id === 'undefined' || id === 'null') return;
     if (role === 'reception') {
@@ -2382,10 +2412,22 @@ function reconcileCurrentCasePayments(p) {
 
 
 /** After new/old case save: only today queue + KPI + quiet push — never full app reload */
+
+function softMpaBackAfterSave() {
+  try {
+    if (!(document.body && document.body.getAttribute('data-case-entry'))) return;
+    var r = (typeof role !== 'undefined' ? role : 'office');
+    setTimeout(function() {
+      window.location.href = (r === 'reception') ? 'reception.html' : 'office.html';
+    }, 400);
+  } catch (e) {}
+}
+
 function afterLocalDataFast(p) {
     try {
         if (typeof isCaseFormOpen === 'function' && isCaseFormOpen()) {
             setTimeout(function() { try { pushLocalQuiet(); } catch (e) {} }, 120);
+            try { softMpaBackAfterSave(); } catch (e2) {}
             return;
         }
     } catch (e) {}
@@ -4424,7 +4466,7 @@ function editP(id) {
         return;
     }
     closeModal();
-    openPage('dashboard');
+    openPage(window.__SOFT_MPA_PAGE || 'dashboard');
     // Ensure case no is in 0A format when opening edit
     if (/^\d+$/.test(String(p.caseNo || '').trim())) {
         p.caseNo = normalizeCaseNoInput(p.caseNo);
@@ -5234,6 +5276,17 @@ function setupNav() {
             return;
         }
         b.onclick = (e) => {
+            /* Soft MPA: <a href> = full page load (no hang). Stay in-page only if section exists. */
+            try {
+                if (window.__SOFT_MPA && b.tagName === 'A' && b.getAttribute('href')) {
+                    var target = b.dataset.page;
+                    var el = target && document.getElementById(target);
+                    if (!el) {
+                        /* let browser follow href */
+                        return;
+                    }
+                }
+            } catch (err) {}
             e.preventDefault();
             openPage(b.dataset.page);
             // Mobile: close side drawer after opening any interface
@@ -6131,8 +6184,14 @@ function setup() {
     setupEmptyStockBtn();
     setupKpiClicks();
     setupPatientsNav();
-    $('#newCase')?.addEventListener('click', () => buildPatientForm('new'));
-    $('#oldCase')?.addEventListener('click', () => openOldAppointmentPanel());
+    $('#newCase')?.addEventListener('click', () => {
+        if (window.__SOFT_MPA) { softMpaNavigate('newCase'); return; }
+        buildPatientForm('new');
+    });
+    $('#oldCase')?.addEventListener('click', () => {
+        if (window.__SOFT_MPA) { softMpaNavigate('oldCase'); return; }
+        openOldAppointmentPanel();
+    });
     $('#patientForm')?.addEventListener('submit', registerCase);
     $('#patientClose')?.addEventListener('click', closeForm);
     $('#patientDate')?.addEventListener('change', checkRenewal);
@@ -7124,4 +7183,22 @@ window.openMultiYearGrowthModal = function() {
 
 (function deferHeavyPageRender() {
   /* Disabled: openPage/renderPage already paints once. Second pass caused hang on nav click. */
+})();
+
+
+(function softMpaCaseEntryBoot() {
+  function run() {
+    try {
+      var kind = document.body && document.body.getAttribute('data-case-entry');
+      if (!kind) return;
+      window.__SOFT_MPA = true;
+      if (kind === 'new') {
+        setTimeout(function() { try { buildPatientForm('new'); } catch (e) {} }, 50);
+      } else if (kind === 'old') {
+        setTimeout(function() { try { openOldAppointmentPanel(); } catch (e) {} }, 50);
+      }
+    } catch (e) {}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else setTimeout(run, 0);
 })();
