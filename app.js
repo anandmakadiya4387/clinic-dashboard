@@ -1,5 +1,18 @@
 const APP_VERSION = 'PRO';
 const role = document.body.dataset.role || 'office';
+
+(function softMpaDetect() {
+  try {
+    var pages = document.querySelectorAll('section.page');
+    if (document.body && document.body.getAttribute('data-start-page')) {
+      window.__SOFT_MPA = true;
+      window.__SOFT_MPA_PAGE = document.body.getAttribute('data-start-page');
+    } else if (pages && pages.length <= 2) {
+      window.__SOFT_MPA = true;
+    }
+  } catch (e) {}
+})();
+
 const savedTheme = 'light';
 document.documentElement.dataset.theme = 'light';
 try { localStorage.setItem('anandClinicTheme', 'light'); } catch(e) {}
@@ -5276,14 +5289,19 @@ function setupNav() {
             return;
         }
         b.onclick = (e) => {
-            /* Soft MPA: <a href> = full page load (no hang). Stay in-page only if section exists. */
+            /* Soft MPA CRITICAL: real <a href="other.html"> must ALWAYS full-navigate.
+               Never preventDefault — that was keeping URL stuck on office.html */
             try {
-                if (window.__SOFT_MPA && b.tagName === 'A' && b.getAttribute('href')) {
-                    var target = b.dataset.page;
-                    var el = target && document.getElementById(target);
-                    if (!el) {
-                        /* let browser follow href */
-                        return;
+                if (b.tagName === 'A') {
+                    var href = b.getAttribute('href') || '';
+                    if (href && href !== '#' && !href.startsWith('javascript:')) {
+                        var target = b.dataset.page;
+                        var el = target ? document.getElementById(target) : null;
+                        /* Section not in this HTML → let browser load other page */
+                        if (!el) {
+                            return; /* no preventDefault → full navigation */
+                        }
+                        /* Same page section exists → SPA openPage only */
                     }
                 }
             } catch (err) {}
@@ -7201,4 +7219,23 @@ window.openMultiYearGrowthModal = function() {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else setTimeout(run, 0);
+})();
+
+
+/* Soft MPA: capture-phase — nothing may block sidebar <a href> navigation */
+(function softMpaForceNav() {
+  document.addEventListener('click', function(ev) {
+    try {
+      var a = ev.target && ev.target.closest && ev.target.closest('a.navBtn, a.navSubBtn, .nav a[href]');
+      if (!a) return;
+      var href = a.getAttribute('href') || '';
+      if (!href || href === '#' || href.indexOf('javascript:') === 0) return;
+      var page = a.getAttribute('data-page');
+      var el = page ? document.getElementById(page) : null;
+      if (el) return; /* same-document section: allow SPA */
+      /* Different HTML file — force navigation even if someone called preventDefault */
+      ev.stopImmediatePropagation();
+      window.location.assign(href);
+    } catch (e) {}
+  }, true);
 })();
