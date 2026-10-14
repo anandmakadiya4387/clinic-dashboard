@@ -465,15 +465,37 @@ function saveLocal(opts) {
         } catch (e) { console.error(e); }
         return;
     }
-    if (opts.skipRender) return;
-    softUIRefresh(opts);
+    if (opts.skipRender) {
+        if (opts.push !== false) {
+            setTimeout(function() { try { pushLocalQuiet(); } catch (e) {} }, 250);
+        }
+        return;
+    }
+    softUIRefresh(Object.assign({}, opts, { sync: false }));
+    if (opts.push !== false) {
+        setTimeout(function() { try { pushLocalQuiet(); } catch (e) {} }, 250);
+    }
 }
 
 /** Update only KPIs + active page + queue — not the whole app */
+function isCaseFormOpen() {
+    try {
+        if (document.body && document.body.classList.contains('caseFormOpen')) return true;
+        const f = document.getElementById('patientForm');
+        if (f && f.classList.contains('caseOverlayOpen') && !f.classList.contains('hidden')) return true;
+        const o = document.getElementById('oldAppointmentPanel');
+        if (o && o.classList.contains('caseOverlayOpen') && !o.classList.contains('hidden')) return true;
+    } catch (e) {}
+    return false;
+}
+
 function softUIRefresh(opts) {
     opts = opts || {};
+    /* While new/old case form is open — ZERO UI work (typing must not freeze) */
+    if (isCaseFormOpen() && !opts.force) return;
     /* Do NOT clear lastRenderKey / force dataDirty — that made every nav re-paint all pages */
     setTimeout(function() {
+        if (isCaseFormOpen() && !opts.force) return;
         try { updateDashboardKPIsOnly(); } catch (e) {}
         try { renderQueue(); } catch (e) {}
         try { if (role === 'reception') renderReceptionQueue(); } catch (e) {}
@@ -485,15 +507,37 @@ function softUIRefresh(opts) {
             } catch (e) {}
         }
     }, 10);
-    if (opts.sync === false) return;
-    setTimeout(function() {
-        try { if (typeof syncNow === 'function') syncNow(true); } catch (e) {}
-    }, 400);
+    /* Default: NO auto sync — only when opts.sync === true (manual Refresh) */
+    if (opts.sync === true) {
+        setTimeout(function() {
+            try { if (typeof syncNow === 'function') syncNow(true); } catch (e) {}
+        }, 400);
+    }
 }
 
 function softRefreshAfterPayment() {
-    softUIRefresh({});
+    afterLocalDataFast(null);
 }
+
+/** Send local DB to server without merging remote or re-rendering (no hang / no loading loop) */
+function pushLocalQuiet() {
+    if (!server) return;
+    if (typeof _syncInFlight !== 'undefined' && _syncInFlight) return;
+    try {
+        if (typeof isCaseFormOpen === 'function' && isCaseFormOpen()) return;
+    } catch (e) {}
+    Promise.resolve()
+        .then(function() { return api('/api/sync', 'POST', DB); })
+        .then(function() {
+            try {
+                window.__lastSyncAt = new Date();
+                var ls = document.getElementById('lastSyncText');
+                if (ls) ls.textContent = 'Last sync: ' + window.__lastSyncAt.toLocaleTimeString();
+            } catch (e) {}
+        })
+        .catch(function() {});
+}
+
 
 function updateDashboardKPIsOnly() {
     try {
@@ -955,15 +999,22 @@ function connectClinicWebSocket() {
                     if (document.hidden) return;
                     if (window.__wsSoftSyncTimer) clearTimeout(window.__wsSoftSyncTimer);
                     window.__wsSoftSyncTimer = setTimeout(function() {
+                        /* Other device saved — merge quietly, only today queue/KPI (no full page reload) */
+                        try { if (typeof isCaseFormOpen === 'function' && isCaseFormOpen()) return; } catch (e) {}
                         Promise.resolve(syncNow(true)).then(function() {
-                            try { dataDirty = true; lastRenderKey = ''; } catch (e) {}
                             try {
-                                const act = document.querySelector('.page.active');
-                                if (act && act.id) renderPage(act.id);
-                                else if (typeof renderAll === 'function') renderAll();
+                                if (typeof afterLocalDataFast === 'function') {
+                                    /* already pushed on other side — only refresh local UI, no second push */
+                                    dataDirty = true; lastRenderKey = '';
+                                    try { updateDashboardKPIsOnly(); } catch (e2) {}
+                                    try { renderQueue(); } catch (e2) {}
+                                    try { if (role === 'reception') renderReceptionQueue(); } catch (e2) {}
+                                } else {
+                                    softUIRefresh({ sync: false, force: true });
+                                }
                             } catch (e) {}
                         }).catch(function(){});
-                    }, 500);
+                    }, 300);
                 }
             } catch (e) {}
         };
@@ -1010,12 +1061,18 @@ async function syncNow(silent = false) {
         window.__lastCheckAt = window.__lastSyncAt;
         setConn(true, 'Synced · lag ' + lag + ' ms', lag);
         if (!clinicWs || clinicWs.readyState > 1) connectClinicWebSocket();
-        try { if (role === 'reception') renderPermissions(); } catch (e) {}
-        try { if (typeof refreshAllPatientViews === 'function') refreshAllPatientViews(); } catch (e) {}
-        try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (e) {}
-        try { if (typeof renderQueue === 'function') renderQueue(); } catch (e) {}
-        try { if (typeof renderReceptionQueue === 'function') renderReceptionQueue(); } catch (e) {}
-        if (!silent) toast('Refresh complete — Office & Reception data merged');
+        /* Full UI refresh only on manual Refresh (silent=false). Silent/auto: no re-load all pages. */
+        if (!silent) {
+            try { if (role === 'reception') renderPermissions(); } catch (e) {}
+            try { if (typeof softUIRefresh === 'function') softUIRefresh({ sync: false, force: true }); } catch (e) {}
+            try {
+                const act = document.querySelector('.page.active');
+                if (act && act.id && typeof renderPage === 'function') renderPage(act.id);
+            } catch (e) {}
+            toast('Refresh complete — Office & Reception data merged');
+        } else {
+            try { if (typeof updateDashboardKPIsOnly === 'function') updateDashboardKPIsOnly(); } catch (e) {}
+        }
     } catch (e) {
         setConn(false, 'Offline mode. Local entries are safe.', null);
         if (!silent) toast('Sync unavailable — working offline', true);
@@ -1719,7 +1776,7 @@ function openPage(id) {
         b.classList.toggle('active', b.dataset.page === id);
     });
     if (window.innerWidth < 900) { $('#side')?.classList.remove('open'); document.body.classList.remove('side-open'); }
-    /* Fast nav: show page shell first, then paint heavy table (no hang on click) */
+    /* Twocompo-style: page shell already visible above — paint ONLY if this page is dirty */
     try {
         var renderKey = id;
         try {
@@ -1730,9 +1787,12 @@ function openPage(id) {
                 renderKey = 'payments|' + pv;
             }
         } catch (e3) {}
-        if (renderKey === lastRenderKey && !dataDirty) {
-            return;
-        }
+        var needPaint = true;
+        try {
+            if (renderKey === lastRenderKey && pageDirty && pageDirty[id] === false) needPaint = false;
+            else if (renderKey === lastRenderKey && !dataDirty && !(pageDirty && pageDirty[id])) needPaint = false;
+        } catch (e4) {}
+        if (!needPaint) return;
         var seq = (++_navPaintSeq);
         var paintId = id;
         var paintKey = renderKey;
@@ -1743,9 +1803,10 @@ function openPage(id) {
                 lastRenderedPage = paintId;
                 lastRenderKey = paintKey;
                 dataDirty = false;
+                try { if (pageDirty) pageDirty[paintId] = false; } catch (e5) {}
             } catch (e) { console.warn('renderPage', e); }
         }
-        /* Double rAF: browser paints active tab before heavy DOM work */
+        /* Defer paint so click feels instant (shell already shown) */
         if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(function() { requestAnimationFrame(doNavPaint); });
         } else {
@@ -1784,7 +1845,7 @@ function openOldAppointmentPanel() {
         toast('Old appointment panel missing', true);
         return;
     }
-    try { openPage('dashboard'); } catch (e) {}
+    /* no openPage — keep typing smooth */
     panel.classList.remove('hidden');
     panel.classList.add('caseOverlayOpen');
     try { document.body.classList.add('caseFormOpen'); } catch (e) {}
@@ -1831,8 +1892,9 @@ function runOldApptSearch() {
         if (!prev || Number(p.caseNo || 0) < Number(prev.caseNo || 0)) byKey.set(key, p);
     });
     // also always include exact caseNo matches
-    const unique = [...byKey.values()];
+    const unique = [...byKey.values()].slice(0, 15);
     hits.forEach(p => {
+        if (unique.length >= 15) return;
         if (String(p.caseNo) === q && !unique.some(x => x.id === p.id)) unique.push(p);
     });
     unique.sort((a, b) => Number(a.caseNo || 0) - Number(b.caseNo || 0));
@@ -2078,7 +2140,7 @@ function setupOldAppointmentPanel() {
     let _oldApptTimer = null;
     $('#oldApptSearch')?.addEventListener('input', () => {
         clearTimeout(_oldApptTimer);
-        _oldApptTimer = setTimeout(runOldApptSearch, 120);
+        _oldApptTimer = setTimeout(runOldApptSearch, 200);
     });
     $('#oldApptSearch')?.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
@@ -2093,9 +2155,8 @@ function buildPatientForm(type, patient = null) {
     const f = $('#patientForm');
     if (!f) return;
     $('#formTitle').textContent = patient ? 'Edit Case' : (type === 'new' ? 'New Case Registration' : 'Old Case Registration');
-    // Full-screen overlay (no openPage — avoids hang/loops)
+    // Full-screen overlay — do NOT openPage/renderDashboard (that froze typing for minutes)
     try { $('#oldAppointmentPanel')?.classList.add('hidden'); } catch (e) {}
-    try { openPage('dashboard'); } catch (e) {}
     f.classList.remove('hidden');
     f.classList.add('caseOverlayOpen');
     try { document.body.classList.add('caseFormOpen'); } catch (e) {}
@@ -2319,6 +2380,46 @@ function reconcileCurrentCasePayments(p) {
     });
 }
 
+
+/** After new/old case save: only today queue + KPI + quiet push — never full app reload */
+function afterLocalDataFast(p) {
+    try {
+        if (typeof isCaseFormOpen === 'function' && isCaseFormOpen()) {
+            setTimeout(function() { try { pushLocalQuiet(); } catch (e) {} }, 120);
+            return;
+        }
+    } catch (e) {}
+    try {
+        dataDirty = true;
+        _searchIndexDirty = true;
+        _histRowsCache = null; _histRowsCacheKey = '';
+        _payTotalsCache = null; _payTotalsCacheKey = '';
+        if (typeof pageDirty === 'object' && pageDirty) {
+            pageDirty.dashboard = true;
+            pageDirty.patients = true;
+            pageDirty.appointmentHistory = true;
+            pageDirty.payments = true;
+        }
+        lastRenderKey = '';
+    } catch (e) {}
+    try { updateDashboardKPIsOnly(); } catch (e) {}
+    try { renderQueue(); } catch (e) {}
+    try { if (role === 'reception') renderReceptionQueue(); } catch (e) {}
+    try {
+        const act = document.querySelector('.page.active');
+        if (act && act.id === 'payments' && typeof renderPaymentSummary === 'function') {
+            setTimeout(function() { try { renderPaymentSummary(); } catch (e) {} }, 0);
+        }
+    } catch (e) {}
+    setTimeout(function() {
+        try { if (typeof scheduleSearchIndexRebuild === 'function') scheduleSearchIndexRebuild(); } catch (e) {}
+    }, 400);
+    setTimeout(function() {
+        try { if (typeof pushLocalQuiet === 'function') pushLocalQuiet(); } catch (e) {}
+    }, 100);
+}
+function afterCaseRegisteredFast(p) { afterLocalDataFast(p); }
+
 function registerCase(e) {
     if (e && e.preventDefault) e.preventDefault();
     const _dupName = $('#name')?.value?.trim() || '';
@@ -2441,11 +2542,13 @@ function registerCase(e) {
     const pid = String(p.id);
     DB.patients = (DB.patients || []).filter(x => String(x.id) !== pid);
     DB.patients.push(p);
-    saveLocal();
+    /* Superfast path: local save only, no full reload / full sync */
+    try { saveLocal({ skipRender: true, push: false }); } catch (e) {
+        try { saveLocal(); } catch (e2) {}
+    }
     closeForm();
-    refreshAllPatientViews();
+    afterCaseRegisteredFast(p);
     toast(id ? 'Case updated' : 'Case registered');
-    try { syncNow(true); } catch (e) {}
 }
 
 function closeForm() {
@@ -2521,6 +2624,7 @@ function receptionPayStatusLabel(p) {
 }
 
 function renderQueue() {
+    try { if (typeof isCaseFormOpen === 'function' && isCaseFormOpen()) return; } catch (e) {}
     const b = $('#queueBody');
     if (!b) return;
     const q = ($('#queueSearch')?.value || '').toLowerCase();
@@ -2613,18 +2717,20 @@ function renderPatientReport() {
     if (view === 'renewal') {
         // Cases that have at least one renewal payment — unique by case no, last renewal first
         const byCase = new Map();
-        active(DB.payments).filter(x => (x.feeCategory === 'renewal' || x.caseType === 'renewal') && Number(x.amount || 0) > 0)
-            .forEach(x => {
-                const p = active(DB.patients).find(pt => pt.id === x.patientId);
-                if (!p) return;
-                const key = String(permanentCaseNo(p));
-                const prim = primaryRegistration(key) || p;
-                const prev = byCase.get(key);
-                const payDate = String(x.date || '');
-                if (!prev || payDate > prev._lastRenewPay) {
-                    byCase.set(key, { ...prim, _lastRenewPay: payDate });
-                }
-            });
+        const byId = new Map();
+        active(DB.patients).forEach(function(pt) { if (pt && pt.id) byId.set(pt.id, pt); });
+        active(DB.payments).forEach(function(x) {
+            if (!x || (x.feeCategory !== 'renewal' && x.caseType !== 'renewal') || Number(x.amount || 0) <= 0) return;
+            const p = byId.get(x.patientId);
+            if (!p) return;
+            const key = String(permanentCaseNo(p));
+            const prim = primaryRegistration(key) || p;
+            const prev = byCase.get(key);
+            const payDate = String(x.date || '');
+            if (!prev || payDate > prev._lastRenewPay) {
+                byCase.set(key, Object.assign({}, prim, { _lastRenewPay: payDate }));
+            }
+        });
         rows = [...byCase.values()].sort((a, b) => String(b._lastRenewPay).localeCompare(String(a._lastRenewPay)));
         rows = rows.filter(p => patientDateMatch(p.date) || patientDateMatch(p._lastRenewPay));
     } else if (view === 'followup') {
@@ -3640,14 +3746,20 @@ function renderPaymentSummary() {
     const customFrom = fromEl?.value || '';
     const customTo = toEl?.value || '';
     const useCustom = !!(customFrom || customTo);
+    /* Totals computed once per filter key until data changes (Twocompo-style) */
+    const totalsKey = [year, month, day, customFrom, customTo, useCustom ? '1' : '0', (DB.payments || []).length].join('|');
 
     let newY, oldY, renY, medY, totY;
-    if (useCustom) {
+    if (_payTotalsCache && _payTotalsCacheKey === totalsKey) {
+        newY = _payTotalsCache.newY; oldY = _payTotalsCache.oldY; renY = _payTotalsCache.renY;
+        medY = _payTotalsCache.medY; totY = _payTotalsCache.totY;
+    } else if (useCustom) {
         newY = paymentAmountRange(customFrom || null, customTo || null, 'new');
         oldY = paymentAmountRange(customFrom || null, customTo || null, 'old');
         renY = paymentAmountRange(customFrom || null, customTo || null, 'renewal');
         medY = paymentAmountRange(customFrom || null, customTo || null, null, 'medicine');
         totY = paymentAmountRange(customFrom || null, customTo || null, 'total');
+        _payTotalsCache = { newY, oldY, renY, medY, totY }; _payTotalsCacheKey = totalsKey;
     } else {
         const y = year === 'ALL' ? null : year;
         newY = paymentAmountBy(y, month || null, day || null, 'new');
@@ -3655,6 +3767,7 @@ function renderPaymentSummary() {
         renY = paymentAmountBy(y, month || null, day || null, 'renewal');
         medY = feeCategoryAmountBy(y, month || null, day || null, 'medicine');
         totY = paymentAmountBy(y, month || null, day || null, 'total');
+        _payTotalsCache = { newY, oldY, renY, medY, totY }; _payTotalsCacheKey = totalsKey;
     }
 
    
@@ -4369,11 +4482,8 @@ function docP(id) {
     }
     p.withDoctor = !p.withDoctor;
     markUpdated(p);
-    saveLocal();
-    renderQueue();
-    renderReceptionQueue();
-    // no toast popup — status shows in queue
-    try { syncNow(true); } catch (e) {}
+    saveLocal({ skipRender: true, push: false });
+    afterLocalDataFast(p);
 }
 
 function categoryPaid(patientId, feeCategory) {
@@ -4612,14 +4722,9 @@ function pendingP(id) {
     p.completedAt = null;
     // do NOT clear withDoctor
     markUpdated(p);
-    saveLocal();
-    renderDashboard();
-    renderQueue();
-    renderReceptionQueue();
-    renderReportPage();
-    if ($('#histBody')) renderAppointmentHistory();
+    saveLocal({ skipRender: true, push: false });
+    afterLocalDataFast(p);
     toast('Case marked pending (stays With Doctor until received)');
-    syncNow(true);
 }
 
 function payP(id, category) {
@@ -4655,14 +4760,10 @@ function payP(id, category) {
             p.completedAt = null;
         }
         markUpdated(p);
-        saveLocal();
+        saveLocal({ skipRender: true, push: false });
         closeModal();
-        renderDashboard();
-        renderQueue();
-        renderReceptionQueue();
-        renderReportPage();
+        afterLocalDataFast(p);
         toast('Payment registered');
-        syncNow(true)
     })
 }
 
@@ -4691,11 +4792,10 @@ function editPay(id) {
             p.completedAt = pend <= 0 ? (p.completedAt || new Date().toISOString()) : null;
             markUpdated(p)
         }
-        saveLocal();
+        saveLocal({ skipRender: true, push: false });
         closeModal();
-        refreshAllPatientViews();
+        afterLocalDataFast(p);
         toast('Payment updated');
-        try { syncNow(true); } catch (e) {}
     })
 }
 
@@ -4720,9 +4820,9 @@ function delPay(id) {
             p.completedAt = pend <= 0 ? (p.completedAt || new Date().toISOString()) : null;
             markUpdated(p)
         }
-        saveLocal();
-        refreshAllPatientViews();
-        try { syncNow(true); } catch (e) {}
+        saveLocal({ skipRender: true, push: false });
+        afterLocalDataFast(p);
+        toast('Payment deleted');
     }
 }
 
@@ -5482,6 +5582,9 @@ async function importBackup(e) {
 window.importBackup = importBackup;
 
 function getAppointmentHistoryRows() {
+    const q0 = String(histQuery || '').trim().toLowerCase();
+    const cacheKey = String((DB.patients || []).length) + '|' + q0 + '|' + String((DB.payments || []).length);
+    if (_histRowsCache && _histRowsCacheKey === cacheKey) return _histRowsCache;
     /* Single sort only — avoid caseRows() double-sort freeze on 2000+ patients */
     let rows = active(DB.patients).slice();
     rows.sort((a, b) => toSortableDate(b.date).localeCompare(toSortableDate(a.date)) || caseNoNumericPart(b.caseNo) - caseNoNumericPart(a.caseNo));
@@ -5495,7 +5598,7 @@ function getAppointmentHistoryRows() {
             return name.includes(q) || caseNo.includes(q) || (digits && mobile.includes(digits)) || String(p.address || '').toLowerCase().includes(q);
         });
     }
-    return rows;
+    _histRowsCache = rows; _histRowsCacheKey = cacheKey; return rows;
 }
 
 function renderAppointmentHistory() {
@@ -5592,6 +5695,7 @@ function setupAppointmentHistory() {
 
 let _migrationsRan = false;
 function renderAll() {
+    try { if (typeof isCaseFormOpen === 'function' && isCaseFormOpen()) return; } catch (e) {}
     /* Light path first so UI stays responsive with large patient DB (2000+ rows). */
     try {
         if (!_migrationsRan) {
@@ -5702,6 +5806,8 @@ async function runPollTick() {
        Previously only health ping — that forced manual Refresh. Logo/logic unchanged. */
     if (!server) return;
     if (typeof document !== 'undefined' && document.hidden) return;
+    /* Never sync/re-render while user is typing in new/old case form */
+    try { if (typeof isCaseFormOpen === 'function' && isCaseFormOpen()) return; } catch (e) {}
     if (_heartbeatInFlight) return;
     if (typeof _syncInFlight !== 'undefined' && _syncInFlight) return;
     _heartbeatInFlight = true;
@@ -5733,25 +5839,15 @@ async function runPollTick() {
             try { since = localStorage.getItem(STAMP_KEY) || ''; } catch (e) {}
             if (!since || String(meta.time || '') !== since) needSync = true;
         } else {
-            /* Fallback if meta not on server yet: full syncNow once when ?sync not needed */
+            /* No full /api/data on poll — that freezes typing for minutes. Health ping only. */
             try {
-                var remote = await api('/api/data');
-                if (remote && typeof remote === 'object') {
-                    if (activeCount(remote.patients) > activeCount(DB.patients)) needSync = true;
-                    if (activeCount(remote.payments) > activeCount(DB.payments)) needSync = true;
-                    if (activeCount(remote.medicines) > activeCount(DB.medicines)) needSync = true;
-                    if (maxCaseNo(remote.patients) > maxCaseNo(DB.patients)) needSync = true;
-                }
-            } catch (e) {
-                try {
-                    await api('/api/health');
-                    var lagH = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
-                    setConn(true, 'Online · lag ' + lagH + ' ms', lagH);
-                } catch (e2) {
-                    setConn(false, 'Offline / not reachable', null);
-                }
-                return;
+                await api('/api/health');
+                var lagH = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0);
+                setConn(true, 'Online · lag ' + lagH + ' ms', lagH);
+            } catch (e2) {
+                setConn(false, 'Offline / not reachable', null);
             }
+            return;
         }
 
         if (needSync) {
@@ -5788,6 +5884,7 @@ function stopPollTimer() {
 
 function startPollTimerIfNeeded() {
     stopPollTimer();
+    /* Auto periodic sync OFF by default — only when URL has ?sync=30 etc. */
     const ms = getSyncPollMs();
     if (!ms) return;
     if (typeof document !== 'undefined' && document.hidden) return;
@@ -5872,11 +5969,13 @@ function getPatientSearchIndex() {
 
 /** Rebuild index off the typing path (does not block input) */
 function scheduleSearchIndexRebuild() {
+    /* Deferred so form typing never waits on index rebuild */
     setTimeout(function() {
         try {
+            if (typeof isCaseFormOpen === 'function' && isCaseFormOpen()) return;
             if (_searchIndexDirty) getPatientSearchIndex();
         } catch (e) {}
-    }, 0);
+    }, 300);
 }
 
 /** Fast match: only name, case number, mobile */
@@ -5898,7 +5997,7 @@ function searchPatientsQuery(q) {
         }
         if (ok) {
             out.push(row.p);
-            if (out.length >= 20) break;
+            if (out.length >= 15) break;
         }
     }
     return out;
@@ -6037,7 +6136,11 @@ function setup() {
     $('#patientForm')?.addEventListener('submit', registerCase);
     $('#patientClose')?.addEventListener('click', closeForm);
     $('#patientDate')?.addEventListener('change', checkRenewal);
-    $('#caseNo')?.addEventListener('input', checkRenewal);
+    let _renewTimer = null;
+    $('#caseNo')?.addEventListener('input', function() {
+        clearTimeout(_renewTimer);
+        _renewTimer = setTimeout(checkRenewal, 400);
+    });
     $('#queueSearch')?.addEventListener('input', () => { queuePage = 1; if (role === 'reception') renderReceptionQueue(); else renderQueue(); });
     $('#medSearch')?.addEventListener('input', () => { medPage = 1; renderMedicines(); });
     $('#receptionMedSearch')?.addEventListener('input', () => { receptionMedPage = 1; renderReceptionMedicines(); });
@@ -6526,20 +6629,23 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /* When app reopened / tab focused: pull server deltas only, soft UI (no full reload hang) */
 (function wireResumeSync() {
-  var lastVis = Date.now();
+  /* Disabled auto full-sync on tab focus — caused repeated load/hang.
+     Use top-bar Refresh Data when needed. Connection ping only. */
   document.addEventListener('visibilitychange', function() {
-    if (document.hidden) { lastVis = Date.now(); return; }
-    var gap = Date.now() - lastVis;
-    if (gap < 8000) return;
+    if (document.hidden) return;
     setTimeout(function() {
       try {
-        if (typeof syncNow === 'function') {
-          Promise.resolve(syncNow(false)).then(function() {
-            try { softUIRefresh({ sync: false }); } catch (e) {}
-          }).catch(function() {});
+        if (!server) return;
+        if (typeof isCaseFormOpen === 'function' && isCaseFormOpen()) return;
+        if (typeof api === 'function') {
+          Promise.resolve(api('/api/health')).then(function() {
+            try { setConn(true, 'Online', null); } catch (e) {}
+          }).catch(function() {
+            try { setConn(false, 'Offline / not reachable', null); } catch (e) {}
+          });
         }
       } catch (e) {}
-    }, 100);
+    }, 200);
   });
 })();
 
