@@ -1,6 +1,21 @@
 const APP_VERSION = 'PRO';
 const role = document.body.dataset.role || 'office';
 
+
+(function softMpaPatientsViewFromUrl() {
+  try {
+    if (!window.__SOFT_MPA) return;
+    var page = document.body && document.body.getAttribute('data-start-page');
+    if (page !== 'patients') return;
+    var q = new URLSearchParams(window.location.search || '');
+    var v = (q.get('view') || 'new').toLowerCase();
+    if (v === 'followup' || v === 'follow-up' || v === 'old') v = 'followup';
+    if (v === 'renewal' || v === 'renew') v = 'renewal';
+    if (v !== 'followup' && v !== 'renewal') v = 'new';
+    patientTypeFilter = v;
+  } catch (e) {}
+})();
+
 (function softMpaDetect() {
   try {
     var pages = document.querySelectorAll('section.page');
@@ -2800,6 +2815,7 @@ function paintPatientReportFromServer(data) {
         return '<span class="payPendingTag">' + esc(label || 'Pending') + '</span>';
     }
     body.innerHTML = (data.rows || []).map(function(p) {
+        const id = String(p.id || '').replace(/'/g, '');
         const name = esc(displayPatientName(p) || ((p.title ? p.title + ' ' : '') + (p.name || '')));
         const ctype = String(p.caseType || 'new').toLowerCase() === 'new' ? 'NEW' : String(p.caseType || 'OLD').toUpperCase();
         return '<tr>' +
@@ -2810,10 +2826,10 @@ function paintPatientReportFromServer(data) {
             '<td>' + esc(p.age || '-') + '</td>' +
             '<td>' + esc(p.mobile || '-') + '</td>' +
             '<td>' + paySpan(p.payKind, p.payLabel) + '</td>' +
-            '<td class="actions embossedActions compactActions">' +
-            '<button type="button" class="btn embossed" data-edit="' + esc(p.id) + '">Edit</button> ' +
-            '<button type="button" class="btn embossed" data-view="' + esc(p.id) + '">View</button> ' +
-            '<button type="button" class="btn embossed deleteBox" data-del="' + esc(p.id) + '">Del</button>' +
+            '<td class="patientListActions">' +
+            '<button class="btn embossed patientMiniBtn" onclick="editP(\'' + id + '\')">Edit</button> ' +
+            '<button class="btn embossed patientMiniBtn" onclick="viewPatientHistory(\'' + id + '\')">View</button> ' +
+            '<button class="btn deleteBox embossed patientMiniBtn" onclick="delP(\'' + id + '\')">Del</button>' +
             '</td></tr>';
     }).join('') || '<tr><td colspan="8">No records</td></tr>';
     /* pagination buttons */
