@@ -328,6 +328,210 @@ def nightly_backup_loop():
 
 
 # ---------- FastAPI app ----------
+
+# ===== STEP 1: Twocompo-style server-rendered Patients page =====
+def _html_esc(s):
+    return (
+        str(s if s is not None else "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _case_no_key(p):
+    raw = str((p or {}).get("caseNo") or (p or {}).get("linkedCaseNo") or "")
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    try:
+        return int(digits) if digits else 0
+    except Exception:
+        return 0
+
+
+def _fmt_date_dmy(val):
+    """Display as DD/MM/YYYY when possible."""
+    s = str(val or "").strip()
+    if not s:
+        return "-"
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        # YYYY-MM-DD
+        return s[8:10] + "/" + s[5:7] + "/" + s[0:4]
+    return s
+
+
+def build_patient_page_html(view="new", page=1, page_size=25):
+    """Server HTML for /patient — Twocompo model: no full app.js, limited rows."""
+    try:
+        page = max(1, int(page or 1))
+    except Exception:
+        page = 1
+    view = (view or "new").lower()
+    if view not in ("new", "followup", "renewal"):
+        view = "new"
+
+    st = load_state() or {}
+    pts = [
+        p
+        for p in (st.get("patients") or [])
+        if isinstance(p, dict) and p.get("id") and not p.get("_deleted")
+    ]
+
+    title = "New Cases"
+    rows = []
+    if view == "followup":
+        title = "Follow-up Cases"
+        rows = [p for p in pts if str(p.get("caseType") or "new") != "new" or p.get("linkedFromId")]
+        rows.sort(key=lambda p: str(p.get("date") or ""), reverse=True)
+    elif view == "renewal":
+        title = "Renewal Cases"
+        # visits that have renewal amount > 0
+        rows = [p for p in pts if float(p.get("renewal") or 0) > 0]
+        rows.sort(key=lambda p: str(p.get("date") or ""), reverse=True)
+    else:
+        title = "New Cases"
+        by_case = {}
+        for p in pts:
+            if str(p.get("caseType") or "new") != "new":
+                continue
+            key = _case_no_key(p) or str(p.get("caseNo") or p.get("id"))
+            prev = by_case.get(key)
+            if not prev or str(p.get("date") or "") < str(prev.get("date") or ""):
+                by_case[key] = p
+        rows = list(by_case.values())
+        rows.sort(key=lambda p: _case_no_key(p), reverse=True)
+
+    total = len(rows)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    if page > total_pages:
+        page = total_pages
+    start = (page - 1) * page_size
+    slice_rows = rows[start : start + page_size]
+
+    def row_html(p, i):
+        case_no = _html_esc(p.get("caseNo") or "")
+        date = _html_esc(_fmt_date_dmy(p.get("date")))
+        ctype = _html_esc(str(p.get("caseType") or "new").upper())
+        name = _html_esc(
+            ((" " + str(p.get("title") or "")).strip() + " " + str(p.get("name") or "")).strip()
+        )
+        age = _html_esc(p.get("age") or "-")
+        mobile = _html_esc(p.get("mobile") or "-")
+        return (
+            f"<tr>"
+            f"<td>{start + i + 1}</td>"
+            f"<td><b>{case_no}</b></td>"
+            f"<td>{date}</td>"
+            f"<td>{ctype}</td>"
+            f"<td>{name}</td>"
+            f"<td>{age}</td>"
+            f"<td>{mobile}</td>"
+            f"</tr>"
+        )
+
+    body_rows = "".join(row_html(p, i) for i, p in enumerate(slice_rows))
+    if not body_rows:
+        body_rows = '<tr><td colspan="7" style="text-align:center;color:#64748b">No records</td></tr>'
+
+    def page_link(pnum, label=None, disabled=False):
+        lab = label or str(pnum)
+        if disabled:
+            return f'<span class="pg disabled">{lab}</span>'
+        return f'<a class="pg" href="/patient?view={view}&page={pnum}">{lab}</a>'
+
+    pag = []
+    pag.append(page_link(page - 1, "‹ Prev", disabled=(page <= 1)))
+    for pnum in range(1, total_pages + 1):
+        if total_pages > 9 and abs(pnum - page) > 2 and pnum not in (1, total_pages):
+            if pnum == 2 or pnum == total_pages - 1:
+                pag.append('<span class="pg ell">…</span>')
+            continue
+        if pnum == page:
+            pag.append(f'<span class="pg active">{pnum}</span>')
+        else:
+            pag.append(page_link(pnum))
+    pag.append(page_link(page + 1, "Next ›", disabled=(page >= total_pages)))
+    pag_html = "".join(pag)
+
+    def tab(v, label):
+        cls = "tab active" if v == view else "tab"
+        return f'<a class="{cls}" href="/patient?view={v}&page=1">{label}</a>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Patients — Anand Clinic</title>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{ margin:0; font-family: Arial, system-ui, sans-serif; background:#f1f5f9; color:#0f172a; }}
+    .top {{ background:#1e293b; color:#fff; padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }}
+    .top a {{ color:#e2e8f0; text-decoration:none; font-size:14px; }}
+    .top a:hover {{ color:#fff; }}
+    .brand {{ font-weight:bold; color:#38bdf8; margin-right:8px; }}
+    .wrap {{ max-width:1100px; margin:16px auto; padding:0 12px; }}
+    .card {{ background:#fff; border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.08); }}
+    h1 {{ margin:0 0 8px; font-size:22px; font-weight:600; }}
+    .meta {{ color:#64748b; font-size:13px; margin-bottom:12px; }}
+    .tabs {{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }}
+    .tab {{ padding:8px 12px; border-radius:8px; background:#e2e8f0; color:#0f172a; text-decoration:none; font-size:13px; }}
+    .tab.active {{ background:#1d4ed8; color:#fff; }}
+    table {{ width:100%; border-collapse:collapse; font-size:13px; }}
+    th, td {{ border-bottom:1px solid #e2e8f0; padding:8px 6px; text-align:left; vertical-align:top; }}
+    th {{ background:#f8fafc; font-weight:600; color:#334155; }}
+    .pager {{ margin-top:14px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }}
+    .pg {{ display:inline-block; padding:6px 10px; border-radius:6px; background:#e2e8f0; color:#0f172a; text-decoration:none; font-size:13px; }}
+    .pg.active {{ background:#1d4ed8; color:#fff; }}
+    .pg.disabled {{ opacity:.45; pointer-events:none; }}
+    .pg.ell {{ background:transparent; }}
+    .note {{ margin-top:12px; font-size:12px; color:#64748b; }}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <span class="brand">ANAND Clinic</span>
+    <a href="/office.html">Dashboard (full app)</a>
+    <a href="/patient?view=new">Patients (fast)</a>
+    <a href="/reception.html">Reception</a>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <h1>{_html_esc(title)}</h1>
+      <div class="meta">Server page · {_html_esc(total)} record(s) · page {page}/{total_pages} · Twocompo-style (no full app.js)</div>
+      <div class="tabs">
+        {tab("new", "New Cases")}
+        {tab("followup", "Follow-up")}
+        {tab("renewal", "Renewal")}
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Case No</th>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Patient</th>
+              <th>Age</th>
+              <th>Mobile</th>
+            </tr>
+          </thead>
+          <tbody>
+            {body_rows}
+          </tbody>
+        </table>
+      </div>
+      <div class="pager">{pag_html}</div>
+      <p class="note">Step 1: list server database se aati hai. Agar list khali ho to pehle full app se data sync / import karein taaki server SQLite me patients hon.</p>
+    </div>
+  </div>
+</body>
+</html>"""
+    return html
+
+
+
 def create_fastapi_app():
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Header, HTTPException
     from fastapi.responses import FileResponse, JSONResponse
@@ -479,6 +683,24 @@ def create_fastapi_app():
         finally:
             with WS_LOCK:
                 WS_CLIENTS.discard(ws)
+
+
+    # STEP 1 — Twocompo-style Patients (server HTML, no full app.js)
+    from fastapi.responses import HTMLResponse
+
+    @app.get("/patient", response_class=HTMLResponse)
+    def patient_server_page(view: str = "new", page: int = 1):
+        return HTMLResponse(
+            content=build_patient_page_html(view=view, page=page, page_size=25),
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
+
+    @app.get("/patients-fast", response_class=HTMLResponse)
+    def patient_server_page_alias(view: str = "new", page: int = 1):
+        return patient_server_page(view=view, page=page)
 
     # Static files last — NO CACHE so UI upgrades always load
     from starlette.responses import Response
