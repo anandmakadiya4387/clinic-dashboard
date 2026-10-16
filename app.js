@@ -2773,7 +2773,105 @@ function patientDateMatch(dateStr) {
     return true;
 }
 
+
+function paintPatientReportFromServer(data) {
+    const body = $('#reportBodyPatients');
+    if (!body || !data || !data.ok) return false;
+    const view = data.view || 'new';
+    patientTypeFilter = view;
+    patientReportPage = data.page || 1;
+    const titleMap = { renewal: 'Renewal Cases', followup: 'Follow up Cases', new: 'New Cases' };
+    set('pCountLabel', titleMap[view] || 'Cases');
+    const heroH = document.querySelector('#patients .hero h1');
+    if (heroH) heroH.textContent = titleMap[view] || 'Patients';
+    set('pCountNew', data.total || 0);
+    set('patientFilterHint', (titleMap[view] || 'Cases') + ' · ' + (data.total || 0) + ' record(s)');
+    const totalPages = data.totalPages || 1;
+    try {
+        const pag = document.getElementById('patientReportPagination');
+        if (pag && typeof renderPagination === 'function') {
+            /* keep existing pagination UI if any */
+        }
+    } catch (e) {}
+    function paySpan(kind, label) {
+        if (kind === 'foc') return '<span class="payFocTag">' + esc(label) + '</span>';
+        if (kind === 'received') return '<span class="payReceivedTag">' + esc(label) + '</span>';
+        if (kind === 'partial' || kind === 'part_rec') return '<span class="payPartRecTag">' + esc(label) + '</span>';
+        return '<span class="payPendingTag">' + esc(label || 'Pending') + '</span>';
+    }
+    body.innerHTML = (data.rows || []).map(function(p) {
+        const name = esc(displayPatientName(p) || ((p.title ? p.title + ' ' : '') + (p.name || '')));
+        const ctype = String(p.caseType || 'new').toLowerCase() === 'new' ? 'NEW' : String(p.caseType || 'OLD').toUpperCase();
+        return '<tr>' +
+            '<td><b>' + esc(p.caseNo) + '</b></td>' +
+            '<td>' + esc(fmtDate(p.date)) + '</td>' +
+            '<td><span class="tag ' + (ctype === 'NEW' ? 'new' : 'old') + '">' + esc(ctype) + '</span></td>' +
+            '<td>' + name + '</td>' +
+            '<td>' + esc(p.age || '-') + '</td>' +
+            '<td>' + esc(p.mobile || '-') + '</td>' +
+            '<td>' + paySpan(p.payKind, p.payLabel) + '</td>' +
+            '<td class="actions embossedActions compactActions">' +
+            '<button type="button" class="btn embossed" data-edit="' + esc(p.id) + '">Edit</button> ' +
+            '<button type="button" class="btn embossed" data-view="' + esc(p.id) + '">View</button> ' +
+            '<button type="button" class="btn embossed deleteBox" data-del="' + esc(p.id) + '">Del</button>' +
+            '</td></tr>';
+    }).join('') || '<tr><td colspan="8">No records</td></tr>';
+    /* pagination buttons */
+    try {
+        const pag = document.getElementById('patientReportPagination');
+        if (pag) {
+            let html = '';
+            const cur = data.page || 1;
+            const tp = data.totalPages || 1;
+            if (tp > 1) {
+                html += '<button type="button" class="btn embossed" data-prep="prev"' + (cur <= 1 ? ' disabled' : '') + '>‹ Prev</button>';
+                for (let i = 1; i <= tp && i <= 12; i++) {
+                    html += '<button type="button" class="btn embossed' + (i === cur ? ' active' : '') + '" data-ppage="' + i + '">' + i + '</button>';
+                }
+                if (tp > 12) html += '<span class="mini">… ' + tp + '</span>';
+                html += '<button type="button" class="btn embossed" data-prep="next"' + (cur >= tp ? ' disabled' : '') + '>Next ›</button>';
+            }
+            pag.innerHTML = html;
+        }
+    } catch (e) {}
+    return true;
+}
+
+function fetchPatientsListFromServer() {
+    if (!server) return Promise.resolve(null);
+    const view = (patientTypeFilter === 'renewal' || patientTypeFilter === 'followup') ? patientTypeFilter : 'new';
+    const qs = new URLSearchParams({
+        view: view,
+        page: String(patientReportPage || 1),
+        page_size: String(patientReportPageSize || 25),
+        y: String(patientFilterY || ''),
+        m: String(patientFilterM || ''),
+        d: String(patientFilterD || '')
+    });
+    const base = String(server).replace(/\/$/, '');
+    return fetch(base + '/api/patients_list?' + qs.toString(), { cache: 'no-store' })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() { return null; });
+}
+
+
+
 function renderPatientReport() {
+    const body = $('#reportBodyPatients');
+    if (!body) return;
+    // Twocompo-style: when online, server returns only this page (same UI, fast)
+    if (server) {
+        body.innerHTML = '<tr><td colspan="8" class="mini">Loading…</td></tr>';
+        fetchPatientsListFromServer().then(function(data) {
+            if (data && data.ok && paintPatientReportFromServer(data)) return;
+            renderPatientReportLocal();
+        }).catch(function() { renderPatientReportLocal(); });
+        return;
+    }
+    renderPatientReportLocal();
+}
+
+function renderPatientReportLocal() {
     const body = $('#reportBodyPatients');
     if (!body) return;
     const view = (patientTypeFilter === 'renewal' || patientTypeFilter === 'followup') ? patientTypeFilter : 'new';

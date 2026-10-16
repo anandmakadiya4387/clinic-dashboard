@@ -987,6 +987,165 @@ def apply_patient_edit(form: dict):
 
 
 
+def api_patients_list(view="new", page=1, page_size=25, q="", y="", m="", d=""):
+    """JSON list for patients.html — same data shape, server-side filter/page (Twocompo speed, same UI)."""
+    try:
+        page = max(1, int(page or 1))
+    except Exception:
+        page = 1
+    try:
+        page_size = max(1, min(100, int(page_size or 25)))
+    except Exception:
+        page_size = 25
+    view = (view or "new").lower()
+    if view not in ("new", "followup", "renewal"):
+        view = "new"
+    q = str(q or "").strip()
+    q_lower = q.lower()
+    q_digits = "".join(ch for ch in q if ch.isdigit())
+    y, m, d = str(y or "").strip(), str(m or "").strip(), str(d or "").strip()
+
+    st = load_state() or {}
+    pts = [p for p in (st.get("patients") or []) if isinstance(p, dict) and p.get("id") and not p.get("_deleted")]
+    pays = [x for x in (st.get("payments") or []) if isinstance(x, dict) and not x.get("_deleted")]
+
+    paid_by = {}
+    for x in pays:
+        pid = x.get("patientId")
+        if not pid:
+            continue
+        paid_by[pid] = paid_by.get(pid, 0) + float(x.get("amount") or 0)
+
+    def fee_total(p):
+        return float(p.get("consultation") or 0) + float(p.get("medicine") or 0) + float(p.get("renewal") or 0)
+
+    def status_label(p):
+        fees = fee_total(p)
+        paid = float(paid_by.get(p.get("id"), 0))
+        partial = max(0.0, float(p.get("partialPending") or 0))
+        if p.get("foc") is True:
+            return "FOC", "foc"
+        if p.get("forcePending") is True and p.get("received") is not True:
+            return "Pending", "pending"
+        if p.get("received") is True and max(0.0, fees - paid) <= 0 and partial <= 0:
+            return "Received", "received"
+        if paid > 0 and (max(0.0, fees - paid) > 0 or partial > 0):
+            return "Partial pending", "partial"
+        if p.get("received") is False and fees > 0:
+            return "Pending", "pending"
+        if fees <= 0 and partial <= 0:
+            return "Received", "received"
+        if max(0.0, fees - paid) + partial > 0:
+            return "Pending", "pending"
+        return "Received", "received"
+
+    def date_match(val):
+        s = str(val or "")
+        if not y and not m and not d:
+            return True
+        key = _parse_date_key(s)
+        if len(key) < 8:
+            return False
+        yy, mm, dd = key[0:4], key[4:6], key[6:8]
+        if y and yy != y:
+            return False
+        if m and mm != m.zfill(2):
+            return False
+        if d and dd != d.zfill(2):
+            return False
+        return True
+
+    # build rows like client
+    if view == "followup":
+        rows = [p for p in pts if str(p.get("caseType") or "new") != "new" or p.get("linkedFromId")]
+        rows = [p for p in rows if date_match(p.get("date"))]
+        rows.sort(key=lambda p: _parse_date_key(p.get("date")), reverse=True)
+    elif view == "renewal":
+        rows = [p for p in pts if float(p.get("renewal") or 0) > 0]
+        # also from payments
+        by_case = {}
+        by_id = {p.get("id"): p for p in pts}
+        for x in pays:
+            if str(x.get("feeCategory") or x.get("caseType") or "").lower().find("renew") < 0:
+                continue
+            if float(x.get("amount") or 0) <= 0:
+                continue
+            p = by_id.get(x.get("patientId"))
+            if not p:
+                continue
+            key = str(p.get("linkedCaseNo") or p.get("caseNo") or p.get("id"))
+            prev = by_case.get(key)
+            pd = str(x.get("date") or "")
+            if not prev or pd > prev.get("_lastRenewPay", ""):
+                cp = dict(p)
+                cp["_lastRenewPay"] = pd
+                by_case[key] = cp
+        if by_case:
+            rows = list(by_case.values())
+        rows = [p for p in rows if date_match(p.get("date")) or date_match(p.get("_lastRenewPay"))]
+        rows.sort(key=lambda p: str(p.get("_lastRenewPay") or p.get("date") or ""), reverse=True)
+    else:
+        by_case = {}
+        for p in pts:
+            if str(p.get("caseType") or "new") != "new":
+                continue
+            key = _case_no_key(p) or str(p.get("caseNo") or p.get("id"))
+            prev = by_case.get(key)
+            if not prev or str(p.get("date") or "") < str(prev.get("date") or ""):
+                by_case[key] = p
+        rows = [p for p in by_case.values() if date_match(p.get("date"))]
+        rows.sort(key=lambda p: _case_no_key(p), reverse=True)
+
+    if q_lower:
+        def matches(p):
+            blob = " ".join([
+                str(p.get("title") or ""),
+                str(p.get("name") or ""),
+                str(p.get("mobile") or ""),
+                str(p.get("caseNo") or ""),
+                str(p.get("linkedCaseNo") or ""),
+            ]).lower()
+            if q_lower in blob:
+                return True
+            if q_digits:
+                digits = "".join(ch for ch in blob if ch.isdigit())
+                if q_digits in digits:
+                    return True
+            return False
+        rows = [p for p in rows if matches(p)]
+
+    total = len(rows)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    if page > total_pages:
+        page = total_pages
+    start = (page - 1) * page_size
+    slice_rows = rows[start : start + page_size]
+    out_rows = []
+    for p in slice_rows:
+        label, kind = status_label(p)
+        out_rows.append({
+            "id": p.get("id"),
+            "caseNo": p.get("caseNo") or p.get("linkedCaseNo") or "",
+            "date": p.get("date") or "",
+            "caseType": p.get("caseType") or "new",
+            "title": p.get("title") or "",
+            "name": p.get("name") or "",
+            "age": p.get("age") or "",
+            "mobile": p.get("mobile") or "",
+            "payLabel": label,
+            "payKind": kind,
+        })
+    return {
+        "ok": True,
+        "view": view,
+        "page": page,
+        "pageSize": page_size,
+        "total": total,
+        "totalPages": total_pages,
+        "rows": out_rows,
+    }
+
+
 def create_fastapi_app():
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Header, HTTPException
     from fastapi.responses import FileResponse, JSONResponse
@@ -1020,6 +1179,18 @@ def create_fastapi_app():
             "framework": "fastapi",
             "ws": "/ws",
         }
+
+    @app.get("/api/patients_list")
+    def patients_list_api(
+        view: str = "new",
+        page: int = 1,
+        page_size: int = 25,
+        q: str = "",
+        y: str = "",
+        m: str = "",
+        d: str = "",
+    ):
+        return api_patients_list(view=view, page=page, page_size=page_size, q=q, y=y, m=m, d=d)
 
     @app.get("/api/meta")
     def get_meta():
