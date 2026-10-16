@@ -1146,6 +1146,143 @@ def api_patients_list(view="new", page=1, page_size=25, q="", y="", m="", d=""):
     }
 
 
+def api_dashboard_today(day: str = ""):
+    """Today's queue + KPI numbers only — Twocompo-style small payload for office dashboard."""
+    from datetime import date as _date
+
+    def iso_today():
+        d = _date.today()
+        return f"{d.year:04d}-{d.month:02d}-{d.day:02d}"
+
+    day = str(day or "").strip() or iso_today()
+    # normalize DD/MM/YYYY
+    if len(day) >= 10 and day[2] in "/-" and day[5] in "/-":
+        day = day[6:10] + "-" + day[3:5] + "-" + day[0:2]
+
+    st = load_state() or {}
+    pts_all = [p for p in (st.get("patients") or []) if isinstance(p, dict) and p.get("id") and not p.get("_deleted")]
+    pays_all = [x for x in (st.get("payments") or []) if isinstance(x, dict) and not x.get("_deleted")]
+
+    def date_is_day(val):
+        key = _parse_date_key(val)
+        want = _parse_date_key(day)
+        return key == want and key != "00000000"
+
+    today_pts = [p for p in pts_all if date_is_day(p.get("date"))]
+    # payments dated today
+    pays_today = [x for x in pays_all if date_is_day(x.get("date"))]
+    paid_by = {}
+    for x in pays_all:
+        pid = x.get("patientId")
+        if not pid:
+            continue
+        paid_by[pid] = paid_by.get(pid, 0.0) + float(x.get("amount") or 0)
+
+    def fee_total(p):
+        return float(p.get("consultation") or 0) + float(p.get("medicine") or 0) + float(p.get("renewal") or 0)
+
+    def pending_for(p):
+        fees = fee_total(p)
+        paid = float(paid_by.get(p.get("id"), 0))
+        partial = max(0.0, float(p.get("partialPending") or 0))
+        if p.get("foc") is True:
+            return 0.0
+        return max(0.0, fees - paid) + partial
+
+    def queue_status(p):
+        if p.get("completed") or p.get("completedAt") or str(p.get("status") or "").lower() in ("completed", "done", "received"):
+            # still pending payment?
+            if pending_for(p) > 0 and not p.get("foc"):
+                if p.get("withDoctor"):
+                    return "doctor"
+                return "waiting"
+            return "completed"
+        if p.get("withDoctor"):
+            return "doctor"
+        return "waiting"
+
+    waiting = doctor = completed = new_d = old_d = 0
+    pending_sum = 0.0
+    received_sum = sum(float(x.get("amount") or 0) for x in pays_today if float(x.get("amount") or 0) > 0)
+    for p in today_pts:
+        stq = queue_status(p)
+        if stq == "doctor":
+            doctor += 1
+        elif stq == "completed":
+            completed += 1
+        else:
+            waiting += 1
+        if str(p.get("caseType") or "new") == "new":
+            new_d += 1
+        else:
+            old_d += 1
+        pending_sum += pending_for(p)
+
+    # month / year collection (calendar month/year of day)
+    yy, mm = day[0:4], day[5:7]
+    month_sum = 0.0
+    year_sum = 0.0
+    for x in pays_all:
+        amt = float(x.get("amount") or 0)
+        if amt <= 0:
+            continue
+        key = _parse_date_key(x.get("date"))
+        if len(key) < 8:
+            continue
+        if key[0:4] == yy:
+            year_sum += amt
+            if key[4:6] == mm:
+                month_sum += amt
+
+    # slim patient payload for queue (keep fields client needs)
+    slim = []
+    for p in today_pts:
+        slim.append({
+            "id": p.get("id"),
+            "caseNo": p.get("caseNo"),
+            "linkedCaseNo": p.get("linkedCaseNo"),
+            "date": p.get("date"),
+            "caseType": p.get("caseType"),
+            "title": p.get("title"),
+            "name": p.get("name"),
+            "mobile": p.get("mobile"),
+            "address": p.get("address"),
+            "age": p.get("age"),
+            "consultation": p.get("consultation"),
+            "medicine": p.get("medicine"),
+            "renewal": p.get("renewal"),
+            "partialPending": p.get("partialPending"),
+            "foc": p.get("foc"),
+            "received": p.get("received"),
+            "forcePending": p.get("forcePending"),
+            "withDoctor": p.get("withDoctor"),
+            "completed": p.get("completed"),
+            "completedAt": p.get("completedAt"),
+            "status": p.get("status"),
+            "_updated": p.get("_updated"),
+            "lastRenewalDate": p.get("lastRenewalDate"),
+            "entryTime": p.get("entryTime") or p.get("createdAt"),
+        })
+
+    return {
+        "ok": True,
+        "date": day,
+        "patients": slim,
+        "kpis": {
+            "waiting": waiting,
+            "withDoctor": doctor,
+            "completed": completed,
+            "todayNew": new_d,
+            "todayOld": old_d,
+            "todayTotal": len(today_pts),
+            "receivedToday": received_sum,
+            "pendingToday": pending_sum,
+            "monthCollection": month_sum,
+            "yearCollection": year_sum,
+        },
+    }
+
+
 def create_fastapi_app():
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Header, HTTPException
     from fastapi.responses import FileResponse, JSONResponse
@@ -1179,6 +1316,10 @@ def create_fastapi_app():
             "framework": "fastapi",
             "ws": "/ws",
         }
+
+    @app.get("/api/patients_list")
+    def dashboard_today_api(day: str = ""):
+        return api_dashboard_today(day=day)
 
     @app.get("/api/patients_list")
     def patients_list_api(

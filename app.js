@@ -521,6 +521,52 @@ function isCaseFormOpen() {
     return false;
 }
 
+
+window.__DASH_TODAY = null;
+window.__DASH_TODAY_DATE = '';
+
+function fetchDashboardTodayFromServer() {
+    if (!server) return Promise.resolve(null);
+    const base = String(server).replace(/\/$/, '');
+    const day = (typeof calendarDate === 'string' && calendarDate) ? calendarDate : (typeof isoToday === 'function' ? isoToday() : '');
+    return fetch(base + '/api/dashboard_today?day=' + encodeURIComponent(day), { cache: 'no-store' })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() { return null; });
+}
+
+function applyDashboardTodayPayload(data) {
+    if (!data || !data.ok) return false;
+    window.__DASH_TODAY = data;
+    window.__DASH_TODAY_DATE = data.date || '';
+    const k = data.kpis || {};
+    try {
+        set('qWaiting', k.waiting || 0);
+        set('qWithDoctor', k.withDoctor || 0);
+        set('qCompleted', k.completed || 0);
+        set('topNew', k.todayNew || 0);
+        set('topOld', k.todayOld || 0);
+        set('topTotal', k.todayTotal || 0);
+        set('topReceived', money(k.receivedToday || 0));
+        set('topPending', money(k.pendingToday || 0));
+        set('topIncome', money(k.receivedToday || 0));
+        set('topMonth', money(k.monthCollection || 0));
+        set('topYearCollect', money(k.yearCollection || 0));
+    } catch (e) {}
+    return true;
+}
+
+function todayPatientsFromServerOrLocal() {
+    const day = (typeof calendarDate === 'string' && calendarDate) ? calendarDate : (typeof isoToday === 'function' ? isoToday() : '');
+    if (window.__DASH_TODAY && window.__DASH_TODAY.patients && window.__DASH_TODAY_DATE === day) {
+        return window.__DASH_TODAY.patients.slice();
+    }
+    try {
+        if (typeof todayCaseRows === 'function') return todayCaseRows();
+    } catch (e) {}
+    return [];
+}
+
+
 function softUIRefresh(opts) {
     opts = opts || {};
     /* While new/old case form is open — ZERO UI work (typing must not freeze) */
@@ -1222,6 +1268,13 @@ function caseRows() {
 
 /** Today queue only — NO full-list sort (was 5–6s hang on every click) */
 function todayCaseRows() {
+    try {
+        var _day = (typeof calendarDate === 'string' && calendarDate) ? calendarDate : (typeof isoToday === 'function' ? isoToday() : '');
+        if (window.__DASH_TODAY && window.__DASH_TODAY.patients && window.__DASH_TODAY_DATE === _day) {
+            return window.__DASH_TODAY.patients.slice();
+        }
+    } catch (_e) {}
+
     const today = isoToday();
     const out = [];
     const list = active(DB.patients);
@@ -1490,6 +1543,13 @@ function patientQueueStatus(p) {
 
 function renderDashboard() {
     const today = isoToday();
+    /* Twocompo: if server today payload matches, KPI strip already fast-path */
+    try {
+        if (window.__DASH_TODAY && window.__DASH_TODAY_DATE === (calendarDate || today) && window.__DASH_TODAY.kpis) {
+            applyDashboardTodayPayload(window.__DASH_TODAY);
+        }
+    } catch (e) {}
+
     const todayPatients = todayCaseRows();
     let receivedToday = 0;
     active(DB.payments).forEach(function(x) {
@@ -7434,4 +7494,23 @@ window.openMultiYearGrowthModal = function() {
       window.location.assign(href);
     } catch (e) {}
   }, true);
+})();
+
+
+(function softMpaDashboardFastBoot() {
+  function run() {
+    try {
+      if (!window.__SOFT_MPA) return;
+      var page = document.body && document.body.getAttribute('data-start-page');
+      if (page !== 'dashboard') return;
+      if (!server) return;
+      fetchDashboardTodayFromServer().then(function(data) {
+        if (applyDashboardTodayPayload(data)) {
+          try { renderQueue(); } catch (e) {}
+        }
+      }).catch(function(){});
+    } catch (e) {}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function() { setTimeout(run, 0); });
+  else setTimeout(run, 0);
 })();
