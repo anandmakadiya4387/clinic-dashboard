@@ -360,8 +360,9 @@ def _fmt_date_dmy(val):
     return s
 
 
-def build_patient_page_html(view="new", page=1, page_size=25):
-    """Server HTML for /patient — Twocompo model: no full app.js, limited rows."""
+
+def build_patient_page_html(view="new", page=1, page_size=25, q=""):
+    """Server HTML for /patient — Twocompo model + Step 2 search."""
     try:
         page = max(1, int(page or 1))
     except Exception:
@@ -369,6 +370,9 @@ def build_patient_page_html(view="new", page=1, page_size=25):
     view = (view or "new").lower()
     if view not in ("new", "followup", "renewal"):
         view = "new"
+    q = str(q or "").strip()
+    q_lower = q.lower()
+    q_digits = "".join(ch for ch in q if ch.isdigit())
 
     st = load_state() or {}
     pts = [
@@ -385,7 +389,6 @@ def build_patient_page_html(view="new", page=1, page_size=25):
         rows.sort(key=lambda p: str(p.get("date") or ""), reverse=True)
     elif view == "renewal":
         title = "Renewal Cases"
-        # visits that have renewal amount > 0
         rows = [p for p in pts if float(p.get("renewal") or 0) > 0]
         rows.sort(key=lambda p: str(p.get("date") or ""), reverse=True)
     else:
@@ -400,6 +403,24 @@ def build_patient_page_html(view="new", page=1, page_size=25):
                 by_case[key] = p
         rows = list(by_case.values())
         rows.sort(key=lambda p: _case_no_key(p), reverse=True)
+
+    # Step 2: server-side search (name / mobile / case no) — before pagination
+    if q_lower:
+        filtered = []
+        for p in rows:
+            name = str(p.get("name") or "").lower()
+            title_p = str(p.get("title") or "").lower()
+            mobile = str(p.get("mobile") or "")
+            mobile_digits = "".join(ch for ch in mobile if ch.isdigit())
+            case_no = str(p.get("caseNo") or "").lower()
+            case_digits = "".join(ch for ch in case_no if ch.isdigit())
+            blob = f"{title_p} {name} {mobile} {case_no}"
+            ok = q_lower in blob
+            if not ok and q_digits and (q_digits in mobile_digits or q_digits in case_digits):
+                ok = True
+            if ok:
+                filtered.append(p)
+        rows = filtered
 
     total = len(rows)
     total_pages = max(1, (total + page_size - 1) // page_size)
@@ -433,11 +454,16 @@ def build_patient_page_html(view="new", page=1, page_size=25):
     if not body_rows:
         body_rows = '<tr><td colspan="7" style="text-align:center;color:#64748b">No records</td></tr>'
 
+    q_param = ("&q=" + _html_esc(q).replace(" ", "+")) if q else ""
+    # For href we need URL-encode lightly
+    import urllib.parse
+    q_qs = ("&q=" + urllib.parse.quote(q)) if q else ""
+
     def page_link(pnum, label=None, disabled=False):
         lab = label or str(pnum)
         if disabled:
             return f'<span class="pg disabled">{lab}</span>'
-        return f'<a class="pg" href="/patient?view={view}&page={pnum}">{lab}</a>'
+        return f'<a class="pg" href="/patient?view={view}&page={pnum}{q_qs}">{lab}</a>'
 
     pag = []
     pag.append(page_link(page - 1, "‹ Prev", disabled=(page <= 1)))
@@ -455,7 +481,10 @@ def build_patient_page_html(view="new", page=1, page_size=25):
 
     def tab(v, label):
         cls = "tab active" if v == view else "tab"
-        return f'<a class="{cls}" href="/patient?view={v}&page=1">{label}</a>'
+        return f'<a class="{cls}" href="/patient?view={v}&page=1{q_qs}">{label}</a>'
+
+    q_val = _html_esc(q)
+    search_hint = f' · search “{_html_esc(q)}”' if q else ""
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -477,6 +506,10 @@ def build_patient_page_html(view="new", page=1, page_size=25):
     .tabs {{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }}
     .tab {{ padding:8px 12px; border-radius:8px; background:#e2e8f0; color:#0f172a; text-decoration:none; font-size:13px; }}
     .tab.active {{ background:#1d4ed8; color:#fff; }}
+    .searchBar {{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }}
+    .searchBar input {{ flex:1; min-width:180px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; }}
+    .searchBar button, .searchBar a.btn {{ padding:10px 14px; border-radius:8px; border:none; background:#1d4ed8; color:#fff; font-size:14px; cursor:pointer; text-decoration:none; }}
+    .searchBar a.btn.secondary {{ background:#64748b; }}
     table {{ width:100%; border-collapse:collapse; font-size:13px; }}
     th, td {{ border-bottom:1px solid #e2e8f0; padding:8px 6px; text-align:left; vertical-align:top; }}
     th {{ background:#f8fafc; font-weight:600; color:#334155; }}
@@ -498,7 +531,14 @@ def build_patient_page_html(view="new", page=1, page_size=25):
   <div class="wrap">
     <div class="card">
       <h1>{_html_esc(title)}</h1>
-      <div class="meta">Server page · {_html_esc(total)} record(s) · page {page}/{total_pages} · Twocompo-style (no full app.js)</div>
+      <div class="meta">Server page · {_html_esc(total)} record(s) · page {page}/{total_pages}{search_hint} · Twocompo-style (no full app.js)</div>
+      <form class="searchBar" method="get" action="/patient">
+        <input type="hidden" name="view" value="{_html_esc(view)}"/>
+        <input type="hidden" name="page" value="1"/>
+        <input type="search" name="q" value="{q_val}" placeholder="Search name, mobile or case no…" autofocus/>
+        <button type="submit">Search</button>
+        <a class="btn secondary" href="/patient?view={_html_esc(view)}&page=1">Clear</a>
+      </form>
       <div class="tabs">
         {tab("new", "New Cases")}
         {tab("followup", "Follow-up")}
@@ -523,7 +563,7 @@ def build_patient_page_html(view="new", page=1, page_size=25):
         </table>
       </div>
       <div class="pager">{pag_html}</div>
-      <p class="note">Step 1: list server database se aati hai. Agar list khali ho to pehle full app se data sync / import karein taaki server SQLite me patients hon.</p>
+      <p class="note">Step 2: search server pe filter hota hai (name / mobile / case no). Full app.js load nahi hota.</p>
     </div>
   </div>
 </body>
@@ -689,9 +729,9 @@ def create_fastapi_app():
     from fastapi.responses import HTMLResponse
 
     @app.get("/patient", response_class=HTMLResponse)
-    def patient_server_page(view: str = "new", page: int = 1):
+    def patient_server_page(view: str = "new", page: int = 1, q: str = ""):
         return HTMLResponse(
-            content=build_patient_page_html(view=view, page=page, page_size=25),
+            content=build_patient_page_html(view=view, page=page, page_size=25, q=q),
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
@@ -699,8 +739,8 @@ def create_fastapi_app():
         )
 
     @app.get("/patients-fast", response_class=HTMLResponse)
-    def patient_server_page_alias(view: str = "new", page: int = 1):
-        return patient_server_page(view=view, page=page)
+    def patient_server_page_alias(view: str = "new", page: int = 1, q: str = ""):
+        return patient_server_page(view=view, page=page, q=q)
 
     # Static files last — NO CACHE so UI upgrades always load
     from starlette.responses import Response
