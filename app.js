@@ -338,7 +338,11 @@ let DB = loadLocal();
                 const cP = (DB.patients || []).length;
                 if (nP > cP || (nP === cP && nP > 0 && !localStorage.getItem(KEY))) {
                     DB = n;
-                    try { renderAll(); } catch (e) {}
+                    try {
+                        if (window.__SOFT_MPA && typeof softMpaRenderCurrentOnly === 'function') softMpaRenderCurrentOnly();
+                        else if (typeof softUIRefresh === 'function') softUIRefresh();
+                        else if (typeof renderAll === 'function') renderAll();
+                    } catch (e) {}
                 }
             } catch (e) { console.warn('idb hydrate', e); }
         }).catch(function(){});
@@ -1756,7 +1760,7 @@ function softMpaUrlFor(pageId, extra) {
   extra = extra || {};
   var r = (typeof role !== 'undefined' ? role : (document.body && document.body.dataset.role)) || 'office';
   var officeMap = {
-    dashboard: 'office.html', patients: 'patients.html', payments: 'payments.html',
+    dashboard: 'office.html', patients: '/patient', payments: 'payments.html',
     appointmentHistory: 'history.html', medicines: 'medicines.html', clinic: 'clinic.html',
     connection: 'connection.html', permissions: 'permissions.html', bill: 'bill.html',
     yearlyGrowth: 'yearly-growth.html', reports: 'reports.html', backup: 'backup.html',
@@ -1779,6 +1783,18 @@ function softMpaNavigate(pageId, extra) {
     window.location.href = softMpaUrlFor(pageId, extra || {});
     return true;
   } catch (e) { return false; }
+}
+
+
+/* Soft MPA speed: reuse active patient list within same tick */
+var _activePatientsCache = null;
+var _activePatientsCacheAt = 0;
+function _activePatientsCached() {
+    var now = Date.now();
+    if (_activePatientsCache && (now - _activePatientsCacheAt) < 800) return _activePatientsCache;
+    _activePatientsCache = active(DB.patients);
+    _activePatientsCacheAt = now;
+    return _activePatientsCache;
 }
 
 function openPage(id) {
@@ -2774,7 +2790,7 @@ function renderPatientReport() {
         // Cases that have at least one renewal payment — unique by case no, last renewal first
         const byCase = new Map();
         const byId = new Map();
-        active(DB.patients).forEach(function(pt) { if (pt && pt.id) byId.set(pt.id, pt); });
+        _activePatientsCached().forEach(function(pt) { if (pt && pt.id) byId.set(pt.id, pt); });
         active(DB.payments).forEach(function(x) {
             if (!x || (x.feeCategory !== 'renewal' && x.caseType !== 'renewal') || Number(x.amount || 0) <= 0) return;
             const p = byId.get(x.patientId);
@@ -2791,14 +2807,14 @@ function renderPatientReport() {
         rows = rows.filter(p => patientDateMatch(p.date) || patientDateMatch(p._lastRenewPay));
     } else if (view === 'followup') {
         // All OLD / follow-up visits — latest follow-up first
-        rows = active(DB.patients)
+        rows = _activePatientsCached()
             .filter(p => p.caseType === 'old' || p.linkedFromId)
             .filter(p => patientDateMatch(p.date))
             .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b._updated || '').localeCompare(String(a._updated || '')));
     } else {
         // Only NEW case registrations (original), unique by permanent case no
         const byCase = new Map();
-        active(DB.patients).filter(p => p.caseType === 'new').forEach(p => {
+        _activePatientsCached().filter(p => p.caseType === 'new').forEach(p => {
             const key = String(permanentCaseNo(p));
             const prev = byCase.get(key);
             if (!prev || String(p.date) < String(prev.date)) byCase.set(key, p);
@@ -6219,12 +6235,23 @@ function setup() {
         });
       };
       forceProBadge();
-      setInterval(forceProBadge, 2000);
+      /* Soft MPA: badge interval only on dashboard — less background work */
+      if (!window.__SOFT_MPA || (window.__SOFT_MPA_PAGE === 'dashboard')) {
+        setInterval(forceProBadge, 2000);
+      }
     } catch(e) {}
     try { setupGlobalPatientSearch(); } catch (e) { console.warn("search setup", e); }
-    setupOldAppointmentPanel();
-    setupAppointmentHistory();
-    setupPaymentView();
+    /* Soft MPA: only wire modules that exist on THIS thin page — skip rest (Twocompo-style) */
+    var _smp = window.__SOFT_MPA ? String(window.__SOFT_MPA_PAGE || document.body.getAttribute('data-start-page') || '') : '';
+    if (!_smp || _smp === 'dashboard') {
+      try { setupOldAppointmentPanel(); } catch (e) {}
+    }
+    if (!_smp || _smp === 'appointmentHistory' || _smp === 'dashboard') {
+      try { setupAppointmentHistory(); } catch (e) {}
+    }
+    if (!_smp || _smp === 'payments' || _smp === 'dashboard') {
+      try { setupPaymentView(); } catch (e) {}
+    }
     try { connectClinicWebSocket(); } catch (e) {}
     $('#reconnectBtn')?.addEventListener('click', async () => {
         setConn(false, '🟡 Syncing…', null);

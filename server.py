@@ -621,10 +621,12 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
 </head>
 <body>
   <div class="top">
-    <span class="brand">ANAND Clinic</span>
-    <a href="/office.html">Dashboard (full app)</a>
-    <a href="/patient?view=new">Patients (fast)</a>
-    <a href="/reception.html">Reception</a>
+    <span class="brand">ANAND Clinic · Office</span>
+    <a href="/office.html">← Dashboard</a>
+    <a href="/patient?view=new">New Cases</a>
+    <a href="/patient?view=followup">Follow-up</a>
+    <a href="/patient?view=renewal">Renewal</a>
+    <a href="/office.html">New / Old Case entry</a>
   </div>
   <div class="wrap">
     <div class="card">
