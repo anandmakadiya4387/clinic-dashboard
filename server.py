@@ -527,6 +527,7 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
         mobile = _html_esc(p.get("mobile") or "-")
         pid = _html_esc(p.get("id") or "")
         view_href = f"/patient/view?id={pid}"
+        edit_href = f"/patient/edit?id={pid}"
         return (
             f"<tr>"
             f"<td>{start + i + 1}</td>"
@@ -536,7 +537,10 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
             f"<td>{name}</td>"
             f"<td>{age}</td>"
             f"<td>{mobile}</td>"
-            f'<td><a class="viewBtn" href="{view_href}">View</a></td>'
+            f'<td style="white-space:nowrap">'
+            f'<a class="viewBtn" href="{view_href}">View</a> '
+            f'<a class="editBtn" href="{edit_href}">Edit</a>'
+            f"</td>"
             f"</tr>"
         )
 
@@ -611,6 +615,8 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
     .note {{ margin-top:12px; font-size:12px; color:#64748b; }}
     .viewBtn {{ display:inline-block; padding:4px 10px; border-radius:6px; background:#0f766e; color:#fff; text-decoration:none; font-size:12px; }}
     .viewBtn:hover {{ background:#0d9488; }}
+    .editBtn {{ display:inline-block; padding:4px 10px; border-radius:6px; background:#1d4ed8; color:#fff; text-decoration:none; font-size:12px; margin-left:4px; }}
+    .editBtn:hover {{ background:#1e40af; }}
   </style>
 </head>
 <body>
@@ -798,6 +804,8 @@ def build_patient_view_html(patient_id: str):
     th, td {{ border-bottom:1px solid #e2e8f0; padding:8px 6px; text-align:left; }}
     th {{ background:#f8fafc; color:#334155; }}
     .note {{ font-size:12px; color:#64748b; margin-top:10px; }}
+    .viewBtn {{ display:inline-block; padding:4px 10px; border-radius:6px; background:#0f766e; color:#fff; text-decoration:none; font-size:12px; }}
+    .editBtn {{ display:inline-block; padding:4px 10px; border-radius:6px; background:#1d4ed8; color:#fff; text-decoration:none; font-size:12px; }}
   </style>
 </head>
 <body>
@@ -841,12 +849,139 @@ def build_patient_view_html(patient_id: str):
           </tbody>
         </table>
       </div>
-      <p class="note">Step 3: View = server HTML only. Edit / payment receive still full app (later steps).</p>
+      <p class="note">Step 4: Edit = server form (name, mobile, address…). Payment receive = full app.</p>
+      <p style="margin-top:10px">
+        <a class="editBtn" href="/patient/edit?id={_html_esc(pid)}" style="padding:8px 14px">Edit details</a>
+        <a class="viewBtn" href="/office.html" style="padding:8px 14px;margin-left:8px">Payment (full app)</a>
+      </p>
     </div>
   </div>
 </body>
 </html>"""
     return html
+
+
+
+def build_patient_edit_html(patient_id: str, message: str = ""):
+    """Step 4: small server edit form — no app.js."""
+    st = load_state() or {}
+    pts = [p for p in (st.get("patients") or []) if isinstance(p, dict) and p.get("id") and not p.get("_deleted")]
+    pid = str(patient_id or "").strip()
+    root = next((p for p in pts if str(p.get("id")) == pid), None)
+    if not root:
+        return (
+            "<!DOCTYPE html><html><body style='font-family:Arial;padding:24px'>"
+            "<p>Patient not found.</p><p><a href='/patient'>← Back</a></p></body></html>"
+        )
+
+    def v(key):
+        return _html_esc(root.get(key) or "")
+
+    msg_html = f'<div class="msg">{_html_esc(message)}</div>' if message else ""
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Edit — {_html_esc(_display_person_name(root))}</title>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{ margin:0; font-family: Arial, system-ui, sans-serif; background:#f1f5f9; color:#0f172a; }}
+    .top {{ background:#1e293b; color:#fff; padding:12px 16px; display:flex; gap:12px; flex-wrap:wrap; }}
+    .top a {{ color:#e2e8f0; text-decoration:none; font-size:14px; }}
+    .brand {{ font-weight:bold; color:#38bdf8; }}
+    .wrap {{ max-width:560px; margin:16px auto; padding:0 12px; }}
+    .card {{ background:#fff; border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.08); }}
+    h1 {{ margin:0 0 8px; font-size:20px; }}
+    .meta {{ color:#64748b; font-size:13px; margin-bottom:14px; }}
+    label {{ display:block; font-size:12px; color:#64748b; margin:10px 0 4px; }}
+    input, select, textarea {{ width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; }}
+    textarea {{ min-height:70px; resize:vertical; }}
+    .actions {{ margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; }}
+    button, .btn {{ padding:10px 16px; border-radius:8px; border:none; font-size:14px; cursor:pointer; text-decoration:none; display:inline-block; }}
+    button.primary {{ background:#1d4ed8; color:#fff; }}
+    .btn.secondary {{ background:#64748b; color:#fff; }}
+    .msg {{ background:#ecfdf5; color:#065f46; padding:10px; border-radius:8px; margin-bottom:12px; font-size:13px; }}
+    .ro {{ background:#f8fafc; color:#64748b; }}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <span class="brand">ANAND Clinic</span>
+    <a href="/patient/view?id={_html_esc(pid)}">← View</a>
+    <a href="/patient">Patients (fast)</a>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <h1>Edit patient</h1>
+      <div class="meta">Case {v("caseNo")} · server form (no full app.js)</div>
+      {msg_html}
+      <form method="post" action="/patient/edit">
+        <input type="hidden" name="id" value="{_html_esc(pid)}"/>
+        <label>Case No (read only)</label>
+        <input class="ro" value="{v("caseNo")}" readonly/>
+        <label>Title</label>
+        <input name="title" value="{v("title")}" placeholder="Mr / Mrs / Master…"/>
+        <label>Name</label>
+        <input name="name" value="{v("name")}" required/>
+        <label>Mobile</label>
+        <input name="mobile" value="{v("mobile")}"/>
+        <label>Age</label>
+        <input name="age" value="{v("age")}"/>
+        <label>Gender</label>
+        <select name="gender">
+          <option value=""></option>
+          <option value="Male" {"selected" if str(root.get("gender") or "") == "Male" else ""}>Male</option>
+          <option value="Female" {"selected" if str(root.get("gender") or "") == "Female" else ""}>Female</option>
+          <option value="Other" {"selected" if str(root.get("gender") or "") == "Other" else ""}>Other</option>
+        </select>
+        <label>Address</label>
+        <textarea name="address">{v("address")}</textarea>
+        <label>Ref By</label>
+        <input name="refBy" value="{v("refBy")}"/>
+        <div class="actions">
+          <button type="submit" class="primary">Save</button>
+          <a class="btn secondary" href="/patient/view?id={_html_esc(pid)}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>"""
+    return html
+
+
+def apply_patient_edit(form: dict):
+    """Update one patient record on server state. Returns (ok, id, error)."""
+    pid = str(form.get("id") or "").strip()
+    if not pid:
+        return False, "", "Missing id"
+    st = load_state() or {}
+    pts = st.get("patients") or []
+    found = None
+    for p in pts:
+        if isinstance(p, dict) and str(p.get("id")) == pid and not p.get("_deleted"):
+            found = p
+            break
+    if not found:
+        return False, pid, "Patient not found"
+    # Only basic identity fields — do not touch payments / charges
+    for key in ("title", "name", "mobile", "age", "gender", "address", "refBy"):
+        if key in form:
+            found[key] = str(form.get(key) or "").strip()
+    try:
+        from datetime import datetime, timezone
+        found["_updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    except Exception:
+        pass
+    st["patients"] = pts
+    save_state(st, "patient-edit-server")
+    try:
+        broadcast_ws({"type": "data_changed", "source": "patient-edit", "time": now()})
+    except Exception:
+        pass
+    return True, pid, ""
 
 
 
@@ -1043,6 +1178,27 @@ def create_fastapi_app():
                 "Pragma": "no-cache",
             },
         )
+
+
+    @app.get("/patient/edit", response_class=HTMLResponse)
+    def patient_edit_page(id: str = ""):
+        return HTMLResponse(
+            content=build_patient_edit_html(id),
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+        )
+
+    @app.post("/patient/edit")
+    async def patient_edit_post(request: Request):
+        from fastapi.responses import RedirectResponse
+        form = await request.form()
+        data = {k: form.get(k) for k in form.keys()}
+        ok, pid, err = apply_patient_edit(data)
+        if not ok:
+            return HTMLResponse(
+                content=build_patient_edit_html(pid or str(data.get("id") or ""), message=err or "Save failed"),
+                status_code=400,
+            )
+        return RedirectResponse(url=f"/patient/view?id={pid}", status_code=303)
 
     @app.get("/")
     def root():
