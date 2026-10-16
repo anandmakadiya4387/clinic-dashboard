@@ -404,23 +404,77 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
         rows = list(by_case.values())
         rows.sort(key=lambda p: _case_no_key(p), reverse=True)
 
-    # Step 2: server-side search (name / mobile / case no) — before pagination
+    # Step 2: server-side search — flexible case no / mobile / name match
+    def _digits(s):
+        return "".join(ch for ch in str(s or "") if ch.isdigit())
+
+    def _norm_case_digits(s):
+        d = _digits(s).lstrip("0")
+        return d if d else "0"
+
+    def _patient_matches(p, q_lower, q_digits):
+        name = str(p.get("name") or "").lower()
+        title_p = str(p.get("title") or "").lower()
+        mobile = str(p.get("mobile") or "")
+        mobile_digits = _digits(mobile)
+        case_no = str(p.get("caseNo") or "")
+        case_no_l = case_no.lower()
+        linked = str(p.get("linkedCaseNo") or "").lower()
+        case_digits = _digits(case_no)
+        linked_digits = _digits(linked)
+        blob = f"{title_p} {name} {mobile} {case_no_l} {linked}"
+        if q_lower and q_lower in blob:
+            return True
+        # case / mobile: exact digits, contains, or ignore leading zeros (0A000560 vs 560)
+        if q_digits:
+            qd = _norm_case_digits(q_digits)
+            for cd in (case_digits, linked_digits, mobile_digits):
+                if not cd:
+                    continue
+                if q_digits in cd or cd in q_digits:
+                    return True
+                if qd and qd == _norm_case_digits(cd):
+                    return True
+            # full string without separators e.g. 0a000560
+            compact = "".join(ch for ch in case_no_l if ch.isalnum())
+            q_compact = "".join(ch for ch in q_lower if ch.isalnum())
+            if q_compact and q_compact in compact:
+                return True
+        return False
+
     if q_lower:
-        filtered = []
-        for p in rows:
-            name = str(p.get("name") or "").lower()
-            title_p = str(p.get("title") or "").lower()
-            mobile = str(p.get("mobile") or "")
-            mobile_digits = "".join(ch for ch in mobile if ch.isdigit())
-            case_no = str(p.get("caseNo") or "").lower()
-            case_digits = "".join(ch for ch in case_no if ch.isdigit())
-            blob = f"{title_p} {name} {mobile} {case_no}"
-            ok = q_lower in blob
-            if not ok and q_digits and (q_digits in mobile_digits or q_digits in case_digits):
-                ok = True
-            if ok:
-                filtered.append(p)
-        rows = filtered
+        # When searching by case/mobile/name: search FULL patient list first,
+        # then keep current tab filter only if still useful; case-no hits always show.
+        pool = pts  # all patients on server
+        matched = [p for p in pool if _patient_matches(p, q_lower, q_digits)]
+        if view == "new":
+            # Prefer unique new registrations; if none, still show any matched visits
+            by_case = {}
+            for p in matched:
+                if str(p.get("caseType") or "new") != "new":
+                    continue
+                key = _case_no_key(p) or str(p.get("caseNo") or p.get("id"))
+                prev = by_case.get(key)
+                if not prev or str(p.get("date") or "") < str(prev.get("date") or ""):
+                    by_case[key] = p
+            rows = list(by_case.values())
+            if not rows:
+                # fallback: show matched follow-ups / any so user is not stuck on "No records"
+                rows = matched
+            rows.sort(key=lambda p: _case_no_key(p), reverse=True)
+        elif view == "followup":
+            rows = [
+                p for p in matched
+                if str(p.get("caseType") or "new") != "new" or p.get("linkedFromId")
+            ]
+            if not rows:
+                rows = matched
+            rows.sort(key=lambda p: str(p.get("date") or ""), reverse=True)
+        else:
+            rows = [p for p in matched if float(p.get("renewal") or 0) > 0]
+            if not rows:
+                rows = matched
+            rows.sort(key=lambda p: str(p.get("date") or ""), reverse=True)
 
     total = len(rows)
     total_pages = max(1, (total + page_size - 1) // page_size)
@@ -438,6 +492,8 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
         )
         age = _html_esc(p.get("age") or "-")
         mobile = _html_esc(p.get("mobile") or "-")
+        pid = _html_esc(p.get("id") or "")
+        view_href = f"/patient/view?id={pid}"
         return (
             f"<tr>"
             f"<td>{start + i + 1}</td>"
@@ -447,12 +503,13 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
             f"<td>{name}</td>"
             f"<td>{age}</td>"
             f"<td>{mobile}</td>"
+            f'<td><a class="viewBtn" href="{view_href}">View</a></td>'
             f"</tr>"
         )
 
     body_rows = "".join(row_html(p, i) for i, p in enumerate(slice_rows))
     if not body_rows:
-        body_rows = '<tr><td colspan="7" style="text-align:center;color:#64748b">No records</td></tr>'
+        body_rows = '<tr><td colspan="8" style="text-align:center;color:#64748b">No records</td></tr>'
 
     q_param = ("&q=" + _html_esc(q).replace(" ", "+")) if q else ""
     # For href we need URL-encode lightly
@@ -519,6 +576,8 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
     .pg.disabled {{ opacity:.45; pointer-events:none; }}
     .pg.ell {{ background:transparent; }}
     .note {{ margin-top:12px; font-size:12px; color:#64748b; }}
+    .viewBtn {{ display:inline-block; padding:4px 10px; border-radius:6px; background:#0f766e; color:#fff; text-decoration:none; font-size:12px; }}
+    .viewBtn:hover {{ background:#0d9488; }}
   </style>
 </head>
 <body>
@@ -555,6 +614,7 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
               <th>Patient</th>
               <th>Age</th>
               <th>Mobile</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -564,6 +624,193 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
       </div>
       <div class="pager">{pag_html}</div>
       <p class="note">Step 2: search server pe filter hota hai (name / mobile / case no). Full app.js load nahi hota.</p>
+    </div>
+  </div>
+</body>
+</html>"""
+    return html
+
+
+
+def build_patient_view_html(patient_id: str):
+    """Step 3: single patient + visit history — server HTML, no app.js."""
+    import urllib.parse
+
+    st = load_state() or {}
+    pts = [p for p in (st.get("patients") or []) if isinstance(p, dict) and p.get("id") and not p.get("_deleted")]
+    pays = [x for x in (st.get("payments") or []) if isinstance(x, dict) and not x.get("_deleted")]
+
+    pid = str(patient_id or "").strip()
+    root = next((p for p in pts if str(p.get("id")) == pid), None)
+    if not root:
+        return (
+            "<!DOCTYPE html><html><body style='font-family:Arial;padding:24px'>"
+            "<p>Patient not found on server.</p>"
+            "<p><a href='/patient'>← Back to Patients</a></p>"
+            "</body></html>"
+        )
+
+    # Same family / case: match permanent case number digits
+    def case_digits(p):
+        raw = str(p.get("caseNo") or p.get("linkedCaseNo") or "")
+        d = "".join(ch for ch in raw if ch.isdigit()).lstrip("0")
+        return d if d else "0"
+
+    root_digits = case_digits(root)
+    root_name = str(root.get("name") or "").strip().lower()
+    root_mobile = "".join(ch for ch in str(root.get("mobile") or "") if ch.isdigit())
+
+    visits = []
+    for p in pts:
+        same = str(p.get("id")) == pid
+        if not same and root_digits and case_digits(p) == root_digits:
+            same = True
+        if not same and root_mobile and len(root_mobile) >= 8:
+            pm = "".join(ch for ch in str(p.get("mobile") or "") if ch.isdigit())
+            if pm == root_mobile and str(p.get("name") or "").strip().lower() == root_name:
+                same = True
+        if same:
+            visits.append(p)
+
+    # Latest visit first
+    visits.sort(key=lambda p: str(p.get("date") or ""), reverse=True)
+
+    def money(n):
+        try:
+            return f"₹{float(n or 0):,.0f}"
+        except Exception:
+            return "₹0"
+
+    def visit_status(p):
+        foc = p.get("foc") or str(p.get("paymentStatus") or "").lower() == "foc"
+        if foc:
+            return "FOC"
+        cons = float(p.get("consultation") or 0)
+        med = float(p.get("medicine") or 0)
+        ren = float(p.get("renewal") or 0)
+        pend = float(p.get("partialPending") or 0)
+        total = cons + med + ren
+        # payments linked
+        paid = 0.0
+        for x in pays:
+            if str(x.get("patientId")) == str(p.get("id")):
+                try:
+                    paid += float(x.get("amount") or 0)
+                except Exception:
+                    pass
+        if pend > 0:
+            return f"Partial pending {money(pend)}"
+        if total <= 0 and paid <= 0:
+            return "—"
+        if paid >= total - 0.01 or str(p.get("paymentStatus") or "").lower() in ("received", "paid", "complete"):
+            return "Received"
+        if str(p.get("status") or "").lower() in ("pending",):
+            return "Pending"
+        return "Pending" if total > 0 else "—"
+
+    def type_label(p):
+        ct = str(p.get("caseType") or "new").lower()
+        if float(p.get("renewal") or 0) > 0:
+            return "RENEWED"
+        if ct == "new":
+            return "NEW"
+        return "FOLLOWUP"
+
+    visit_rows = []
+    for i, p in enumerate(visits):
+        cons = float(p.get("consultation") or 0)
+        med = float(p.get("medicine") or 0)
+        ren = float(p.get("renewal") or 0)
+        total = cons + med + ren
+        visit_rows.append(
+            "<tr>"
+            f"<td>{i + 1}</td>"
+            f"<td>{_html_esc(_fmt_date_dmy(p.get('date')))}</td>"
+            f"<td>{_html_esc(type_label(p))}</td>"
+            f"<td>{_html_esc(p.get('caseNo') or '')}</td>"
+            f"<td>{money(cons)}</td>"
+            f"<td>{money(med)}</td>"
+            f"<td>{money(ren)}</td>"
+            f"<td><b>{money(total)}</b></td>"
+            f"<td>{_html_esc(visit_status(p))}</td>"
+            "</tr>"
+        )
+    visits_html = "".join(visit_rows) or '<tr><td colspan="9" style="text-align:center;color:#64748b">No visits</td></tr>'
+
+    display_name = (
+        (" " + str(root.get("title") or "")).strip() + " " + str(root.get("name") or "")
+    ).strip()
+    case_show = root.get("caseNo") or ""
+    back_q = urllib.parse.quote(str(case_show))
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{_html_esc(display_name)} — Patient</title>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{ margin:0; font-family: Arial, system-ui, sans-serif; background:#f1f5f9; color:#0f172a; }}
+    .top {{ background:#1e293b; color:#fff; padding:12px 16px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }}
+    .top a {{ color:#e2e8f0; text-decoration:none; font-size:14px; }}
+    .brand {{ font-weight:bold; color:#38bdf8; }}
+    .wrap {{ max-width:960px; margin:16px auto; padding:0 12px; }}
+    .card {{ background:#fff; border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.08); margin-bottom:14px; }}
+    h1 {{ margin:0 0 6px; font-size:22px; }}
+    .meta {{ color:#64748b; font-size:13px; margin-bottom:10px; }}
+    .grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }}
+    .field {{ background:#f8fafc; border-radius:8px; padding:10px; }}
+    .field label {{ display:block; font-size:11px; color:#64748b; margin-bottom:4px; }}
+    .field div {{ font-size:14px; font-weight:600; }}
+    table {{ width:100%; border-collapse:collapse; font-size:13px; }}
+    th, td {{ border-bottom:1px solid #e2e8f0; padding:8px 6px; text-align:left; }}
+    th {{ background:#f8fafc; color:#334155; }}
+    .note {{ font-size:12px; color:#64748b; margin-top:10px; }}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <span class="brand">ANAND Clinic</span>
+    <a href="/patient?q={back_q}">← Patients (fast)</a>
+    <a href="/office.html">Dashboard (full app)</a>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <h1>{_html_esc(display_name)}</h1>
+      <div class="meta">Case {_html_esc(case_show)} · {_html_esc(len(visits))} visit(s) · server page (no full app.js)</div>
+      <div class="grid">
+        <div class="field"><label>Case No</label><div>{_html_esc(case_show)}</div></div>
+        <div class="field"><label>Mobile</label><div>{_html_esc(root.get('mobile') or '-')}</div></div>
+        <div class="field"><label>Age</label><div>{_html_esc(root.get('age') or '-')}</div></div>
+        <div class="field"><label>Gender</label><div>{_html_esc(root.get('gender') or '-')}</div></div>
+        <div class="field"><label>Address</label><div>{_html_esc(root.get('address') or '-')}</div></div>
+        <div class="field"><label>Ref By</label><div>{_html_esc(root.get('refBy') or '-')}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h1 style="font-size:18px">Visit history</h1>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Case No</th>
+              <th>Consult</th>
+              <th>Medicine</th>
+              <th>Renewal</th>
+              <th>Total</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visits_html}
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Step 3: View = server HTML only. Edit / payment receive still full app (later steps).</p>
     </div>
   </div>
 </body>
@@ -754,6 +1001,17 @@ def create_fastapi_app():
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Expires"] = "0"
         return resp
+
+
+    @app.get("/patient/view", response_class=HTMLResponse)
+    def patient_view_page(id: str = ""):
+        return HTMLResponse(
+            content=build_patient_view_html(id),
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
 
     @app.get("/")
     def root():
