@@ -361,6 +361,41 @@ def _fmt_date_dmy(val):
 
 
 
+
+def _display_person_name(p):
+    """Avoid 'rajan patel rajan patel' when title repeats name."""
+    title = str((p or {}).get("title") or "").strip()
+    name = str((p or {}).get("name") or "").strip()
+    if not title:
+        return name
+    if not name:
+        return title
+    tl, nl = title.lower(), name.lower()
+    if tl == nl or nl.startswith(tl + " ") or tl in nl:
+        return name
+    if nl in tl:
+        return title
+    return (title + " " + name).strip()
+
+
+def _parse_date_key(val):
+    """Sort key YYYYMMDD from common formats; higher = newer."""
+    s = str(val or "").strip()
+    if not s:
+        return "00000000"
+    # ISO YYYY-MM-DD or YYYY/MM/DD
+    if len(s) >= 10 and s[4] in "-/" and s[7] in "-/":
+        return s[0:4] + s[5:7] + s[8:10]
+    # DD-MM-YYYY or DD/MM/YYYY
+    if len(s) >= 10 and s[2] in "-/" and s[5] in "-/":
+        return s[6:10] + s[3:5] + s[0:2]
+    # YYYYMMDD
+    digits = "".join(ch for ch in s if ch.isdigit())
+    if len(digits) >= 8:
+        return digits[:8]
+    return "00000000"
+
+
 def build_patient_page_html(view="new", page=1, page_size=25, q=""):
     """Server HTML for /patient — Twocompo model + Step 2 search."""
     try:
@@ -487,9 +522,7 @@ def build_patient_page_html(view="new", page=1, page_size=25, q=""):
         case_no = _html_esc(p.get("caseNo") or "")
         date = _html_esc(_fmt_date_dmy(p.get("date")))
         ctype = _html_esc(str(p.get("caseType") or "new").upper())
-        name = _html_esc(
-            ((" " + str(p.get("title") or "")).strip() + " " + str(p.get("name") or "")).strip()
-        )
+        name = _html_esc(_display_person_name(p))
         age = _html_esc(p.get("age") or "-")
         mobile = _html_esc(p.get("mobile") or "-")
         pid = _html_esc(p.get("id") or "")
@@ -672,8 +705,8 @@ def build_patient_view_html(patient_id: str):
         if same:
             visits.append(p)
 
-    # Latest visit first
-    visits.sort(key=lambda p: str(p.get("date") or ""), reverse=True)
+    # Latest visit first (handles DD-MM-YYYY and YYYY-MM-DD)
+    visits.sort(key=lambda p: _parse_date_key(p.get("date")), reverse=True)
 
     def money(n):
         try:
@@ -737,9 +770,7 @@ def build_patient_view_html(patient_id: str):
         )
     visits_html = "".join(visit_rows) or '<tr><td colspan="9" style="text-align:center;color:#64748b">No visits</td></tr>'
 
-    display_name = (
-        (" " + str(root.get("title") or "")).strip() + " " + str(root.get("name") or "")
-    ).strip()
+    display_name = _display_person_name(root)
     case_show = root.get("caseNo") or ""
     back_q = urllib.parse.quote(str(case_show))
 
