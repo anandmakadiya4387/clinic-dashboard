@@ -7523,12 +7523,6 @@ window.openMultiYearGrowthModal = function() {
       if (!window.__SOFT_MPA) return;
       var page = document.body && document.body.getAttribute('data-start-page');
       if (page !== 'dashboard') return;
-      if (!server) return;
-      fetchDashboardTodayFromServer().then(function(data) {
-        if (applyDashboardTodayPayload(data)) {
-          try { renderQueue(); } catch (e) {}
-        }
-      }).catch(function(){});
     } catch (e) {}
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function() { setTimeout(run, 0); });
