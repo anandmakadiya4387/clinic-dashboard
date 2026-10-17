@@ -5793,6 +5793,8 @@ async function importPreviousData(e) {
             setStatus('Import full backup done · patients ' + pc + (payc != null ? ' · payments ' + payc : ''));
             try { toast('Import done — data loaded (refresh not needed)'); } catch (err) {}
             try { e.target.value = ''; } catch (err) {}
+            // Import ke baad page ko refresh karne ke liye taaki naya data turant dikhe
+            try { window.location.reload(); } catch(err) {}
             return;
         }
 
