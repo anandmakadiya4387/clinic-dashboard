@@ -341,7 +341,7 @@ const DEFAULT = {
         deleted: []
     }
 };
-let DB = loadLocal();
+let DB = loadLocal() || { patients: [], payments: [], appointments: [] };
 /* Hydrate from IndexedDB if it has more/newer data (localStorage may be empty after large import). */
 (function hydrateFromIndexedDB() {
     try {
