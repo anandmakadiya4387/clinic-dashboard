@@ -132,33 +132,25 @@ def load_state():
         return json.loads(row[0]) if row else {}
 
 
-def save_state(state, device="server"):
+def _async_backup_worker(state, device):
+    """Background thread mein backups aur mirror writes karna taaki main app fast chale."""
     try:
-        state.setdefault("meta", {})["serverMergedAt"] = now()
-    except Exception:
-        pass
-    payload = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
-    with LOCK, connect_db() as c:
-        c.execute("UPDATE state SET payload=?,updated=? WHERE id=1", (payload, now()))
-        c.execute(
-            "INSERT INTO changes(changed_at,device_id,summary) VALUES(?,?,?)",
-            (now(), device, "record-level merge"),
-        )
-        c.commit()
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
-    path = os.path.join(BACKUP_DIR, f"clinic-auto-{stamp}.json")
-    try:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
+        path = os.path.join(BACKUP_DIR, f"clinic-auto-{stamp}.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
+        
+        # Purane backups prune karein (sirf last 5 rakhein)
         files = sorted([x for x in os.listdir(BACKUP_DIR) if x.endswith(".json")])
         for old in files[:-5]:
             try:
                 os.remove(os.path.join(BACKUP_DIR, old))
             except OSError:
                 pass
-    except OSError:
+    except Exception:
         pass
-    # Optional cloud/local mirror folder from settings
+
+    # Optional cloud/local mirror folder backup
     try:
         mirror = (state.get("settings") or {}).get("cloudBackupPath") or os.environ.get("ANAND_CLOUD_BACKUP_PATH")
         if mirror and os.path.isdir(mirror):
@@ -167,6 +159,29 @@ def save_state(state, device="server"):
                 json.dump(state, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+
+def save_state(state, device="server"):
+    try:
+        state.setdefault("meta", {})["serverMergedAt"] = now()
+    except Exception:
+        pass
+    
+    payload = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
+    
+    # Sirf database update aur change log likhna (Fast & Non-blocking)
+    with LOCK, connect_db() as c:
+        c.execute("UPDATE state SET payload=?,updated=? WHERE id=1", (payload, now()))
+        c.execute(
+            "INSERT INTO changes(changed_at,device_id,summary) VALUES(?,?,?)",
+            (now(), device, "record-level merge"),
+        )
+        c.commit()
+
+    # File backups aur mirrors ko background thread mein daal diya
+    threading.Thread(target=_async_backup_worker, args=(state, device), daemon=True).start()
+
+    # Real-time WebSocket broadcast instant bhejna
     broadcast_ws({"type": "data_changed", "role": ROLE, "time": now(), "device": device})
 
 
