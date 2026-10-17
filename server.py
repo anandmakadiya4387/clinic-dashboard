@@ -1331,17 +1331,17 @@ def create_fastapi_app():
             "framework": "fastapi",
             "ws": "/ws",
         }
-     @app.get("/api/meta")
-     def get_meta():
-         st = load_state()
-         pts = st.get("patients") or []
-         meta = st.get("meta") or {}
-         return {
-             "ok": True,
-             "time": meta.get("serverMergedAt") or now(),
-             "patientsCount": len(pts),
-             "paymentsCount": len(st.get("payments") or []),
-             "schemaVersion": st.get("schemaVersion", 30)
+    @app.get("/api/meta")
+    def get_meta():
+        st = load_state()
+        pts = st.get("patients") or []
+        meta = st.get("meta") or {}
+        return {
+            "ok": True,
+            "time": meta.get("serverMergedAt") or now(),
+            "patientsCount": len(pts),
+            "paymentsCount": len(st.get("payments") or []),
+            "schemaVersion": st.get("schemaVersion", 30)
         }
     @app.get("/api/patients_list")
     def dashboard_today_api(day: str = ""):
