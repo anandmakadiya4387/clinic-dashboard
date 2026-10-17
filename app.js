@@ -6423,18 +6423,19 @@ function setup() {
     try {
         if (typeof hydrateFromIndexedDB === 'function') {
             hydrateFromIndexedDB();
-        } else if (typeof renderAll === 'function') {
+        }
+        if (typeof renderAll === 'function') {
             renderAll();
         }
     } catch(e) {}
     try {
-      const forceProBadge = () => {
-        document.querySelectorAll('.appVersionBadge').forEach(el => {
-          el.textContent = 'PRO';
-          el.title = 'Anand Clinic PRO';
-        });
-      };
-      forceProBadge();
+        const forceProBadge = () => {
+            document.querySelectorAll('.appVersionBadge').forEach(el => {
+                el.textContent = 'PRO';
+                el.title = 'Anand Clinic PRO';
+            });
+        };
+        forceProBadge();
       /* Soft MPA: badge interval only on dashboard — less background work */
       if (!window.__SOFT_MPA || (window.__SOFT_MPA_PAGE === 'dashboard')) {
         setInterval(forceProBadge, 2000);
