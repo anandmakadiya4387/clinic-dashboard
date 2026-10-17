@@ -6421,7 +6421,11 @@ function setup() {
     setupNav();
     try { setupKpiCollapse(); } catch(e) {}
     try {
-        if (typeof renderAll === 'function') { renderAll(); }
+        if (typeof hydrateFromIndexedDB === 'function') {
+            hydrateFromIndexedDB();
+        } else if (typeof renderAll === 'function') {
+            renderAll();
+        }
     } catch(e) {}
     try {
       const forceProBadge = () => {
