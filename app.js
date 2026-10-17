@@ -6411,6 +6411,12 @@ function softMpaRenderCurrentOnly() {
 }
 
 function setup() {
+    // Fast Meta Check on page load
+    quickMetaCheck().then(meta => {
+        if (meta) {
+            console.log("Server meta verified, version:", meta.schemaVersion);
+        }
+    });
     setupNav();
     try { setupKpiCollapse(); } catch(e) {}
     try {
