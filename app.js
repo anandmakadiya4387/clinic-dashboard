@@ -6413,13 +6413,7 @@ function softMpaRenderCurrentOnly() {
 }
 
 function setup() {
-    quickMetaCheck().then(meta => {
-        if (meta) {
-            console.log("Server meta verified, version:", meta.schemaVersion);
-        }
-    });
-    setupNav();
-    try { setupKpiCollapse(); } catch(e) {}
+    // Sabse pehle bina kisi delay ke local/IndexedDB data render karo taaki 0 ya blank na dikhe
     try {
         if (typeof hydrateFromIndexedDB === 'function') {
             hydrateFromIndexedDB();
@@ -6428,6 +6422,15 @@ function setup() {
             renderAll();
         }
     } catch(e) {}
+
+    quickMetaCheck().then(meta => {
+        if (meta) {
+            console.log("Server meta verified, version:", meta.schemaVersion);
+        }
+    });
+     
+    setupNav();
+    try { setupKpiCollapse(); } catch(e) {}
     try {
         const forceProBadge = () => {
             document.querySelectorAll('.appVersionBadge').forEach(el => {
