@@ -6413,10 +6413,14 @@ function softMpaRenderCurrentOnly() {
 }
 
 function setup() {
-    // Fast Meta Check on page load
+    // Fast Meta Check on page load and load fresh data immediately
     quickMetaCheck().then(meta => {
         if (meta) {
             console.log("Server meta verified, version:", meta.schemaVersion);
+            // Turant fresh data pull karke UI render karein taaki khali ya zero na dikhe
+            loadFreshFromServer(() => {}).then(() => {
+                try { renderAll(); } catch(e) {}
+            });
         }
     });
     setupNav();
