@@ -1227,7 +1227,19 @@ async function quickHealthOnline() {
         return false;
     }
 }
-
+/** Fast Meta check: only /api/meta (no full data sync). */
+async function quickMetaCheck() {
+    if (!server) return null;
+    try {
+        const res = await api('/api/meta');
+        if (res && res.ok) {
+            return res;
+        }
+    } catch (e) {
+        return null;
+    }
+    return null;
+}
 /** After import/restore: pull full state from server into DB + UI (no hard refresh). */
 async function loadFreshFromServer(statusFn) {
     const say = typeof statusFn === 'function' ? statusFn : function() {};
